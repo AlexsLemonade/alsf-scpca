@@ -1,5 +1,5 @@
 # S3 Group policies taken from AWS Nextflow batch setup
-resource "aws_iam_policy" "nextflow_readwrite_S3" {
+resource "aws_iam_policy" "nf_readwrite_S3" {
   name   = "nextflow-ccdl-readwrite-s3"
   policy = <<EOF
 {
@@ -95,7 +95,7 @@ resource "aws_iam_policy" "nextflow_readwrite_S3" {
 EOF
 }
 
-resource "aws_iam_policy" "nextflow_read_S3" {
+resource "aws_iam_policy" "nf_read_S3" {
   name   = "nextflow-ccdl-read-s3"
   policy = <<EOF
 {

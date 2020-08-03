@@ -50,12 +50,12 @@ resource "aws_iam_role_policy_attachment" "ecs_ec2_container" {
 
 resource "aws_iam_role_policy_attachment" "ecs_rw_s3" {
   role = aws_iam_role.nf_ecs_role.name
-  policy_arn = aws_iam_policy.nextflow_readwrite_S3.arn
+  policy_arn = aws_iam_policy.nf_readwrite_S3.arn
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_read_s3" {
   role = aws_iam_role.nf_ecs_role.name
-  policy_arn = aws_iam_policy.nextflow_read_S3.arn
+  policy_arn = aws_iam_policy.nf_read_S3.arn
 }
 
 

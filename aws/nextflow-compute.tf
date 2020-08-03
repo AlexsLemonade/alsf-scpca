@@ -3,7 +3,7 @@ resource "aws_iam_instance_profile" "nf_ecs_instance_role" {
   role = aws_iam_role.nf_ecs_role.name
 }
 
-resource "aws_batch_compute_environment" "nextflow_ondemand" {
+resource "aws_batch_compute_environment" "nf_ondemand" {
   compute_environment_name = "nextflow-ondemand-compute"
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
@@ -28,7 +28,7 @@ resource "aws_batch_compute_environment" "nextflow_ondemand" {
   depends_on   = [aws_iam_role_policy_attachment.nf_batch]
 }
 
-resource "aws_batch_compute_environment" "nextflow_spot" {
+resource "aws_batch_compute_environment" "nf_spot" {
   compute_environment_name = "nextflow-spot-compute"
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
