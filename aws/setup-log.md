@@ -18,7 +18,7 @@ https://www.nextflow.io/docs/latest/awscloud.html#custom-ami
 
 Briefly:
 1. We used the base AMI _Amazon ECS-Optimized Amazon Linux AMI_. (note, not Amazon Linux 2).
-This was launched with an 80GB EBS volume for data (compared to teh default 22) in addition to the base 8GB boot volume.
+This was launched with an 80GB EBS volume for data (compared to the default 22) in addition to the base 8GB boot volume.
 
 2. All packages were updated with `sudo yum update`
 3. `/etc/sysconfig/docker-storage` edited to include `--storage-opt dm.basesize=40GB`

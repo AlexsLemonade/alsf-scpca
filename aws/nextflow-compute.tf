@@ -3,6 +3,8 @@ resource "aws_iam_instance_profile" "nf_ecs_instance_role" {
   role = aws_iam_role.nf_ecs_role.name
 }
 
+# Create an ondemand environment with up to 20 vcpus
+# the AMI used is described in setup-log.md
 resource "aws_batch_compute_environment" "nf_ondemand" {
   compute_environment_name = "nextflow-ondemand-compute"
   compute_resources {
@@ -28,6 +30,8 @@ resource "aws_batch_compute_environment" "nf_ondemand" {
   depends_on   = [aws_iam_role_policy_attachment.nf_batch]
 }
 
+# Create an spot instance environment with up to 100 vcpus
+# the AMI used is described in setup-log.md
 resource "aws_batch_compute_environment" "nf_spot" {
   compute_environment_name = "nextflow-spot-compute"
   compute_resources {
