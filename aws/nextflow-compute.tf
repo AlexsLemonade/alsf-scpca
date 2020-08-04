@@ -58,7 +58,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
     subnets = [
       aws_subnet.nf_subnet.id,
     ]
-    type = "EC2"
+    type = "SPOT"
     tags = merge(
       var.default_tags,
       {
