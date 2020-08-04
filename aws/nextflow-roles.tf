@@ -16,6 +16,7 @@ resource "aws_iam_role" "nf_batch_role" {
     ]
 }
 EOF
+  tags = var.default_tags
 }
 
 resource "aws_iam_role_policy_attachment" "nf_batch" {
@@ -41,6 +42,7 @@ resource "aws_iam_role" "nf_ecs_role" {
     ]
 }
 EOF
+  tags = var.default_tags
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_ec2_container" {
@@ -76,6 +78,7 @@ resource "aws_iam_role" "nf_spotfleet_role" {
     ]
 }
 EOF
+  tags = var.default_tags
 }
 
 resource "aws_iam_role_policy_attachment" "nf_spotfleet_tagging" {

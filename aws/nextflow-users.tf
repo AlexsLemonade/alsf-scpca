@@ -1,5 +1,6 @@
 resource "aws_iam_user" "nf_user" {
   name = "nextflow-batch-user"
+  tags = var.default_tags
 }
 
 resource "aws_iam_access_key" "nf_key" {

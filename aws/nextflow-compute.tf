@@ -23,11 +23,18 @@ resource "aws_batch_compute_environment" "nf_ondemand" {
       aws_subnet.nf_subnet.id,
     ]
     type = "EC2"
+    tags = merge(
+      var.default_tags,
+      {
+        parent = "nextflow-batch-ondemand"
+      }
+    )
   }
 
   service_role = aws_iam_role.nf_batch_role.arn
   type         = "MANAGED"
   depends_on   = [aws_iam_role_policy_attachment.nf_batch]
+
 }
 
 # Create an spot instance environment with up to 100 vcpus
@@ -52,6 +59,12 @@ resource "aws_batch_compute_environment" "nf_spot" {
       aws_subnet.nf_subnet.id,
     ]
     type = "EC2"
+    tags = merge(
+      var.default_tags,
+      {
+        parent = "nextflow-batch-ondemand"
+      }
+    )
   }
 
   service_role = aws_iam_role.nf_batch_role.arn
