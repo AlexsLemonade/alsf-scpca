@@ -16,6 +16,7 @@ resource "aws_batch_compute_environment" "nf_ondemand" {
     max_vcpus = 20
     min_vcpus = 0
     image_id = "ami-0a8857ac38c35157f"
+    ec2_key_pair = aws_key_pair.data_refinery.key_name
     security_group_ids = [
       aws_security_group.nf_security.id,
     ]
@@ -52,6 +53,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
     max_vcpus = 100
     min_vcpus = 0
     image_id = "ami-0a8857ac38c35157f"
+    ec2_key_pair = aws_key_pair.data_refinery.key_name
     security_group_ids = [
       aws_security_group.nf_security.id,
     ]
