@@ -34,7 +34,7 @@ resource "aws_batch_compute_environment" "nf_ondemand" {
 
   service_role = aws_iam_role.nf_batch_role.arn
   type         = "MANAGED"
-  depends_on   = [aws_iam_role_policy_attachment.nf_batch]
+  depends_on   = [aws_iam_role_policy_attachment.nf_batch_role]
 
 }
 
@@ -71,5 +71,5 @@ resource "aws_batch_compute_environment" "nf_spot" {
 
   service_role = aws_iam_role.nf_batch_role.arn
   type         = "MANAGED"
-  depends_on   = [aws_iam_role_policy_attachment.nf_batch]
+  depends_on   = [aws_iam_role_policy_attachment.nf_batch_role]
 }

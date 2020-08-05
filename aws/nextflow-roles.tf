@@ -19,7 +19,7 @@ EOF
   tags = var.default_tags
 }
 
-resource "aws_iam_role_policy_attachment" "nf_batch" {
+resource "aws_iam_role_policy_attachment" "nf_batch_role" {
   role = aws_iam_role.nf_batch_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSBatchServiceRole"
 }
