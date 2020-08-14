@@ -32,4 +32,4 @@ rm Miniconda3-latest-Linux-x86_64.sh
 ```
 5. Saved AMI from AWS web interface
 
-**The current stored AMI is** `ccdl-nextflow-base`: `ami-0a8857ac38c35157f`
+**The current stored AMI is** `ccdl-nextflow-base`: `ami-0efd6627bb4ee4490`

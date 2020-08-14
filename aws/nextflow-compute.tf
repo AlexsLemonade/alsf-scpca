@@ -15,7 +15,7 @@ resource "aws_batch_compute_environment" "nf_ondemand" {
     allocation_strategy = "BEST_FIT"
     max_vcpus = 20
     min_vcpus = 0
-    image_id = "ami-0a8857ac38c35157f"
+    image_id = "ami-0efd6627bb4ee4490"
     ec2_key_pair = aws_key_pair.nf_keypair.key_name
     security_group_ids = [
       aws_security_group.nf_security.id,
@@ -52,7 +52,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
     bid_percentage = 20
     max_vcpus = 100
     min_vcpus = 0
-    image_id = "ami-0a8857ac38c35157f"
+    image_id = "ami-0efd6627bb4ee4490"
     ec2_key_pair = aws_key_pair.nf_keypair.key_name
     security_group_ids = [
       aws_security_group.nf_security.id,
