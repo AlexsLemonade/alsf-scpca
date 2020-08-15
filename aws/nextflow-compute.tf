@@ -49,7 +49,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
     ]
     allocation_strategy = "SPOT_CAPACITY_OPTIMIZED"
     spot_iam_fleet_role = aws_iam_role.nf_spotfleet_role.arn
-    bid_percentage = 20
+    bid_percentage = 100
     max_vcpus = 100
     min_vcpus = 0
     image_id = "ami-0efd6627bb4ee4490"
