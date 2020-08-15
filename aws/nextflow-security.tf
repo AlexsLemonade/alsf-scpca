@@ -26,22 +26,36 @@ resource "aws_security_group" "nf_security" {
 
 resource "aws_vpc" "nf_vpc" {
   cidr_block = "10.1.0.0/16"
-  tags = var.default_tags
+  tags = merge(
+    {
+      Name = "nextflow-vpc"
+    },
+    var.default_tags
+  )
   enable_dns_hostnames = true
 }
 
 resource "aws_internet_gateway" "nf_gateway" {
   vpc_id = aws_vpc.nf_vpc.id
 
-  tags = {
-    Name = "Nextflow Gateway"
-  }
+  tags = merge(
+    {
+      Name = "nextflow-gateway"
+    },
+    var.default_tags
+  )
+
 }
 
 resource "aws_subnet" "nf_subnet" {
   vpc_id = aws_vpc.nf_vpc.id
   cidr_block = "10.1.1.0/24"
-  tags = var.default_tags
+  tags = merge(
+    {
+      Name = "nextflow-subnet"
+    },
+    var.default_tags
+  )
   map_public_ip_on_launch = true
 }
 
@@ -53,7 +67,12 @@ resource "aws_route_table" "nf_route_table" {
     gateway_id = aws_internet_gateway.nf_gateway.id
   }
 
-  tags = var.default_tags
+  tags = merge(
+    {
+      Name = "nextflow-route-table"
+    },
+    var.default_tags
+  )
 }
 
 resource "aws_route_table_association" "nf_route_table_association" {
