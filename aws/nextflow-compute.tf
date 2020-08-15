@@ -16,7 +16,7 @@ resource "aws_batch_compute_environment" "nf_ondemand" {
     max_vcpus = 20
     min_vcpus = 0
     image_id = "ami-0efd6627bb4ee4490"
-    ec2_key_pair = aws_key_pair.nf_keypair.key_name
+    # ec2_key_pair = aws_key_pair.nf_keypair.key_name
     security_group_ids = [
       aws_security_group.nf_security.id,
     ]
@@ -27,7 +27,7 @@ resource "aws_batch_compute_environment" "nf_ondemand" {
     tags = merge(
       var.default_tags,
       {
-        parent = "nextflow-batch-ondemand"
+        parent = "nextflow-ondemand-compute"
       }
     )
   }
@@ -48,12 +48,12 @@ resource "aws_batch_compute_environment" "nf_spot" {
       "optimal",
     ]
     allocation_strategy = "SPOT_CAPACITY_OPTIMIZED"
-    spot_iam_fleet_role = aws_iam_role.nf_ecs_role.arn
+    spot_iam_fleet_role = aws_iam_role.nf_spotfleet_role.arn
     bid_percentage = 20
     max_vcpus = 100
     min_vcpus = 0
     image_id = "ami-0efd6627bb4ee4490"
-    ec2_key_pair = aws_key_pair.nf_keypair.key_name
+    # ec2_key_pair = aws_key_pair.nf_keypair.key_name
     security_group_ids = [
       aws_security_group.nf_security.id,
     ]
@@ -64,7 +64,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
     tags = merge(
       var.default_tags,
       {
-        parent = "nextflow-batch-ondemand"
+        parent = "nextflow-spot-compute"
       }
     )
   }

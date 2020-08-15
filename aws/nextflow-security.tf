@@ -19,10 +19,10 @@ resource "aws_security_group" "nf_security" {
   }
 }
 
-resource "aws_key_pair" "nf_keypair" {
-  key_name = "nextflow-key"
-  public_key = "PUT_YOUR_PUBLIC_KEY_HERE"
-}
+# resource "aws_key_pair" "nf_keypair" {
+#   key_name = "nextflow-key"
+#   public_key = "PUT_YOUR_PUBLIC_KEY_HERE"
+# }
 
 resource "aws_vpc" "nf_vpc" {
   cidr_block = "10.1.0.0/16"
