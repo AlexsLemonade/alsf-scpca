@@ -10,13 +10,13 @@ resource "aws_security_group" "nf_security" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "SSH from anywhere."
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # ingress {
+  #   description = "SSH from anywhere."
+  #   from_port   = 22
+  #   to_port     = 22
+  #   protocol    = "tcp"
+  #   cidr_blocks = ["0.0.0.0/0"]
+  # }
 }
 
 # resource "aws_key_pair" "nf_keypair" {
