@@ -1,3 +1,7 @@
+# This file creates the compute environments used by the default and priority queues
+# The default environment is a 100 vCPU spot cluster
+# Priority environment is a 20 vCPU on demand cluster
+
 resource "aws_iam_instance_profile" "nf_ecs_instance_role" {
   name = "nextflow-ecs-instance-role"
   role = aws_iam_role.nf_ecs_role.name

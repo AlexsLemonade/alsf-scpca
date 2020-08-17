@@ -1,3 +1,6 @@
+# This sets specific roles for access to AWS services
+# used by compute environments and batch queues
+
 
 ### Batch Role
 resource "aws_iam_role" "nf_batch_role" {

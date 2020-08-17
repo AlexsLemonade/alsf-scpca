@@ -1,3 +1,6 @@
+# This file creates a nextflow user and adds it to the nextflow group.
+# This user can be used for job submissions, but jobs can also be submitted as individual users.
+
 resource "aws_iam_user" "nf_user" {
   name = "nextflow-batch-user"
   tags = var.default_tags

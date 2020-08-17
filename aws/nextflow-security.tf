@@ -1,3 +1,5 @@
+# VPC and network security settings
+
 resource "aws_security_group" "nf_security" {
   name = "nextflow-security-group"
   vpc_id = aws_vpc.nf_vpc.id

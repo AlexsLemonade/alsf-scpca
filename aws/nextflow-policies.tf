@@ -1,4 +1,9 @@
+# Specific policies used by roles and groups
+# Which S3 buckets are available for reading
+
 # S3 Group policies taken from AWS Nextflow batch setup
+
+# This policy allows read and write access to specific buckets for nextflow processing
 resource "aws_iam_policy" "nf_readwrite_S3" {
   name   = "nextflow-ccdl-readwrite-s3"
   policy = <<EOF
@@ -95,6 +100,7 @@ resource "aws_iam_policy" "nf_readwrite_S3" {
 EOF
 }
 
+# This policy gives read access to all S3 buckets
 resource "aws_iam_policy" "nf_read_S3" {
   name   = "nextflow-ccdl-read-s3"
   policy = <<EOF

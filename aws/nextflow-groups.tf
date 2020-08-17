@@ -1,3 +1,6 @@
+# This file sets the access setting sfor teh nextflow-batch group
+# Currently includes read acess to all s3, and write access to select buckets
+
 resource "aws_iam_group" "nf_group" {
   name = "nextflow-batch"
 }
