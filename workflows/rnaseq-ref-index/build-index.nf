@@ -24,7 +24,7 @@ process salmon_index{
   input:
     tuple path(reference), val(index_base), val(k)
   output:
-    path '${index_base}_k${k}'
+    path "${index_base}_k${k}"
   script:
     """
     salmon index \
@@ -35,11 +35,13 @@ process salmon_index{
 }
 
 workflow {
+  // channel of the reference file(s) and a label
   ch_ref = Channel
     .fromList([[params.ref_dir + "/" + params.cdna, "cdna"]])
+  // possible k values
   ch_k = Channel.fromList(params.k)
   // create a channel with all k values for each ref
   ch_salmon = ch_ref.combine(ch_k)
-  ch_salmon.view()
+
   salmon_index(ch_salmon)
 }
