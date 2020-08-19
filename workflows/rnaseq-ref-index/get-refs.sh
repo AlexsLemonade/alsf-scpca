@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-s3_base=s3://nextflow-ccdl-data/reference/homo_sapiens/GRCh38/ensembl-100
+s3_base=s3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100
 
 # Get reference fasta files and sync to S3
 wget -N -P fasta -i fasta_ref_urls.txt
