@@ -4,6 +4,9 @@
 # create a transcript2gene mapping file for use in salmon alevin,
 # and a output a list of mitochondrial genes for use in QC.
 
+# Currently hard coded to Ensembl v100 Homo Sapiens, mostly because 
+# AnnotationHub is not as simple to search efficiently as I might like.
+
 library(AnnotationHub)
 library(magrittr)
 library(optparse)
