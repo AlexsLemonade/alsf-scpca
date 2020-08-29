@@ -13,8 +13,8 @@ option_list <- list(
   make_option(
     opt_str = c("-t", "--t2g_out"),
     type = "character",
-    default = "annotation/Homo_sapiens.ensembl.100.tx2gene.txt",
-    help = "File path for tx2gene output.",
+    default = "annotation/Homo_sapiens.ensembl.100.tx2gene.tsv",
+    help = "File path for tx2gene output tsv file.",
   ),
   make_option(
     opt_str = c("-m", "--mito_out"),
