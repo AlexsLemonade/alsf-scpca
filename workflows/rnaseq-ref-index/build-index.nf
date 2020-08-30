@@ -34,6 +34,23 @@ process salmon_index{
     """
 }
 
+process kallisto_index{
+  container 'quay.io/biocontainers/kallisto:0.46.2--h4f7b962_1'
+  publishDir "${params.ref_dir}/kallisto_index" , mode: 'copy'
+  memory 32.GB
+  input:
+    tuple path(reference), val(index_base), val(kmer)
+  output:
+    path "${index_base}_k${kmer}"
+  script:
+    """
+    kallisto index \
+      -i ${index_base}_k${kmer} \
+      -k ${kmer} \
+      ${reference}
+    """
+}
+
 workflow {
   // channel of the reference files and labels
   ch_ref = Channel
@@ -45,4 +62,5 @@ workflow {
   ch_index = ch_ref.combine(ch_kmer)
 
   salmon_index(ch_index)
+  kallisto_index(ch_index)
 }
