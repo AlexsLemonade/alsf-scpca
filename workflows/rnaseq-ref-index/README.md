@@ -13,7 +13,7 @@ In addition, `get-refs.sh` will also combine the `cdna` and `ncrna` files into a
 ## Indexing
 
 Currently, only salmon indexing is implemented, without decoys.
-The workflow expects to find the following reference sequence files:
+The workflow expects to find the following reference sequence files, and will build indexes for each, currently with versions having 31 bp and 23 bp kmer sizes for each index:
 
 - **cdna** at `s3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/fasta/Homo_sapiens.GRCh38.cdna.all.fa.gz`
 - **txome** at `s3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/fasta/Homo_sapiens.GRCh38.txome.fa.gz`
@@ -22,7 +22,7 @@ and will place the salmon index directories at `s3://nextflow-ccdl-data/referenc
 
 To run the index script locally, navigate to this directory and run
 ```
-nextflow -C ../nextflow.config run build-index.nf
+nextflow -C ../nextflow.config run build-index.nf -resume
 ```
 
 This will use the provided `nextflow.config` file, which allows for running with docker images (the needed image will be pulled automatically)
@@ -30,5 +30,5 @@ This will use the provided `nextflow.config` file, which allows for running with
 To run on AWS Batch, use instead:
 
 ```
-nextflow -C ../nextflow.config run build-index.nf -profile batch
+nextflow -C ../nextflow.config run build-index.nf -profile batch -resume
 ```
