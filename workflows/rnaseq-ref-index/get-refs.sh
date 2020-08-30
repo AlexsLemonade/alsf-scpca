@@ -2,6 +2,9 @@
 set -euo pipefail
 
 s3_base=s3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100
+# run R in the scpca_r dockerfile
+# docker pull ccdl/scpca_r
+rdocker="docker run --mount type=bind,target=/home/rstudio,source=$PWD ccdl/scpca_r"
 
 # Get reference fasta files and sync to S3
 wget -N -P fasta -i fasta_ref_urls.txt
@@ -14,8 +17,6 @@ aws s3 sync fasta $s3_base/fasta
 
 # get annotation files & sync
 wget -N -P annotation -i annotation_ref_urls.txt
+$rdocker Rscript build_tx2gene_mito.R
 aws s3 sync annotation $s3_base/annotation
-
-
-
 
