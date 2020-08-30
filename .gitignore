@@ -33,5 +33,5 @@ work
 *.nextflow*
 
 workflows/rnaseq-ref-index/annotation/
-
 workflows/rnaseq-ref-index/fasta/
+
