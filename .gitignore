@@ -31,3 +31,7 @@ override.tf.json
 # Nextflow workdirs and logs
 work
 *.nextflow*
+
+workflows/rnaseq-ref-index/annotation/
+
+workflows/rnaseq-ref-index/fasta/

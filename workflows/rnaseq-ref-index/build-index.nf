@@ -4,7 +4,7 @@ nextflow.enable.dsl=2
 // basic parameters
 params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100'
 params.cdna = 'fasta/Homo_sapiens.GRCh38.cdna.all.fa.gz'
-params.ncrna = 'fasta/Homo_sapiens.GRCh38.ncrna.fa.gz'
+params.txome = 'fasta/Homo_sapiens.GRCh38.txome.fa.gz'
 params.kmer = [23, 31]
 
 
@@ -35,13 +35,14 @@ process salmon_index{
 }
 
 workflow {
-  // channel of the reference file(s) and a label
+  // channel of the reference files and labels
   ch_ref = Channel
-    .fromList([[params.ref_dir + "/" + params.cdna, "cdna"]])
+    .fromList([[params.ref_dir + "/" + params.cdna, "cdna"],
+               [params.ref_dir + "/" + params.txome, "txome"]])
   // possible kmer values
   ch_kmer = Channel.fromList(params.kmer)
   // create a channel with all k values for each ref
-  ch_salmon = ch_ref.combine(ch_kmer)
+  ch_index = ch_ref.combine(ch_kmer)
 
-  salmon_index(ch_salmon)
+  salmon_index(ch_index)
 }
