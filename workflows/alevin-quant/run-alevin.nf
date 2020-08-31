@@ -24,14 +24,14 @@ process alevin{
   memory { 28.GB * task.attempt}
   errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'terminate' }
   maxRetries 1
-  tag "${id}_${index}"
+  tag "${id}-${index}"
   publishDir "${params.outdir}"
   input:
     tuple val(id), path(read1), path(read2)
     path index
     path tx2gene
   output:
-    path "${id}_${index}"
+    path "${id}-${index}"
   script:
     """
     salmon alevin \
@@ -41,7 +41,7 @@ process alevin{
       -2 ${read2} \
       -i ${index} \
       --tgMap ${tx2gene} \
-      -o ${id}_${index} \
+      -o ${id}-${index} \
       -p ${task.cpus} \
       --dumpFeatures \
     """
