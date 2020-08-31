@@ -10,7 +10,9 @@ params.t2g = 'Homo_sapiens.ensembl.100.tx2gene.tsv'
 params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
 params.sample_dir = 's3://ccdl-scpca-data/raw/green_adam'
 params.sample_id = ['834', '905_3']
+params.outdir = 's3://nextflow-ccdl-results/scpca/alevin-quant'
 
+// build full paths
 params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${params.t2g}"
 params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist}"
@@ -18,24 +20,24 @@ params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist
 process alevin{
   container 'quay.io/biocontainers/salmon:1.3.0--hf69c8f4_0'
   cpus 8
-  memory 56.GB
+  publishDir "${params.outdir}"
   input:
     tuple val(id), path(read1), path(read2)
     path index
     path tx2gene
   output:
-    path "${id}_alevin_results"
+    path "${id}_${index}"
   script:
     """
     salmon alevin \
       -l ISR \
+      --chromium \
       -1 ${read1} \
       -2 ${read2} \
-      --chromium \
       -i ${index} \
-      -p ${task.cpus} \
-      -o ${id}_alevin_results \
       --tgMap ${tx2gene} \
+      -o ${id}_${index} \
+      -p ${task.cpus} \
       --dumpFeatures \
     """
 }
