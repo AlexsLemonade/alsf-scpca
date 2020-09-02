@@ -1,0 +1,138 @@
+---
+title: "Alevin Index comparisons"
+author: "Joshua Shapiro for CCDL"
+output: html_notebook
+---
+
+This notebook contains analysis of some intial benchmark in runs of Alevin usign different index files, looking at mapping rates.
+
+### Load Libraries
+```{r setup}
+library(ggplot2)
+library(magrittr)
+library(SingleCellExperiment)
+library(tximport)
+```
+
+### File and directory setup
+```{r}
+data_dir <- file.path("data", "alevin-quant")
+dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
+
+quant_s3 <- "s3://nextflow-ccdl-results/scpca-benchmark/alevin-quant"
+
+```
+
+
+
+
+## Sync S3 files
+
+```{r}
+sync_call <- paste("aws s3 sync", quant_s3, data_dir)
+system(sync_call)
+
+```
+
+Get the sample list and make a data frame with sample info
+
+```{r}
+quant_dirs <- list.dirs(data_dir, full.names = FALSE, recursive = FALSE)
+
+# split ids into components for later processing
+quant_info <- data.frame (quant_dir = quant_dirs, info = quant_dirs) %>%
+  tidyr::separate(info, sep = "[-]", 
+                  into = c("sample", "index_type")) %>%
+  tidyr::separate(index_type, 
+                  into = c("index_content", "kmer", "sa"), 
+                  extra = "drop") %>%
+  dplyr::mutate(kmer = stringr::str_remove(kmer, "k"))
+  
+```
+
+## Get Annotations from AnnotationHub
+
+```{r}
+hub = AnnotationHub::AnnotationHub(ask = FALSE)
+# Ensembl v100 Homo Sapiens is AH79689
+ensdb = hub[["AH79689"]]
+ensg <- genes(ensdb)
+```
+
+Create vectors of mitochondiral genes and coding genes for later.
+
+```{r}
+# create the mitochondrial gene list
+mito_genes <- ensg[seqnames(ensg) == 'MT']$gene_id
+
+coding_genes <- ensg[ensg$gene_biotype == "protein_coding"]$gene_id
+```
+
+
+
+# Process Alevin quantifications
+
+## tximport and make SCEs
+
+```{r}
+sces <- quant_dirs %>%
+  purrr::map(
+    ~ tximport(file.path(data_dir, .x, "alevin", "quants_mat.gz"),
+               type = "alevin")) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x$counts))) 
+
+# add names
+names(sces) <- quant_dirs
+```
+
+
+Calculate cell and feature QC statistics for each sample.
+
+```{r}
+sces <- sces %>% 
+  purrr::map(
+    ~ scater::addPerCellQC(
+      .x,
+      subsets = list(mito = mito_genes[mito_genes %in% rownames(.x)],
+                     ncRNA = rownames(.x)[!rownames(.x) %in% coding_genes] )
+    ) 
+  ) %>%
+  purrr::map(scater::addPerFeatureQC)
+```
+
+Combine all cell QC stats into a single data frame
+```{r}
+sce_cell_qc <- purrr::map_df(sces, 
+                        ~ as.data.frame(colData(.x)) %>%
+                          tibble::rownames_to_column(var = "cell_id"), 
+                        .id = "quant_id") %>%
+  dplyr::left_join(quant_info, by = c("quant_id" = "quant_dir"))
+```
+
+
+Combine all feature QC stats into a single data frame.
+```{r}
+sce_feature_qc <- purrr::map_df(sces, 
+                        ~ as.data.frame(rowData(.x)) %>%
+                          tibble::rownames_to_column(var = "gene_id"), 
+                        .id = "quant_id") %>%
+  dplyr::left_join(quant_info, by = c("quant_id" = "quant_dir"))
+```
+
+## Plotting the QC stats
+
+Plot cell QC gene accumulation curves & mito fraction
+```{r}
+ggplot(sce_cell_qc %>% dplyr::filter(kmer == "31"), 
+       aes(x = sum, y = detected, color = subsets_mito_percent)) +
+  geom_point() +
+  facet_grid(sample ~ paste(index_content, sa) ) +
+  scale_color_viridis_c() +
+  scale_x_log10() +
+  scale_y_log10()
+  
+```
+
+
+
