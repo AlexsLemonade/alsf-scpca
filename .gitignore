@@ -32,6 +32,17 @@ override.tf.json
 work
 *.nextflow*
 
+# R & Rstudio files
+.Rhistory
+rstudio-server.json
+.rstudio
+
+
+# Cache files
+.cache
+
+# intermediate reference and analysis files
 workflows/rnaseq-ref-index/annotation/
 workflows/rnaseq-ref-index/fasta/
+workflows/alevin-quant/data/
 
