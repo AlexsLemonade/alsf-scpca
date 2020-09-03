@@ -5,7 +5,7 @@ nextflow.enable.dsl=2
 params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100'
 params.cdna = 'fasta/Homo_sapiens.GRCh38.cdna.all.fa.gz'
 params.txome = 'fasta/Homo_sapiens.GRCh38.txome.fa.gz'
-params.genome = 'Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz'
+params.genome = 'fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz'
 params.kmer = '31'
 
 
@@ -38,16 +38,21 @@ process salmon_index_no_sa{
 process salmon_index_full_sa{
   container 'quay.io/biocontainers/salmon:1.3.0--hf69c8f4_0'
   publishDir "${params.ref_dir}/salmon_index", mode: 'copy'
+  // try dynamic memory (28.GB so 2x will fit in r4.2xlarge)
+  memory { 28.GB * task.attempt}
+  errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'terminate' }
+  maxRetries 1
   input:
     tuple val(index_base), path(reference), val(kmer)
+    path genome
   output:
     path "${index_base}_k${kmer}_full_sa"
   script:
     """
-    gunzip -c ${params.genome} \
+    gunzip -c ${genome} \
       |grep "^>" | cut -d " " -f 1 \
       |sed -e 's/>//g' > decoys.txt
-    cat ${reference} ${params.genome} > gentrome.fa.gz
+    cat ${reference} ${genome} > gentrome.fa.gz
     salmon index \
       -t gentrome.fa.gz \
       -d decoys.txt \
@@ -80,6 +85,6 @@ workflow {
                ["txome", params.ref_dir + "/" + params.txome, params.kmer]])
 
   salmon_index_no_sa(ch_ref)
-  salmon_index_full_sa(ch_ref)
+  salmon_index_full_sa(ch_ref, params.ref_dir + "/" + params.genome)
   kallisto_index(ch_ref)
 }
