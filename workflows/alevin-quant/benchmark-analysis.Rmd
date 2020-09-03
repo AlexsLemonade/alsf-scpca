@@ -134,5 +134,111 @@ ggplot(sce_cell_qc %>% dplyr::filter(kmer == "31"),
   
 ```
 
+# Find features that are reliably detected
+
+To start, will select features that are detected in > 5% of cells in at least one sample/index. 
+
+```{r}
+detected_features <- sce_feature_qc %>%
+  dplyr::filter(detected >= 5.0) %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+# How many?
+length(detected_features)
+```
+
+How many of these are not protein coding?
+
+```{r}
+detected_nc <- detected_features[!detected_features %in% coding_genes]
+
+length(detected_nc)
+```
+
+Lets look at these features in a bit more depth, comparing the same sample with full transcriptome vs cDNA only.
+```{r}
+# select noncoding detected features
+nc_feature_qc <- sce_feature_qc %>% 
+  dplyr::filter(gene_id %in% detected_nc) 
+
+# Get detected ncRNAs in 834-txome_k31_no_sa as a transcriptome 
+
+nc_txome <-  nc_feature_qc %>%
+  dplyr::filter(quant_id == "834-txome_k31_no_sa") %>%
+  dplyr::arrange(desc(mean))
+
+nc_cdna <-  nc_feature_qc %>%
+  dplyr::filter(quant_id == "834-cdna_k31_no_sa")
+
+# Join the tables
+nc_feature_comparison <- nc_txome %>%
+  dplyr::left_join(nc_cdna, 
+                   by = "gene_id", 
+                   suffix = c("_txome", "_cdna")) %>%
+  dplyr::select("gene_id", "mean_txome", "mean_cdna", "detected_txome", "detected_cdna")
+
+nc_feature_comparison
+```
+
+As expected, most of the features that are not listed as coding do not appear in the cdna only set!
+Some do, and spot checking indicates that those are listed as pseudogenes, which are for whatever reason still included in the cDNA file.
+
+Of those that do not, the top few genes are MALAT1 and mitchondrial rRNAs. 
+MALAT1 is potentially interesting, and it does seem that we should probably keep it!
+
+Lets make a vector of the noncoding cDNAs for future work:
+```{r}
+nc_cdna_genes <- sce_feature_qc %>%
+  dplyr::filter(quant_id == "834-cdna_k31_no_sa",
+                ! gene_id %in% coding_genes) %>%
+  dplyr::pull(gene_id)
+```
+
+
+## Comparing coding and noncoding txomes
+
+First, looking at the mean expression of each gene, comparing coding and noncoding: comparing within samples, coding to noncoding.
+
+```{r}
+sce_feature_filtered <- sce_feature_qc %>% 
+  dplyr::filter(kmer == "31", sa == "no") %>%
+  dplyr::mutate(class = dplyr::case_when(gene_id %in% coding_genes ~ "coding",
+                                         gene_id %in% nc_cdna_genes ~ "noncoding cDNA",
+                                          TRUE ~ "ncRNA"))
+
+ggplot(sce_feature_filtered, 
+       aes (x = mean, color = class)) +
+  geom_density() + 
+  scale_x_log10() + 
+  scale_color_brewer(palette = "Dark2") +
+  facet_grid(index_content ~ sample)
+```
+
+The noncoding cDNA genes seem to follow a very similar ditribution to the noncoding cDNA genes (mostly pseudogenes?), but I can't see any particular reason to exclude them.
+
+Just to check, lets look at the correlation of coding genes within a sample:
+
+
+```{r}
+# pick a random set of cells to look at
+cell_sample <- sample(colnames(sces[["834-cdna_k31_no_sa"]]), 100)
+
+features <- rownames(sces[["834-cdna_k31_no_sa"]])
+coding_features <- features[features %in% coding_genes]
+
+compare_expression <- data.frame(
+  cdna = as.vector(counts(sces[["834-cdna_k31_no_sa"]][coding_features, cell_sample])),
+  txome = as.vector(counts(sces[["834-txome_k31_no_sa"]][coding_features, cell_sample]))
+)
+
+cor(compare_expression, method = "spearman")
+```
+```{r}
+qqplot(log1p(compare_expression$cdna), log1p(compare_expression$txome))
+```
+Correlation is nearly perfect.
+
+## Conclusion
+I think there is little cost, and a not insignificant potential gain to including noncoding RNA transcripts in the mapping sets for this project.
 
 
