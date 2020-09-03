@@ -22,6 +22,7 @@ def get_base(file){
 process salmon_index_no_sa{
   container 'quay.io/biocontainers/salmon:1.3.0--hf69c8f4_0'
   publishDir "${params.ref_dir}/salmon_index", mode: 'copy'
+  cpus 2
   input:
     tuple val(index_base), path(reference), val(kmer)
   output:
@@ -40,6 +41,7 @@ process salmon_index_full_sa{
   publishDir "${params.ref_dir}/salmon_index", mode: 'copy'
   // try dynamic memory (28.GB so 2x will fit in r4.2xlarge)
   memory { 28.GB * task.attempt}
+  cpus 8
   errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'terminate' }
   maxRetries 1
   input:
@@ -56,8 +58,9 @@ process salmon_index_full_sa{
     salmon index \
       -t gentrome.fa.gz \
       -d decoys.txt \
-      -i ${index_base}_k${kmer} \
+      -i ${index_base}_k${kmer}_full_sa \
       -k ${kmer}
+      -p ${task.cpus}
     """
 }
 
