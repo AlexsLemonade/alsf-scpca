@@ -59,7 +59,7 @@ process salmon_index_full_sa{
       -t gentrome.fa.gz \
       -d decoys.txt \
       -i ${index_base}_k${kmer}_full_sa \
-      -k ${kmer}
+      -k ${kmer} \
       -p ${task.cpus}
     """
 }
