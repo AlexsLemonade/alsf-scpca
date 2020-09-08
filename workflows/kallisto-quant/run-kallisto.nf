@@ -19,24 +19,24 @@ params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${params.t2g}"
 params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist}"
 
 
-process kallisto{
+process kallisto_bus{
   container 'quay.io/biocontainers/kallisto:0.46.2--h4f7b962_1'
-  label 'thread_8'
+  label 'cpus_8'
   tag "${id}-${index}"
   publishDir "${params.outdir}"
   input:
     tuple val(id), path(read1), path(read2)
     path index
   output:
-    path outdir
+    path bus
   script:
     // interleave read1 & read2 files
-    outdir = "${id}-${index}_bus"
+    bus = "${id}-${index}_bus"
     reads = [read1, read2].transpose().flatten().join(' ')
     """
     kallisto bus \
       -i ${index} \
-      -o ${outdir} \
+      -o ${bus} \
       -x 10xv3 \
       -t ${task.cpus} \
       ${reads}
@@ -45,18 +45,19 @@ process kallisto{
 
 process bustools_sort{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
-  label 'thread_8'
+  label 'cpus_8'
   input:
-    path busfile
+    path bus
   output:
-    path "${busfile.baseName}.sorted.bus"
+    path outfile
   script:
+    outfile = "${bus}/output.sorted.bus"
     """
     bustools sort \
-      -o ${busfile.baseName}.sorted.bus \
+      -o  ${outfile} \
       -t ${task.cpus} \
       -m ${task.memory.toGiga()}G \
-      ${busfile}
+      ${bus}/output.bus
     """
 }
 
@@ -79,17 +80,17 @@ process bustools_correct{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
   label 'cpus_8'
   input:
-    path busfile
+    path bus
     path whitelist
   output:
     path outfile
   script:
-    outfile = "${busfile.simpleName}.corrected.bus"
+    outfile = "${bus}/output.corrected.bus"
     """
     bustools correct \
       -p \
       -w ${whitelist} \
-      ${busfile} \
+      ${bus}/output.bus \
     | bustools sort \
       -o ${outfile} \
       -t ${task.cpus} \
@@ -110,11 +111,10 @@ workflow{
                       file("${params.sample_dir}/${id}/*_R2_*.fastq.gz"),
                       )}
   // run Kallisto
-  kallisto(ch_reads, params.index_path)
+  kallisto_bus(ch_reads, params.index_path)
   // get busfiles
-  busfiles = kallisto.out.map{dir -> "${dir}/output.bus"}
   // generate whitelist
-  bustools_sort(busfiles) | bustools_whitelist
+  bustools_sort(kallisto_bus.out) | bustools_whitelist
   // correct busfiles
-  bustools_correct(busfiles, bustools_whitelist.out)
+  bustools_correct(kallisto_bus.out, bustools_whitelist.out)
 }
