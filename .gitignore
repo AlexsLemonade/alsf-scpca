@@ -32,9 +32,11 @@ override.tf.json
 work
 *.nextflow*
 
-# Rstudio server files
+# R & Rstudio files
+.Rhistory
 rstudio-server.json
 .rstudio
+
 
 # Cache files
 .cache

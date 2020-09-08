@@ -9,7 +9,7 @@ params.annotation_dir = 'annotation'
 params.t2g = 'Homo_sapiens.ensembl.100.tx2gene.tsv'
 params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
 params.sample_dir = 's3://ccdl-scpca-data/raw/green_adam'
-params.sample_id = ['834', '905_3']
+params.sample_ids = "834,905_3" //comma separated list to be parsed into a list
 params.outdir = 's3://nextflow-ccdl-results/scpca/alevin-quant'
 
 // build full paths
@@ -48,7 +48,8 @@ process alevin{
 }
 
 workflow{
-  ch_reads = Channel.fromList(params.sample_id)
+  sample_ids = params.sample_ids?.tokenize(',') ?: []
+  ch_reads = Channel.fromList(sample_ids)
     // create tuple of [sample_id, [Read1 files], [Read2 files]]
     .map{ id -> tuple("$id",
                       file("${params.sample_dir}/${id}/*_R1_*.fastq.gz"),
