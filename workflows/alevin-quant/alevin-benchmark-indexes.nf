@@ -3,7 +3,7 @@ nextflow.enable.dsl=2
 
 // run parameters
 params.sample_dir = 's3://ccdl-scpca-data/raw/green_adam'
-params.sample_id = ['834', '905_3']
+params.sample_ids = "834,905_3" //comma separated list to be parsed into a list
 params.outdir = 's3://nextflow-ccdl-results/scpca-benchmark/alevin-quant'
 
 process alevin{
@@ -35,7 +35,8 @@ process alevin{
 }
 
 workflow{
-  ch_reads = Channel.fromList(params.sample_id)
+  sample_ids = params.sample_ids?.tokenize(',') ?: []
+  ch_reads = Channel.fromList(sample_ids)
     // create tuple of [sample_id, [Read1 files], [Read2 files]]
     .map{ id -> tuple("$id",
                       file("${params.sample_dir}/${id}/*_R1_*.fastq.gz"),
@@ -54,11 +55,14 @@ workflow{
     ['txome_k23_no_sa',
      's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/salmon_index/txome_k23',
      's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/annotation/Homo_sapiens.ensembl.100.tx2gene.tsv'],
+    ['cdna_k31_full_sa',
+     's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/salmon_index/cdna_k31_full_sa',
+     's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/annotation/Homo_sapiens.ensembl.100.tx2gene.tsv'],
+    ['txome_k31_full_sa',
+     's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/salmon_index/txome_k31_full_sa',
+     's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/annotation/Homo_sapiens.ensembl.100.tx2gene.tsv'],
     ['cdna_k31_partial_sa',
      's3://nextflow-ccdl-data/reference/homo_sapiens/refgenomes-hg38/salmon_partial_sa_index',
-     's3://nextflow-ccdl-data/reference/homo_sapiens/refgenomes-hg38/annotation/Homo_sapiens.ensembl.97.tx2gene.tsv'],
-    ['cdna_k31_full_sa',
-     's3://nextflow-ccdl-data/reference/homo_sapiens/refgenomes-hg38/salmon_sa_index',
      's3://nextflow-ccdl-data/reference/homo_sapiens/refgenomes-hg38/annotation/Homo_sapiens.ensembl.97.tx2gene.tsv'],
   ])
   ch_testset = ch_reads.combine(ch_indexes)
