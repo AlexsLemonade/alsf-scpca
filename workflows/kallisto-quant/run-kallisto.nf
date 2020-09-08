@@ -32,19 +32,78 @@ process kallisto{
     tuple val(id), path(read1), path(read2)
     path index
   output:
-    path "${id}-${index}_bus"
+    path outdir
   script:
     // interleave read1 & read2 files
+    outdir = "${id}-${index}_bus"
     reads = [read1, read2].transpose().flatten().join(' ')
     """
     kallisto bus \
       -i ${index} \
-      -o ${id}-${index}_bus \
+      -o ${outdir} \
       -x 10xv3 \
       -t ${task.cpus} \
       ${reads}
     """
 }
+
+process bustools_sort{
+  container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
+  cpus 8
+  input:
+    path busfile
+  output:
+    path "${busfile.baseName}.sorted.bus"
+  script:
+    """
+    bustools sort \
+      -o ${busfile.baseName}.sorted.bus \
+      -t ${task.cpus} \
+      -m ${task.memory.toGiga()}G \
+      ${busfile}
+    """
+}
+
+process bustools_whitelist{
+  container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
+  input:
+    path busfile_sorted
+  output:
+    path whitelist_file
+  script:
+    whitelist_file = "${busfile_sorted.simpleName}_whitelist.txt"
+    """
+    bustools whitelist \
+      -o ${whitelist_file} \
+      ${busfile_sorted}
+    """
+}
+
+process bustools_correct{
+  container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
+  cpus 8
+  input:
+    path busfile
+    path whitelist
+  output:
+    path outfile
+  script:
+    outfile = "${busfile.simpleName}.corrected.bus"
+    """
+    bustools correct \
+      -p \
+      -w ${whitelist} \
+      ${busfile} \
+    | bustools sort \
+      -o ${outfile} \
+      -t ${task.cpus} \
+      -m ${task.memory.toGiga()}G \
+      -
+    """
+}
+
+
+
 
 workflow{
   sample_ids = params.sample_ids?.tokenize(',') ?: []
@@ -56,4 +115,10 @@ workflow{
                       )}
   // run Kallisto
   kallisto(ch_reads, params.index_path)
+  // get busfiles
+  busfiles = kallisto.out.map{dir -> "${dir}/output.bus"}
+  // generate whitelist
+  bustools_sort(busfiles) | bustools_whitelist
+  // correct busfiles
+  bustools_correct(busfiles, bustools_whitelist.out)
 }
