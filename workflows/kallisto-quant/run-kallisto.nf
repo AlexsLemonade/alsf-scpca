@@ -8,6 +8,7 @@ params.index_name = 'cdna_k31'
 params.annotation_dir = 'annotation'
 params.t2g = 'Homo_sapiens.ensembl.100.tx2gene.tsv'
 params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
+params.barcodes = 's3://nextflow-ccdl-data/reference/10X/barcodes/3M-february-2018.txt'
 
 params.sample_dir = 's3://ccdl-scpca-data/raw/green_adam'
 params.sample_ids = "834,905_3" //comma separated list to be parsed into a list
@@ -43,42 +44,31 @@ process kallisto_bus{
     """
 }
 
-process bustools_sort{
+process bustools_whitelist{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
   label 'cpus_8'
+  publishDir "${params.outdir}"
   input:
     path bus
   output:
-    path outfile
+    path whitelist
   script:
-    outfile = "${bus}/output.sorted.bus"
+    whitelist = "${bus}/whitelist.txt"
     """
     bustools sort \
-      -o  ${outfile} \
+      -o output.sorted.bus\
       -t ${task.cpus} \
-      -m ${task.memory.toGiga()}G \
       ${bus}/output.bus
-    """
-}
-
-process bustools_whitelist{
-  container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
-  input:
-    path busfile_sorted
-  output:
-    path whitelist_file
-  script:
-    whitelist_file = "${busfile_sorted.simpleName}_whitelist.txt"
-    """
     bustools whitelist \
-      -o ${whitelist_file} \
-      ${busfile_sorted}
+    -o ${whitelist} \
+    output.sorted.bus
     """
 }
 
 process bustools_correct{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
   label 'cpus_8'
+  publishDir "${params.outdir}"
   input:
     path bus
     path whitelist
@@ -94,7 +84,6 @@ process bustools_correct{
     | bustools sort \
       -o ${outfile} \
       -t ${task.cpus} \
-      -m ${task.memory.toGiga()}G \
       -
     """
 }
@@ -112,9 +101,8 @@ workflow{
                       )}
   // run Kallisto
   kallisto_bus(ch_reads, params.index_path)
-  // get busfiles
   // generate whitelist
-  bustools_sort(kallisto_bus.out) | bustools_whitelist
+  // bustools_whitelist(kallisto_bus.out)
   // correct busfiles
-  bustools_correct(kallisto_bus.out, bustools_whitelist.out)
+  bustools_correct(kallisto_bus.out, params.barcodes)
 }
