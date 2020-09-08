@@ -21,11 +21,7 @@ params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist
 
 process kallisto{
   container 'quay.io/biocontainers/kallisto:0.46.2--h4f7b962_1'
-  cpus 8
-  // try dynamic memory (28.GB so 2x will fit in r4.2xlarge)
-  memory { 28.GB * task.attempt}
-  errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'terminate' }
-  maxRetries 1
+  label 'thread_8'
   tag "${id}-${index}"
   publishDir "${params.outdir}"
   input:
@@ -49,7 +45,7 @@ process kallisto{
 
 process bustools_sort{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
-  cpus 8
+  label 'thread_8'
   input:
     path busfile
   output:
@@ -81,7 +77,7 @@ process bustools_whitelist{
 
 process bustools_correct{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
-  cpus 8
+  label 'cpus_8'
   input:
     path busfile
     path whitelist
