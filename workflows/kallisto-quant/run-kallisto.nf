@@ -29,15 +29,16 @@ process kallisto_bus{
     tuple val(id), path(read1), path(read2)
     path index
   output:
-    path bus_dir
+    path run_dir
   script:
+    run_dir = "${id}-${index}"
     // interleave read1 & read2 files
-    bus_dir = "${id}-${index}"
     reads = [read1, read2].transpose().flatten().join(' ')
     """
+    mkdir -p ${run_dir}/bus
     kallisto bus \
       -i ${index} \
-      -o ${bus_dir} \
+      -o ${run_dir}/bus \
       -x 10xv3 \
       -t ${task.cpus} \
       ${reads}
@@ -51,16 +52,16 @@ process bustools_whitelist{
   label 'cpus_8'
   publishDir "${params.outdir}"
   input:
-    path bus_dir
+    path run_dir
   output:
     path whitelist
   script:
-    whitelist = "${bus_dir}/whitelist.txt"
+    whitelist = "${run_dir}/bus/whitelist.txt"
     """
     bustools sort \
       -o output.sorted.bus \
       -t ${task.cpus} \
-      ${bus_dir}/output.bus
+      ${run_dir}/bus/output.bus
     bustools whitelist \
     -o ${whitelist} \
     output.sorted.bus
@@ -71,18 +72,18 @@ process bustools_correct{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
   label 'cpus_8'
   input:
-    path bus_dir
+    path run_dir
     path whitelist
   output:
-    path bus_dir
+    path run_dir
   script:
     """
     bustools correct \
       -p \
       -w ${whitelist} \
-      ${bus_dir}/output.bus \
+      ${run_dir}/bus/output.bus \
     | bustools sort \
-      -o ${bus_dir}/output.corrected.bus \
+      -o ${run_dir}/bus/output.corrected.bus \
       -t ${task.cpus} \
       -
     """
@@ -93,19 +94,20 @@ process bustools_count{
   label 'cpus_8'
   publishDir "${params.outdir}"
   input:
-    path bus_dir
+    path run_dir
     path tx2gene
   output:
-    path bus_dir
+    path count_dir
   script:
     """
+    mkdir -p ${run_dir}/counts
     bustools count \
-      -o ${bus_dir}/gene.count \
-      -e ${bus_dir}/matrix.ec \
-      -t ${bus_dir}/transcripts.txt \
+      -o ${run_dir}/counts/gene_count \
+      -e ${run_dir}/bus/matrix.ec \
+      -t ${run_dir}/bus/transcripts.txt \
       -g ${tx2gene} \
       --genecounts \
-      ${bus_dir}/output.corrected.bus
+      ${run_dir}/bus/output.corrected.bus
     """
 }
 
@@ -120,7 +122,7 @@ workflow{
                       )}
   // run kallisto
   kallisto_bus(ch_reads, params.index_path)
-  // correct busfiles
+  // correct busfiles using expected barcodes
   bustools_correct(kallisto_bus.out, params.barcodes)
   // count genes
   bustools_count(bustools_correct.out, params.t2g_path)
