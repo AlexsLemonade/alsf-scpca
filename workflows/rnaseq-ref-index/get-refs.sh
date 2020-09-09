@@ -3,8 +3,8 @@ set -euo pipefail
 
 s3_base=s3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100
 # run R in the scpca_r dockerfile
-# docker pull ccdl/scpca_r
-rdocker="docker run --mount type=bind,target=/home/rstudio,source=$PWD ccdl/scpca_r"
+# docker pull ghcr.io/alexslemonade/scpca_r
+rdocker="docker run --mount type=bind,target=/home/rstudio,source=$PWD ghcr.io/alexslemonade/scpca_r"
 
 # Get reference fasta files and sync to S3
 wget -N -P fasta -i fasta_ref_urls.txt
