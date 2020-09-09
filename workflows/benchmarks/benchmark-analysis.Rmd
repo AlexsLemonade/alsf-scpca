@@ -30,8 +30,7 @@ quant_s3 <- "s3://nextflow-ccdl-results/scpca-benchmark/alevin-quant"
 
 ```{r}
 sync_call <- paste("aws s3 sync", quant_s3, data_dir)
-system(sync_call)
-
+system(sync_call, ignore.stdout = TRUE)
 ```
 
 Get the sample list and make a data frame with sample info
@@ -214,7 +213,8 @@ ggplot(sce_feature_filtered,
   facet_grid(index_content ~ sample)
 ```
 
-The noncoding cDNA genes seem to follow a very similar ditribution to the noncoding cDNA genes (mostly pseudogenes?), but I can't see any particular reason to exclude them.
+The noncoding cDNA genes seem to follow a very similar ditribution to the noncoding cDNA genes (mostly pseudogenes?), but I can't see any particular reason to exclude them. 
+If anything, there are ncRNA genes tend to have somewhat higher mean expression than the noncoding cDNAs which are in the cDNA dataset.
 
 Just to check, lets look at the correlation of coding genes within a sample:
 
@@ -238,7 +238,12 @@ qqplot(log1p(compare_expression$cdna), log1p(compare_expression$txome))
 ```
 Correlation is nearly perfect.
 
-## Conclusion
+### Transcriptome Conclusion
+
 I think there is little cost, and a not insignificant potential gain to including noncoding RNA transcripts in the mapping sets for this project.
+
+## Comparing decoy sequences (TBD)
+
+
 
 
