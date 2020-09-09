@@ -5,7 +5,8 @@ nextflow.enable.dsl=2
 params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100'
 params.cdna = 'fasta/Homo_sapiens.GRCh38.cdna.all.fa.gz'
 params.txome = 'fasta/Homo_sapiens.GRCh38.txome.fa.gz'
-params.kmer = [23, 31]
+params.genome = 'fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz'
+params.kmer = '31'
 
 
 // remove .gz if it exists
@@ -18,11 +19,12 @@ def get_base(file){
 }
 
 
-process salmon_index{
+process salmon_index_no_sa{
   container 'quay.io/biocontainers/salmon:1.3.0--hf69c8f4_0'
-  publishDir "${params.ref_dir}/salmon_index" , mode: 'copy'
+  publishDir "${params.ref_dir}/salmon_index", mode: 'copy'
+  cpus 2
   input:
-    tuple path(reference), val(index_base), val(kmer)
+    tuple val(index_base), path(reference), val(kmer)
   output:
     path "${index_base}_k${kmer}"
   script:
@@ -34,12 +36,40 @@ process salmon_index{
     """
 }
 
+process salmon_index_full_sa{
+  container 'quay.io/biocontainers/salmon:1.3.0--hf69c8f4_0'
+  publishDir "${params.ref_dir}/salmon_index", mode: 'copy'
+  // try dynamic memory (28.GB so 2x will fit in r4.2xlarge)
+  memory { 28.GB * task.attempt}
+  cpus 8
+  errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'terminate' }
+  maxRetries 1
+  input:
+    tuple val(index_base), path(reference), val(kmer)
+    path genome
+  output:
+    path "${index_base}_k${kmer}_full_sa"
+  script:
+    """
+    gunzip -c ${genome} \
+      |grep "^>" | cut -d " " -f 1 \
+      |sed -e 's/>//g' > decoys.txt
+    cat ${reference} ${genome} > gentrome.fa.gz
+    salmon index \
+      -t gentrome.fa.gz \
+      -d decoys.txt \
+      -i ${index_base}_k${kmer}_full_sa \
+      -k ${kmer} \
+      -p ${task.cpus}
+    """
+}
+
 process kallisto_index{
   container 'quay.io/biocontainers/kallisto:0.46.2--h4f7b962_1'
-  publishDir "${params.ref_dir}/kallisto_index" , mode: 'copy'
+  publishDir "${params.ref_dir}/kallisto_index", mode: 'copy'
   memory 32.GB
   input:
-    tuple path(reference), val(index_base), val(kmer)
+    tuple val(index_base), path(reference), val(kmer)
   output:
     path "${index_base}_k${kmer}"
   script:
@@ -54,13 +84,10 @@ process kallisto_index{
 workflow {
   // channel of the reference files and labels
   ch_ref = Channel
-    .fromList([[params.ref_dir + "/" + params.cdna, "cdna"],
-               [params.ref_dir + "/" + params.txome, "txome"]])
-  // possible kmer values
-  ch_kmer = Channel.fromList(params.kmer)
-  // create a channel with all k values for each ref
-  ch_index = ch_ref.combine(ch_kmer)
+    .fromList([["cdna", params.ref_dir + "/" + params.cdna, params.kmer],
+               ["txome", params.ref_dir + "/" + params.txome, params.kmer]])
 
-  salmon_index(ch_index)
-  kallisto_index(ch_index)
+  salmon_index_no_sa(ch_ref)
+  salmon_index_full_sa(ch_ref, params.ref_dir + "/" + params.genome)
+  kallisto_index(ch_ref)
 }
