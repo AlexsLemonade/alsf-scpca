@@ -32,7 +32,7 @@ process kallisto_bus{
     path run_dir
   script:
     run_dir = "${id}-${index}"
-    // interleave read1 & read2 files
+    // interleave read1 & read2 file paths
     reads = [read1, read2].transpose().flatten().join(' ')
     """
     mkdir -p ${run_dir}/bus
