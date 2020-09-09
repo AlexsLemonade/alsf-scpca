@@ -71,6 +71,7 @@ process bustools_whitelist{
 process bustools_correct{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
   label 'cpus_8'
+  publishDir "${params.outdir}"
   input:
     path run_dir
     path whitelist
@@ -99,10 +100,11 @@ process bustools_count{
   output:
     path count_dir
   script:
+    count_dir ="${run_dir}/counts"
     """
-    mkdir -p ${run_dir}/counts
+    mkdir -p ${count_dir}
     bustools count \
-      -o ${run_dir}/counts/gene_count \
+      -o ${count_dir}/gene_count \
       -e ${run_dir}/bus/matrix.ec \
       -t ${run_dir}/bus/transcripts.txt \
       -g ${tx2gene} \
