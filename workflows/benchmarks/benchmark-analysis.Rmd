@@ -9,6 +9,8 @@ output:
 
 This notebook contains analysis of some initial benchmark in runs of Alevin using different index files, looking at mapping rates.
 
+## Setup
+
 ### Load Libraries
 ```{r setup}
 library(ggplot2)
@@ -74,9 +76,9 @@ coding_genes <- ensg[ensg$gene_biotype == "protein_coding"]$gene_id
 
 
 
-# Process Alevin quantifications
+## Process Alevin quantifications
 
-## tximport and make SCEs
+### tximport and make SCEs
 
 ```{r}
 sces <- quant_dirs %>%
@@ -124,7 +126,7 @@ sce_feature_qc <- purrr::map_df(sces,
   dplyr::left_join(quant_info, by = c("quant_id" = "quant_dir"))
 ```
 
-## Plotting the QC stats
+### Plotting QC stats
 
 Plot cell QC gene accumulation curves & mito fraction
 ```{r}
@@ -138,7 +140,7 @@ ggplot(sce_cell_qc %>% dplyr::filter(kmer == "31"),
   
 ```
 
-# Find features that are reliably detected
+### Find features that are reliably detected
 
 To start, will select features that are detected in > 5% of cells in at least one sample/index. 
 
@@ -249,7 +251,7 @@ Interesting though that there are some genes which do not appear to be expressed
 
 I think there is little cost, and a not insignificant potential gain to including noncoding RNA transcripts in the mapping sets for this project.
 
-## Comparing decoy sequences (TBD)
+## Comparing decoy indexes
 
 Get cDNA-only decoy comparison data.
 ```{r}
