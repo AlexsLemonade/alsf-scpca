@@ -1,10 +1,13 @@
 ---
 title: "Alevin Index comparisons"
 author: "Joshua Shapiro for CCDL"
-output: html_notebook
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
 ---
 
-This notebook contains analysis of some intial benchmark in runs of Alevin usign different index files, looking at mapping rates.
+This notebook contains analysis of some initial benchmark in runs of Alevin using different index files, looking at mapping rates.
 
 ### Load Libraries
 ```{r setup}
@@ -55,12 +58,12 @@ quant_info <- data.frame (quant_dir = quant_dirs, info = quant_dirs) %>%
 
 ```{r}
 hub = AnnotationHub::AnnotationHub(ask = FALSE)
-# Ensembl v100 Homo Sapiens is AH79689
+# Ensembl v100 Homo sapiens is AH79689
 ensdb = hub[["AH79689"]]
 ensg <- genes(ensdb)
 ```
 
-Create vectors of mitochondiral genes and coding genes for later.
+Create vectors of mitochondrial genes and coding genes for later.
 
 ```{r}
 # create the mitochondrial gene list
@@ -181,10 +184,10 @@ nc_feature_comparison <- nc_txome %>%
 nc_feature_comparison
 ```
 
-As expected, most of the features that are not listed as coding do not appear in the cdna only set!
+As expected, most of the features that are not listed as coding do not appear in the cDNA only set!
 Some do, and spot checking indicates that those are listed as pseudogenes, which are for whatever reason still included in the cDNA file.
 
-Of those that do not, the top few genes are MALAT1 and mitchondrial rRNAs. 
+Of those that do not, the top few genes are MALAT1 and mitochondrial rRNAs. 
 MALAT1 is potentially interesting, and it does seem that we should probably keep it!
 
 Lets make a vector of the noncoding cDNAs for future work:
@@ -215,7 +218,7 @@ ggplot(sce_feature_filtered,
   facet_grid(index_content ~ sample)
 ```
 
-The noncoding cDNA genes seem to follow a very similar ditribution to the noncoding cDNA genes (mostly pseudogenes?), but I can't see any particular reason to exclude them. 
+The noncoding cDNA genes seem to follow a very similar distribution to the noncoding cDNA genes (mostly pseudogenes?), but I can't see any particular reason to exclude them. 
 If anything, there are ncRNA genes tend to have somewhat higher mean expression than the noncoding cDNAs which are in the cDNA dataset.
 
 Just to check, lets look at the correlation of coding genes within a sample:
@@ -271,7 +274,7 @@ cor(decoy_means[,3:5], method = "spearman", use = "complete.obs")
 
 
 And we have them... interestingly, the best correlation is between no decoys and the partial decoy: the full decoy index is more different by this measure.
-This leads me to the preliminary conclusion that the partial index (which notably uses a slightly different set of transcipts at this stage, due to not being built locally) may not be worth pursuing, as it seems to make very little difference.
+This leads me to the preliminary conclusion that the partial index (which notably uses a slightly different set of transcripts at this stage, due to not being built locally) may not be worth pursuing, as it seems to make very little difference.
 
 Don't forget to look at your data!
 ```{r}
