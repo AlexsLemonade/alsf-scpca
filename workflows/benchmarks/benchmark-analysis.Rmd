@@ -12,7 +12,12 @@ library(ggplot2)
 library(magrittr)
 library(SingleCellExperiment)
 library(tximport)
+
+# set seed
+set.seed(2020)
 ```
+
+
 
 ### File and directory setup
 ```{r}
@@ -22,9 +27,6 @@ dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
 quant_s3 <- "s3://nextflow-ccdl-results/scpca-benchmark/alevin-quant"
 
 ```
-
-
-
 
 ## Sync S3 files
 
@@ -43,7 +45,7 @@ quant_info <- data.frame (quant_dir = quant_dirs, info = quant_dirs) %>%
   tidyr::separate(info, sep = "[-]", 
                   into = c("sample", "index_type")) %>%
   tidyr::separate(index_type, 
-                  into = c("index_content", "kmer", "sa"), 
+                  into = c("index_content", "kmer", "decoy"), 
                   extra = "drop") %>%
   dplyr::mutate(kmer = stringr::str_remove(kmer, "k"))
   
@@ -126,7 +128,7 @@ Plot cell QC gene accumulation curves & mito fraction
 ggplot(sce_cell_qc %>% dplyr::filter(kmer == "31"), 
        aes(x = sum, y = detected, color = subsets_mito_percent)) +
   geom_point() +
-  facet_grid(sample ~ paste(index_content, sa) ) +
+  facet_grid(sample ~ paste(index_content, decoy) ) +
   scale_color_viridis_c() +
   scale_x_log10() +
   scale_y_log10()
@@ -200,10 +202,10 @@ First, looking at the mean expression of each gene, comparing coding and noncodi
 
 ```{r}
 sce_feature_filtered <- sce_feature_qc %>% 
-  dplyr::filter(kmer == "31", sa == "no") %>%
+  dplyr::filter(kmer == "31", decoy == "no") %>%
   dplyr::mutate(class = dplyr::case_when(gene_id %in% coding_genes ~ "coding",
                                          gene_id %in% nc_cdna_genes ~ "noncoding cDNA",
-                                          TRUE ~ "ncRNA"))
+                                         TRUE ~ "ncRNA"))
 
 ggplot(sce_feature_filtered, 
        aes (x = mean, color = class)) +
@@ -221,22 +223,24 @@ Just to check, lets look at the correlation of coding genes within a sample:
 
 ```{r}
 # pick a random set of cells to look at
-cell_sample <- sample(colnames(sces[["834-cdna_k31_no_sa"]]), 100)
+cell_sample <- sample(colnames(sces[["905_3-cdna_k31_no_sa"]]), 100)
 
-features <- rownames(sces[["834-cdna_k31_no_sa"]])
+features <- rownames(sces[["905_3-cdna_k31_no_sa"]])
 coding_features <- features[features %in% coding_genes]
 
 compare_expression <- data.frame(
-  cdna = as.vector(counts(sces[["834-cdna_k31_no_sa"]][coding_features, cell_sample])),
-  txome = as.vector(counts(sces[["834-txome_k31_no_sa"]][coding_features, cell_sample]))
+  cdna = as.vector(counts(sces[["905_3-cdna_k31_no_sa"]][coding_features, cell_sample])),
+  txome = as.vector(counts(sces[["905_3-txome_k31_no_sa"]][coding_features, cell_sample]))
 )
 
 cor(compare_expression, method = "spearman")
 ```
 ```{r}
-qqplot(log1p(compare_expression$cdna), log1p(compare_expression$txome))
+ggplot(compare_expression, aes(x = log1p(cdna), y = log1p(txome))) +
+  geom_point()
 ```
-Correlation is nearly perfect.
+Correlation is very good for genes present in both, with expression more often lower in the transcriptome set, which may make sense in the case of multimapping introduced by the larger number of potential targets.
+Interesting though that there are some genes which do not appear to be expressed in the cDNA set that have expression in the txome.
 
 ### Transcriptome Conclusion
 
@@ -244,6 +248,72 @@ I think there is little cost, and a not insignificant potential gain to includin
 
 ## Comparing decoy sequences (TBD)
 
+Get cDNA-only decoy comparison data.
+```{r}
+sce_feature_filtered <- sce_feature_qc %>% 
+  dplyr::filter(kmer == "31", index_content == "cdna")
+```
+
+```{r}
+decoy_means <- sce_feature_filtered %>%
+  tidyr::pivot_wider(id_cols = c(gene_id, sample),
+                     names_from = decoy,
+                     values_from = mean) 
+```
+
+First off, how well correlated are the means for various decoy choices? 
+We expect very good correlations.
+
+```{r}
+cor(decoy_means[,3:5], method = "spearman", use = "complete.obs")
+```
 
 
 
+And we have them... interestingly, the best correlation is between no decoys and the partial decoy: the full decoy index is more different by this measure.
+This leads me to the preliminary conclusion that the partial index (which notably uses a slightly different set of transcipts at this stage, due to not being built locally) may not be worth pursuing, as it seems to make very little difference.
+
+Don't forget to look at your data!
+```{r}
+pairs(decoy_means[,3:5])
+```
+Whoa... seems like a lot is being driven by a few points that are very different in the full index data. 
+What are those genes?
+
+
+```{r}
+decoy_means %>% 
+  dplyr::mutate(diff = (no - full)/(full + 1)) %>%
+  dplyr::arrange(desc(diff))
+```
+ENSG00000269028, which is by far the most different, is the gene *MT-RNR2 like 12* which, aside from being related to at least 12 other genes, does not ring any particular bells.
+However, ENSG00000255823 is *MT-RNR2-like 8* 
+
+Other genes at the top of the differential list:
+ENSG00000163864: NMNAT3 nicotinamide nucleotide adenylyltransferase 3
+ENSG00000197563: PIGN Phosphatidylinositol Glycan Anchor Biosynthesis Class N
+ENSG00000173559: NABP1 Nucleic Acid Binding Protein 1
+
+I don't really know what to do with this list... it seems like few genes will have large differences, but a few differences are enormous!
+
+
+Just as a sanity check, lets repeat one of the analyses we did before, comparing the cDNA to the transcriptome for the full decoy index (since we now have both):
+
+```{r}
+# using the same `cell_sample` and `coding_features` as previously
+
+compare_expression_full <- data.frame(
+  cdna = as.vector(counts(sces[["905_3-cdna_k31_full_sa"]][coding_features, cell_sample])),
+  txome = as.vector(counts(sces[["905_3-txome_k31_full_sa"]][coding_features, cell_sample]))
+)
+
+cor(compare_expression_full, method = "spearman")
+```
+```{r}
+ggplot(compare_expression_full, aes(log1p(cdna), y = log1p(txome))) +
+  geom_point()
+```
+
+Interestingly, the correlation between cDNA and txome expression values (for coding genes) using the full decoy seems substantially better than with the no decoy sequences!
+
+This seems to me to be a good argument for using the full decoy, if it is less sensitive to the chosen transcript list.
