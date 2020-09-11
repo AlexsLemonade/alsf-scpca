@@ -11,7 +11,7 @@ params.barcodes = 's3://nextflow-ccdl-data/reference/10X/barcodes/3M-february-20
 process alevin{
   container 'quay.io/biocontainers/salmon:1.3.0--hf69c8f4_0'
   label 'cpus_8'
-  tag "${sample_id}-${index_id}-alevin"
+  tag "${sample_id}-${index_id}"
   publishDir "${params.outdir}/alevin"
   input:
     tuple val(sample_id), path(read1), path(read2), val(index_id), path(index)
@@ -36,7 +36,7 @@ process alevin{
 process kallisto_bus{
   container 'quay.io/biocontainers/kallisto:0.46.2--h4f7b962_1'
   label 'cpus_8'
-  tag "${sample_id}-${index_id}-kallisto"
+  tag "${sample_id}-${index_id}"
   publishDir "${params.outdir}/kallisto"
   input:
     tuple val(sample_id), path(read1), path(read2), val(index_id), path(index)
@@ -113,22 +113,22 @@ workflow{
                       file("${params.sample_dir}/${id}/*_R2_*.fastq.gz"),
                       )}
   ch_indexes_alevin = Channel.fromList([
-    ['cdna_k31_no_sa',
+    ['alevin_cdna_no_sa',
      's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/salmon_index/cdna_k31'],
-    ['txome_k31_no_sa',
+    ['alevin_txome_no_sa',
      's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/salmon_index/txome_k31'],
-    ['cdna_k31_full_sa',
+    ['alevin_cdna_full_sa',
      's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/salmon_index/cdna_k31_full_sa'],
-    ['txome_k31_full_sa',
+    ['alevin_txome_full_sa',
      's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/salmon_index/txome_k31_full_sa']
   ])
 
   ch_testset_alevin = ch_reads.combine(ch_indexes_alevin)
 
   ch_indexes_kallisto = Channel.fromList([
-    ['cdna_k31_kallisto',
+    ['kallisto_cdna',
      's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/kallisto_index/cdna_k31'],
-    ['txome_k31_kallisto',
+    ['kallisto_txome',
      's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/kallisto_index/txome_k31']
   ])
 
