@@ -156,7 +156,7 @@ length(detected_features)
 How many of these are not protein coding?
 
 ```{r}
-detected_nc <- detected_features[!detected_features %in% coding_genes]
+detected_nc <- detected_features[!(detected_features %in% coding_genes)]
 
 length(detected_nc)
 ```
