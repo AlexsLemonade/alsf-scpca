@@ -28,6 +28,7 @@ RUN install2.r --error --deps TRUE \
 # Install bioconductor packages
 RUN R -e "BiocManager::install(c( \
     'AnnotationHub', \
+    'DropletUtils', \
     'ensembldb', \
     'scran', \
     'scater', \
