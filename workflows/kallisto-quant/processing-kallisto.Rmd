@@ -1,0 +1,150 @@
+---
+title: "Kallisto bustools Processing"
+output: html_notebook
+---
+
+This notebook is an example of processing a kallsto|bustools run as implemented in the `run-kallisto.nf` workflow.
+
+```{r setup}
+library(magrittr)
+library(ggplot2)
+library(SingleCellExperiment)
+```
+
+
+First we will download a data set to work with from S3. 
+This set was quantified as part of a benchmarking set.
+This step assumes that `awscli` is installed (which it is if you use the `scpca-r` docker image) and that you have already set up credentials.
+
+```{r}
+data_dir <- file.path("data", "kallisto", "834")
+dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
+quant_s3 <- "s3://nextflow-ccdl-results/scpca-benchmark/quants/kallisto/834-kallisto_cdna"
+mito_s3 <- "s3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/annotation/Homo_sapiens.ensembl.100.mitogenes.txt" 
+mito_file <- file.path("data", "Homo_sapiens.ensembl.100.mitogenes.txt")
+```
+
+### Sync S3 files
+
+```{r}
+sync_call <- paste("aws s3 sync", quant_s3, data_dir, "--exclude 'bus/*'")
+system(sync_call, ignore.stdout = TRUE)
+
+# get the mitochondrial gene set
+cp_call <- paste("aws s3 cp", mito_s3, mito_file)
+system(cp_call)
+```
+
+## Read counts matrix
+```{r}
+file_base <- file.path(data_dir, "counts", "gene_count")
+
+counts <- Matrix::readMM(paste0(file_base, ".mtx")) %>%
+  # compress and transpose to genes in rows x cells in columns
+  t() %>%
+  as("dgCMatrix")
+# add annotation info
+dimnames(counts) <- list(readLines(paste0(file_base, ".genes.txt")),
+                         readLines(paste0(file_base, ".barcodes.txt")))
+```
+
+## Identifying cells with droplets
+
+### Cellranger default method first.
+
+Based on library size, capturing cells with at least 10% of the UMI counts of the upper 99th percentile.
+
+```{r}
+system.time(drops <- DropletUtils::defaultDrops(counts))
+
+sum(drops)
+min(colSums(counts[,drops]))
+```
+
+### Knee plot method
+
+Find the knee, keep the cells above that rank.
+
+```{r}
+system.time(rank_df <- DropletUtils::barcodeRanks(counts))
+knee = metadata(rank_df)$knee
+inflection = metadata(rank_df)$inflection
+
+sum(rank_df$total >= knee)
+min(colSums(counts[,which(rank_df$total >= knee)]))
+```
+
+
+```{r}
+ggplot(as.data.frame(rank_df), aes(x = rank, y = total)) + 
+  geom_point() +
+  geom_hline(yintercept = knee, color = "blue") +
+  geom_hline(yintercept = inflection, color = "darkgreen") +
+  scale_x_log10() + 
+  scale_y_log10()
+```
+
+
+### EmptyDrops method
+Fancy method: difference from ambient RNA distribution.
+(v. slow so may not be worth pursuing in this context, but could be added to a workflow?)
+```{r}
+system.time(drop_df <- DropletUtils::emptyDrops(counts))
+
+is.cell <- drop_df$FDR <= 0.01 
+sum(is.cell, na.rm=TRUE)
+```
+
+This method also keeps many more "cells", which may be net negative for downstream processing as well, but may also be worth pursuing for some kinds of analysis.
+
+For now, we will proceed with the knee method to define cells.
+
+## Make SCE object 
+
+```{r}
+cells <- which(rank_df$total >= knee)
+sce <- SingleCellExperiment(list(counts = counts[ , cells]))
+```
+
+That results in a much more reasonably sized object, one we can work with as usual with SCE objects. 
+
+## Simple QC
+```{r}
+mito_genes <- readLines(mito_file)
+
+sce <- scater::addPerCellQC(
+  sce, 
+  subsets = list(mito = mito_genes[mito_genes %in% rownames(sce)])
+) %>%
+  scater::addPerFeatureQC()
+```
+
+```{r}
+ggplot(as.data.frame(colData(sce)),
+       aes(x = sum, y = detected, color = subsets_mito_percent)) + 
+  geom_point(alpha = 0.1) + 
+  scale_color_viridis_c()
+```
+
+
+### EmptyDrops QC
+
+Out of curiousity, what do the EmptyDrops results look like?
+
+```{r}
+sce_ed <- SingleCellExperiment(list(counts = counts[ , which(is.cell)]))
+
+sce_ed <- scater::addPerCellQC(
+  sce_ed, 
+  subsets = list(mito = mito_genes[mito_genes %in% rownames(sce_ed)])
+) %>%
+  scater::addPerFeatureQC()
+
+ggplot(as.data.frame(colData(sce_ed)),
+       aes(x = sum, y = detected, color = subsets_mito_percent)) + 
+  geom_point(alpha = 0.1) + 
+  scale_color_viridis_c()
+```
+
+
+

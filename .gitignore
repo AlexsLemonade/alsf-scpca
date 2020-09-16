@@ -45,9 +45,4 @@ rstudio-server.json
 # intermediate reference and analysis files
 workflows/rnaseq-ref-index/annotation/
 workflows/rnaseq-ref-index/fasta/
-workflows/alevin-quant/data/
-workflows/benchmarks/data/
-
-
-
-
+workflows/*/data/
