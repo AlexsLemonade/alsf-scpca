@@ -146,5 +146,25 @@ ggplot(as.data.frame(colData(sce_ed)),
   scale_color_viridis_c()
 ```
 
+What happens if we look at the knee plot after EmptyDrops excludes ambient expression drops?
 
+```{r}
+rank_df <- DropletUtils::barcodeRanks(counts(sce_ed))
+knee = metadata(rank_df)$knee
+inflection = metadata(rank_df)$inflection
+
+sum(rank_df$total >= knee)
+min(colSums(counts(sce_ed)[,which(rank_df$total >= knee)]))
+```
+Interestingly, it now recovers more cells, at a slightly lower threshold.
+
+
+```{r}
+ggplot(as.data.frame(rank_df), aes(x = rank, y = total)) + 
+  geom_point() +
+  geom_hline(yintercept = knee, color = "blue") +
+  geom_hline(yintercept = inflection, color = "darkgreen") +
+  scale_x_log10() + 
+  scale_y_log10()
+```
 
