@@ -119,10 +119,10 @@ sce_cell_qc <- purrr::map_df(sces,
 
 Combine all feature QC stats into a single data frame.
 ```{r}
-sce_feature_qc <- purrr::map_df(sces, 
-                        ~ as.data.frame(rowData(.x)) %>%
-                          tibble::rownames_to_column(var = "gene_id"), 
-                        .id = "quant_id") %>%
+sce_feature_qc <- purrr::map_df(sces,
+                                ~ as.data.frame(rowData(.x)) %>%
+                                  tibble::rownames_to_column(var = "gene_id"),
+                                .id = "quant_id") %>%
   dplyr::left_join(quant_info, by = c("quant_id" = "quant_dir"))
 ```
 
@@ -322,3 +322,10 @@ ggplot(compare_expression_full, aes(log1p(cdna), y = log1p(txome))) +
 Interestingly, the correlation between cDNA and txome expression values (for coding genes) using the full decoy seems substantially better than with the no decoy sequences!
 
 This seems to me to be a good argument for using the full decoy, if it is less sensitive to the chosen transcript list.
+
+## Session Info
+
+```{r}
+sessionInfo()
+```
+
