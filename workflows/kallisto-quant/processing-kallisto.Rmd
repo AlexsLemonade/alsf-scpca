@@ -67,8 +67,8 @@ Find the knee, keep the cells above that rank.
 
 ```{r}
 system.time(rank_df <- DropletUtils::barcodeRanks(counts))
-knee = metadata(rank_df)$knee
-inflection = metadata(rank_df)$inflection
+knee <- metadata(rank_df)$knee
+inflection <- metadata(rank_df)$inflection
 
 sum(rank_df$total >= knee)
 min(colSums(counts[,which(rank_df$total >= knee)]))
@@ -181,4 +181,3 @@ ggplot(as.data.frame(rank_df), aes(x = rank, y = total)) +
 ```{r}
 sessionInfo()
 ```
-
