@@ -1,6 +1,8 @@
 ## Docker
 
 Running the benchmark analysis notebook should be done via docker, with the following command to mount the local directory as the home direcory and pass in the current user's AWS credentials and launch RStudio.
+AWS credentials are expected to be stored in `~/.aws`, having been set up on the user's  system with `aws configure`.
+https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html#cli-configure-quickstart-config
 
 ```
 docker run \
