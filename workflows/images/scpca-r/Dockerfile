@@ -7,10 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends apt-utils dialo
 
 # Add curl, bzip2 and dev libs
 RUN apt-get update -qq && apt-get -y --no-install-recommends install \
+    awscli \
     bzip2 \
     curl \
     libbz2-dev \
     libgdal-dev \
+    libglpk-dev \
     liblzma-dev \
     libreadline-dev \
     libudunits2-dev
@@ -30,6 +32,7 @@ RUN R -e "BiocManager::install(c( \
     'AnnotationHub', \
     'DropletUtils', \
     'ensembldb', \
+    'fishpond', \
     'scran', \
     'scater', \
     'tximport'), \
