@@ -168,3 +168,9 @@ ggplot(as.data.frame(rank_df), aes(x = rank, y = total)) +
   scale_y_log10()
 ```
 
+
+## Session Info
+```{r}
+sessionInfo()
+```
+
