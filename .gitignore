@@ -34,6 +34,7 @@ work
 
 # R & Rstudio files
 .Rhistory
+rstudio-prefs.json
 rstudio-server.json
 .rstudio
 
@@ -44,4 +45,4 @@ rstudio-server.json
 # intermediate reference and analysis files
 workflows/rnaseq-ref-index/annotation/
 workflows/rnaseq-ref-index/fasta/
-workflows/benchmarks/data/
+workflows/*/data/
