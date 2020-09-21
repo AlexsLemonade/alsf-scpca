@@ -123,6 +123,9 @@ sce <- scater::addPerCellQC(
 ggplot(as.data.frame(colData(sce)),
        aes(x = sum, y = detected, color = subsets_mito_percent)) + 
   geom_point(alpha = 0.1) + 
+  labs(x = "Total UMI count", 
+       y = "Detected genes",
+       color = "Percent\nmitochondrial") +
   scale_color_viridis_c()
 ```
 
@@ -143,9 +146,14 @@ sce_ed <- scater::addPerCellQC(
 ggplot(as.data.frame(colData(sce_ed)),
        aes(x = sum, y = detected, color = subsets_mito_percent)) + 
   geom_point(alpha = 0.1) + 
+  labs(x = "Total UMI count", 
+       y = "Detected genes",
+       color = "Percent\nmitochondrial") +
   scale_color_viridis_c()
 ```
 
+
+## Sequential filtering
 What happens if we look at the knee plot after EmptyDrops excludes ambient expression drops?
 
 ```{r}
