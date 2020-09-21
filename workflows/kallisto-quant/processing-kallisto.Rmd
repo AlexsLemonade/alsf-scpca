@@ -97,9 +97,9 @@ sum(is.cell, na.rm=TRUE)
 
 This method also keeps many more "cells", which may be net negative for downstream processing as well, but may also be worth pursuing for some kinds of analysis.
 
-For now, we will proceed with the knee method to define cells.
-
 ## Make SCE object 
+
+For now, we will proceed with the knee method to define cells.
 
 ```{r}
 cells <- which(rank_df$total >= knee)
@@ -108,7 +108,7 @@ sce <- SingleCellExperiment(list(counts = counts[ , cells]))
 
 That results in a much more reasonably sized object, one we can work with as usual with SCE objects. 
 
-## Simple QC
+## Simple QC plots
 ```{r}
 mito_genes <- readLines(mito_file)
 
@@ -130,9 +130,9 @@ ggplot(as.data.frame(colData(sce)),
 ```
 
 
-### EmptyDrops QC
+### EmptyDrops QC plots
 
-Out of curiousity, what do the EmptyDrops results look like?
+Out of curiosity, what do the EmptyDrops results look like?
 
 ```{r}
 sce_ed <- SingleCellExperiment(list(counts = counts[ , which(is.cell)]))
@@ -158,8 +158,8 @@ What happens if we look at the knee plot after EmptyDrops excludes ambient expre
 
 ```{r}
 rank_df <- DropletUtils::barcodeRanks(counts(sce_ed))
-knee = metadata(rank_df)$knee
-inflection = metadata(rank_df)$inflection
+knee <- metadata(rank_df)$knee
+inflection <- metadata(rank_df)$inflection
 
 sum(rank_df$total >= knee)
 min(colSums(counts(sce_ed)[,which(rank_df$total >= knee)]))
