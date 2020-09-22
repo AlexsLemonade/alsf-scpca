@@ -60,18 +60,20 @@ quant_dirs <- list.dirs(c(alevin_data_dir, kallisto_data_dir),
 
 
 # split ids into components for later processing
+# expect some NA fills for kallisto, which doesn't have decoys, replace with "no"
 quant_info <- data.frame (quant_dir = quant_dirs, info = quant_dirs) %>%
   tidyr::separate(info, sep = "[-]", 
                   into = c("sample", "index_type")) %>%
   tidyr::separate(index_type, 
                   into = c("tool", "index_content", "decoy"), 
-                  extra = "drop")
+                  extra = "drop") %>%
+  dplyr::mutate(decoy = tidyr::replace_na(decoy, "no"))
   
 ```
 
 ### Get Annotations from AnnotationHub
 
-```{r}
+```{r }
 hub = AnnotationHub::AnnotationHub(ask = FALSE)
 # Ensembl v100 Homo sapiens is AH79689
 ensdb = hub[["AH79689"]]
@@ -87,10 +89,7 @@ mito_genes <- ensg[seqnames(ensg) == 'MT']$gene_id
 coding_genes <- ensg[ensg$gene_biotype == "protein_coding"]$gene_id
 ```
 
-
-
 ## Process quantification files
-
 
 ### Alevin
 
@@ -125,6 +124,7 @@ alevin_sces <- alevin_sces %>%
   purrr::map(scater::addPerFeatureQC)
 ```
 
+Make a data frame of the cell QCs.
 ```{r}
 alevin_cell_qc <- alevin_sces %>%
   purrr::map_df( ~ as.data.frame(colData(.x)) %>%
@@ -133,14 +133,20 @@ alevin_cell_qc <- alevin_sces %>%
   dplyr::left_join(quant_info, by = c("quant_id" = "quant_dir"))
 ```
 
+Summarize the total UMIs per cell.
 ```{r}
 summary(alevin_cell_qc$sum)
 ```
 
+Summarize the number of detected genes per cell.
+```{r}
+summary(alevin_cell_qc$detected)
+```
 
 
 ### Kallisto
 
+Get file basenames (no extension) for import
 
 ```{r}
 kallisto_quant_ids <- quant_info %>%
@@ -152,8 +158,8 @@ base_file <- file.path(kallisto_data_dir, kallisto_quant_ids, "counts", "gene_co
 
 #### Function for reading Kallisto files
 
-Takes a base file name and reads the the mtx file and associated barcode and gene files files.  
-Filters to 
+Takes a base file name and reads the the `.mtx` file and associated `.barcodes.txt` and `.genes.txt` files.  
+Filters cells/barcodes based on the knee plot using `DropletUtils::barcodeRanks()`
 ```{r}
 read_kallisto_counts <- function(base, cellfilter = c("knee", "none")){
   cellfilter <- match.arg(cellfilter)
@@ -172,17 +178,15 @@ read_kallisto_counts <- function(base, cellfilter = c("knee", "none")){
 }
 ```
 
-
+Make a list of kallisto runs as SCEs
 ```{r}
 kallisto_sces <- base_file %>%
   purrr::map(read_kallisto_counts) %>%
-  purrr::map(
-    ~ SingleCellExperiment(list(counts = .x))) 
+  purrr::map(~ SingleCellExperiment(list(counts = .x))) 
 
 # add names
 names(kallisto_sces) <- kallisto_quant_ids
 ```
-
 
 Calculate cell and feature QC statistics for each sample
 
@@ -197,6 +201,7 @@ kallisto_sces <- kallisto_sces %>%
   purrr::map(scater::addPerFeatureQC)
 ```
 
+Make a table of the SCE cell QCs.
 ```{r}
 kallisto_cell_qc <- kallisto_sces %>%
   purrr::map_df(~ as.data.frame(colData(.x)) %>%
@@ -208,3 +213,97 @@ kallisto_cell_qc <- kallisto_sces %>%
 ```{r}
 summary(kallisto_cell_qc$sum)
 ```
+
+Summarize the number of detected genes per cell.
+```{r}
+summary(kallisto_cell_qc$detected)
+```
+
+## Comparing kallisto and alevin summary stats
+
+Combine the two data frames:
+```{r}
+cell_qc <- dplyr::bind_rows(alevin_cell_qc, kallisto_cell_qc)
+```
+
+Plot distributions of Total UMI counts
+```{r}
+ggplot(cell_qc, aes(x = sum, color = index_content)) +
+  geom_density() +
+  xlab("Total UMI count") +
+  facet_grid(tool ~ decoy)
+```
+Plot distributions of Detected gene counts
+```{r}
+ggplot(cell_qc, aes(x = detected, color = index_content)) +
+  geom_density() +
+  xlab("Detected genes") +
+  facet_grid(tool ~ decoy)
+```
+Kallisto tends to detect more UMIs and more transcripts per cell. 
+
+Lets make a little table:
+```{r}
+cell_qc %>%
+  dplyr::group_by(index_content, tool, decoy) %>%
+  dplyr::summarize(dplyr::across(
+    c(sum, detected, subsets_mito_percent),
+    mean))
+```
+
+
+So, the naive conclusion is that Kallisto is mapping many more UMIs per cell, and capturing more genes.
+Is this because we are excluding low count cells in the knee plot? 
+```{r}
+cell_qc %>%
+  dplyr::group_by(index_content, tool, decoy) %>%
+  dplyr::tally()
+```
+Ugh, maybe. 
+
+Lets filter to the cells that are included with all methods and repeat this.
+These will be cells where the count of the cell_id is 3 for txome or cdna, handled separately.
+
+```{r}
+cell_counts <- cell_qc %>%  
+  dplyr::count(index_content, cell_id)
+
+common_cells_cdna <- cell_counts %>%
+  dplyr::filter(index_content == "cdna", n == 3) %>%
+  dplyr::pull(cell_id)
+
+common_cells_txome <- cell_counts %>%
+  dplyr::filter(index_content == "txome", n == 3) %>%
+  dplyr::pull(cell_id)
+
+cell_qc_common <- cell_qc %>%
+  dplyr::filter(
+    (index_content == "cdna" & cell_id %in% common_cells_cdna) 
+    | (index_content == "txome" & cell_id %in% common_cells_txome) 
+  )
+```
+
+
+```{r}
+ggplot(cell_qc_common, aes(x = sum, color = index_content)) +
+  geom_density() +
+  xlab("Total UMI count") +
+  facet_grid(tool ~ decoy)
+```
+Plot distributions of Detected gene counts
+```{r}
+ggplot(cell_qc_common, aes(x = detected, color = index_content)) +
+  geom_density() +
+  xlab("Detected genes") +
+  facet_grid(tool ~ decoy)
+```
+More similar, but still kallisto finds more per cell.
+
+```{r}
+cell_qc_common %>%
+  dplyr::group_by(index_content, tool, decoy) %>%
+  dplyr::summarize(dplyr::across(
+    c(sum, detected, subsets_mito_percent),
+    mean))
+```
+
