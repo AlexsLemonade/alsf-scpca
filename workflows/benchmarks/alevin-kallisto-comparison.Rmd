@@ -111,7 +111,7 @@ alevin_sces <- alevin_quant_ids  %>%
 names(alevin_sces) <- alevin_quant_ids
 ```
 
-Calculate cell and feature QC statistics for each sample
+Calculate cell QC statistics for each sample
 
 ```{r}
 alevin_sces <- alevin_sces %>% 
@@ -120,8 +120,7 @@ alevin_sces <- alevin_sces %>%
       .x,
       subsets = list(mito = mito_genes[mito_genes %in% rownames(.x)])
     ) 
-  ) %>%
-  purrr::map(scater::addPerFeatureQC)
+  )
 ```
 
 Make a data frame of the cell QCs.
@@ -188,7 +187,7 @@ kallisto_sces <- base_file %>%
 names(kallisto_sces) <- kallisto_quant_ids
 ```
 
-Calculate cell and feature QC statistics for each sample
+Calculate cell QC statistics for each sample
 
 ```{r}
 kallisto_sces <- kallisto_sces %>% 
@@ -197,8 +196,7 @@ kallisto_sces <- kallisto_sces %>%
       .x,
       subsets = list(mito = mito_genes[mito_genes %in% rownames(.x)])
     ) 
-  ) %>%
-  purrr::map(scater::addPerFeatureQC)
+  )
 ```
 
 Make a table of the SCE cell QCs.
@@ -224,6 +222,7 @@ summary(kallisto_cell_qc$detected)
 Combine the two data frames:
 ```{r}
 cell_qc <- dplyr::bind_rows(alevin_cell_qc, kallisto_cell_qc)
+rm(alevin_cell_qc, kallisto_cell_qc)
 ```
 
 Plot distributions of Total UMI counts
@@ -266,7 +265,7 @@ These will be cells where the count of the cell_id is 3 for txome or cdna, handl
 
 ```{r}
 cell_counts <- cell_qc %>%  
-  dplyr::count(index_content, cell_id)
+  dplyr::count(index_content, cell_id, sample)
 
 common_cells_cdna <- cell_counts %>%
   dplyr::filter(index_content == "cdna", n == 3) %>%
@@ -297,7 +296,7 @@ ggplot(cell_qc_common, aes(x = detected, color = index_content)) +
   xlab("Detected genes") +
   facet_grid(tool ~ decoy)
 ```
-More similar, but still kallisto finds more per cell.
+More similar, but still kallisto finds more UMIs and genes per cell.
 
 ```{r}
 cell_qc_common %>%
@@ -306,4 +305,85 @@ cell_qc_common %>%
     c(sum, detected, subsets_mito_percent),
     mean))
 ```
+
+## Gene-level correlations among methods
+
+
+Before proceeding, we should reduce our SCEs to our common set of cells for fair comparisons.
+
+```{r}
+# note common cells are from either sample
+common_cells <- common_cells_cdna[common_cells_cdna %in% common_cells_txome]
+
+#filter and add Feature QC
+alevin_sces <- alevin_sces %>%
+  purrr::map(~ .x[, colnames(.x) %in% common_cells]) %>%
+  purrr::map(scater::addPerFeatureQC)
+
+kallisto_sces <- kallisto_sces %>%
+  purrr::map(~ .x[, colnames(.x) %in% common_cells]) %>%
+  purrr::map(scater::addPerFeatureQC)
+```
+
+
+Combine all feature QC stats into a single data frame.
+```{r}
+alevin_feature_qc <- purrr::map_df(
+  alevin_sces,
+  ~ as.data.frame(rowData(.x)) %>%
+    tibble::rownames_to_column(var = "gene_id"),
+  .id = "quant_id"
+) %>%
+  dplyr::left_join(quant_info, by = c("quant_id" = "quant_dir"))
+
+kallisto_feature_qc <- purrr::map_df(
+  kallisto_sces,
+  ~ as.data.frame(rowData(.x)) %>%
+    tibble::rownames_to_column(var = "gene_id"),
+  .id = "quant_id"
+) %>%
+  dplyr::left_join(quant_info, by = c("quant_id" = "quant_dir"))
+
+feature_qc <- dplyr::bind_rows(alevin_feature_qc, kallisto_feature_qc)
+rm(alevin_feature_qc, kallisto_feature_qc)
+```
+
+Get features that were found in at least 5% of cells in at least one sample.
+```{r}
+detected_features <- feature_qc %>%
+  dplyr::filter(detected >= 5.0) %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+# How many?
+length(detected_features)
+```
+
+```{r}
+# spread table for comparisons
+feature_compare <- feature_qc %>%
+  dplyr::filter(gene_id %in% detected_features,
+                decoy == "no") %>%
+  tidyr::pivot_wider(id_cols = c(gene_id, sample, index_content),
+                     names_from = tool,
+                     values_from = mean)
+```
+
+What do the correlations look like?
+```{r}
+feature_compare %>% 
+  dplyr::group_by(sample, index_content) %>%
+  dplyr::summarize(ak_cor = cor(alevin, kallisto, method = "spearman"))
+```
+```{r}
+ggplot(feature_compare, aes(x = alevin, y = kallisto)) +
+  geom_point(alpha = 0.1) + 
+  facet_grid(sample ~ index_content) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Alevin mean expression", y = "Kallisto mean expression")
+```
+I would say these correlations are perhaps surprisingly weak?
+Quite honestly, I'm not sure what the exact conclusions should be here...
+
+
 
