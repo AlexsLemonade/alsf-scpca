@@ -27,6 +27,7 @@ https://www.nextflow.io/docs/latest/awscloud.html#custom-ami
 Briefly:
 1. We used the base AMI _Amazon ECS-Optimized Amazon Linux AMI_. (note, not Amazon Linux 2).
 This was launched with a 50GB EBS volume for data (compared to the default 22) in addition to the base 8GB boot volume.
+All volumes are encrypted.
 
 2. All packages were updated with `sudo yum update`
 3. `/etc/sysconfig/docker-storage` edited to include `--storage-opt dm.basesize=50GB`
@@ -40,7 +41,7 @@ rm Miniconda3-latest-Linux-x86_64.sh
 ```
 5. Saved AMI from AWS web interface
 
-**The current stored AMI is** `ccdl-nextflow-base`: `ami-0efd6627bb4ee4490`
+**The current stored AMI is** `ccdl-nextflow-base-v1.1`: `ami-0a17541ba17115761`
 
 
 ## Terraform setup
