@@ -13,6 +13,6 @@ resource "aws_iam_access_key" "nf_key" {
 resource "aws_iam_user_group_membership" "nf_batch" {
   user = aws_iam_user.nf_user.name
   groups = [
-    "${aws_iam_group.nf_group.name}"
+    aws_iam_group.nf_group.name
   ]
 }
