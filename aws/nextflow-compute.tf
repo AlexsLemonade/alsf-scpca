@@ -19,7 +19,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
     allocation_strategy = "SPOT_CAPACITY_OPTIMIZED"
     spot_iam_fleet_role = aws_iam_role.nf_spotfleet_role.arn
     bid_percentage = 100
-    max_vcpus = 100
+    max_vcpus = 256
     min_vcpus = 0
     # ccdl-nextflow-base-v1.1 image
     image_id = "ami-0a17541ba17115761"
@@ -54,7 +54,7 @@ resource "aws_batch_compute_environment" "nf_ondemand" {
       "optimal",
     ]
     allocation_strategy = "BEST_FIT"
-    max_vcpus = 20
+    max_vcpus = 32
     min_vcpus = 0
     # ccdl-nextflow-base-v1.1 image
     image_id = "ami-0a17541ba17115761"
