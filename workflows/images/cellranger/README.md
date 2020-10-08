@@ -1,7 +1,7 @@
 This folder contains a Dockerfile for the cellranger analysis.
 
 The cellranger archive component must be downloaded separately to comply with licensing, and should be placed in this folder.
-The current version of this file is `cellranger-4.0.0.tar.gz`
+The current version of this file is `cellranger-4.0.0.tar.gz` and can be downloaded from [10X Genomics Website](https://support.10xgenomics.com/single-cell-gene-expression/software/downloads/latest) after agreeing to their license terms.
 
 
 ```
@@ -15,7 +15,7 @@ docker tag scpca-cellranger:4.0.0 589864003899.dkr.ecr.us-east-1.amazonaws.com/s
 docker tag scpca-cellranger:4.0.0 589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:4.0.0
 docker push 589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:4.0.0
 docker push 589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:latest
-
+```
 
 ```
 docker pull 589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:latest
