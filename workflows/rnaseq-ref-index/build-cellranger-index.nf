@@ -35,7 +35,8 @@ process cellranger_index{
 workflow {
   // channel of the reference files and labels
   ch_ref = Channel
-    .fromList([["cdna", params.ref_dir + "/" + params.genome, params.ref_dir + "/" + params.gtf ],
+    .fromList([ //currently only one reference, for testing
+      ["cdna", params.ref_dir + "/" + params.genome, params.ref_dir + "/" + params.gtf ],
     ])
   cellranger_index(ch_ref)
 }
