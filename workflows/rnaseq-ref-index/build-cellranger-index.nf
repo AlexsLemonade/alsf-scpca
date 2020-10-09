@@ -19,11 +19,16 @@ process cellranger_index{
     """
     gunzip -c ${fasta} > genome.fasta
     gunzip -c ${gtf} > genome.gtf
-    cellranger mkgtf \
-      genome.gtf \
-      filtered.gtf \
-      --attribute=gene_biotype:protein_coding
-
+    if [ "${index_base}" = "cdna" ]; then 
+      cellranger mkgtf \
+        genome.gtf \
+        filtered.gtf \
+        --attribute=gene_biotype:protein_coding
+    else
+      # include all genes, regardless
+      mv genome.gtf filtered.gtf
+    fi 
+    
     cellranger mkref \
       --genome=${index_base} \
       --fasta=genome.fasta \
@@ -37,6 +42,7 @@ workflow {
   ch_ref = Channel
     .fromList([ //currently only one reference, for testing
       ["cdna", params.ref_dir + "/" + params.genome, params.ref_dir + "/" + params.gtf ],
+      ["txome", params.ref_dir + "/" + params.genome, params.ref_dir + "/" + params.gtf ]
     ])
   cellranger_index(ch_ref)
 }
