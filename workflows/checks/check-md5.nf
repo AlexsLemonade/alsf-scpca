@@ -11,10 +11,11 @@ process check_md5{
   input:
     tuple val(id), val(md5_file), path(files)
   output:
-    path "${id}-md5check.txt"
+    path "${outfile}"
   script:
+    outfile = "${id}-md5check.txt"
     """
-    md5sum -c ${md5_file} > ${id}-md5check.txt
+    md5sum -c ${md5_file} > ${outfile}
     """
 }
 workflow{
