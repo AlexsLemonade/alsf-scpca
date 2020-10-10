@@ -11,7 +11,7 @@ process check_md5{
   input:
     tuple val(id), val(md5_file), path(files)
   output:
-    path "${outfile}"
+    path outfile
   script:
     outfile = "${id}-md5check.txt"
     """
