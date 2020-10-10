@@ -14,7 +14,7 @@ process cellranger_index{
   input:
     tuple val(index_base), path(fasta), path(gtf)
   output:
-    path "${index_base}"
+    path index_base
   script:
     """
     gunzip -c ${fasta} > genome.fasta
