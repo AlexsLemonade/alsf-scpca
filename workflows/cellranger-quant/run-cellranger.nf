@@ -18,26 +18,48 @@ process cellranger{
   publishDir "${params.outdir}", mode: 'copy'
   label 'cpus_8'
   input:
-    tuple val(id), path(read1), path(read2)
+    tuple val(id), val(samples), path(fastq_dir)
     path index
   output:
-    path run_dir
+    path output_id
   script:
-    run_dir = "${id}-${index}"
+    output_id = "${id}-${index}"
     """
-    cellranger
+    cellranger count \
+      --id=${output_id} \
+      --transcriptome=${index} \
+      --fastqs=${fastq_dir} \
+      --sample=${samples} \
+      --localcores=${task.cpus} \
+      --localmem=${task.memory.toGiga()}
     """
 }
+
+def getCRsamples(filelist){
+  // takesstring with semicolon separated file names
+  // returns just the 'sample info' portion of the file names,
+  // as cellranger would interpret them, comma separated
+  fastq_files = filelist.tokenize(';')
+  samples = []
+  fastq_files.each{
+    // append sample names to list, using regex to extract element before S001, etc.
+    // [0] for the first match set, [1] for the first extracted element
+    samples << (it =~ /^(.+)_S.+_L.+_R.+.fastq.gz$/)[0][1]
+  }
+  // set to remove dup
+  return samples.toSet().join(',')
+}
+
 
 workflow{
   run_ids = params.run_ids?.tokenize(',') ?: []
   ch_reads = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
     .filter{it.scpca_run_id in run_ids} // use only the rows in the sample list
-    // create tuple of [sample_id, [Read1 files], [Read2 files]]
+    // create tuple of [sample_id, fastq dir]
     .map{row -> tuple(row.scpca_run_id,
-                      file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
-                      file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
+                      getCRsamples(row.files),
+                      file("s3://${row.s3_prefix}")
                       )}
   // run cellranger
   cellranger(ch_reads, params.index_path)
