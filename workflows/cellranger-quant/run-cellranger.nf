@@ -7,7 +7,7 @@ params.index_dir = 'cellranger_index'
 params.index_name = 'cdna'
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
-params.run_ids = "SCPCR000001,SCPCR000002" //comma separated list to be parsed into a list
+params.run_ids = "SCPCR000001" //comma separated list to be parsed into a list
 params.outdir = 's3://nextflow-ccdl-results/scpca/cellranger-quant'
 
 // build full paths
@@ -17,6 +17,7 @@ process cellranger{
   container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:4.0.0'
   publishDir "${params.outdir}", mode: 'copy'
   label 'cpus_8'
+  label 'bigdisk'
   input:
     tuple val(id), val(samples), path(fastq_dir)
     path index
