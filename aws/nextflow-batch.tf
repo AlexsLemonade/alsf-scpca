@@ -8,7 +8,7 @@ variable "default_tags" {
   description = "Default resource tags"
   type        = map(string)
   default     = {
-    purpose = "nextflow-batch-test"
+    purpose = "nextflow-batch"
     config = "https://github.com/AlexsLemonade/alsf-scpca/tree/jashapiro/terraform-batch/aws"
   }
 

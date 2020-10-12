@@ -21,8 +21,6 @@ resource "aws_batch_compute_environment" "nf_spot" {
     bid_percentage = 100
     max_vcpus = 256
     min_vcpus = 0
-    # ccdl-nextflow-base-v1.1 image
-    # image_id = "ami-0a17541ba17115761"
     # standard launch template
     launch_template {
       launch_template_id = aws_launch_template.nf_lt_standard.id
@@ -99,8 +97,10 @@ resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
 #     allocation_strategy = "BEST_FIT"
 #     max_vcpus = 32
 #     min_vcpus = 0
-#     # ccdl-nextflow-base-v1.1 image
-#     image_id = "ami-0a17541ba17115761"
+#     # standard launch template
+#     launch_template {
+#       launch_template_id = aws_launch_template.nf_lt_standard.id
+#     }
 #     # ec2_key_pair = aws_key_pair.nf_keypair.key_name
 #     security_group_ids = [
 #       aws_security_group.nf_security.id,
