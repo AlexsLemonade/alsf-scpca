@@ -11,7 +11,6 @@ resource "aws_launch_template" "nf_lt_standard" {
       delete_on_termination = true
     }
   }
-
 }
 
 resource "aws_launch_template" "nf_lt_bigdisk" {

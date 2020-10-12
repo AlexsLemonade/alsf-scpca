@@ -25,7 +25,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
     # image_id = "ami-0a17541ba17115761"
     # standard launch template
     launch_template {
-      launch_template_id = aws_launch_template.nf_lt_bigdisk.id
+      launch_template_id = aws_launch_template.nf_lt_standard.id
     }
     # ec2_key_pair = aws_key_pair.nf_keypair.key_name
     security_group_ids = [
