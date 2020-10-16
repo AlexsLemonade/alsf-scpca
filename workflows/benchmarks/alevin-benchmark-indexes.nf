@@ -2,8 +2,8 @@
 nextflow.enable.dsl=2
 
 // run parameters
-params.sample_dir = 's3://ccdl-scpca-data/raw/green_adam'
-params.sample_ids = "834,905_3" //comma separated list to be parsed into a list
+params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
+params.run_ids = "SCPCR000001,SCPCR000002" //comma separated list to be parsed into a list
 params.outdir = 's3://nextflow-ccdl-results/scpca-benchmark/alevin-quant'
 
 process alevin{
@@ -35,12 +35,14 @@ process alevin{
 }
 
 workflow{
-  sample_ids = params.sample_ids?.tokenize(',') ?: []
-  ch_reads = Channel.fromList(sample_ids)
+  run_ids = params.run_ids?.tokenize(',') ?: []
+  ch_reads = Channel.fromPath(params.run_metafile)
+    .splitCsv(header: true, sep: '\t')
+    .filter{it.scpca_run_id in run_ids} // use only the rows in the sample list
     // create tuple of [sample_id, [Read1 files], [Read2 files]]
-    .map{ id -> tuple("$id",
-                      file("${params.sample_dir}/${id}/*_R1_*.fastq.gz"),
-                      file("${params.sample_dir}/${id}/*_R2_*.fastq.gz"),
+    .map{row -> tuple(row.scpca_run_id,
+                      file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
+                      file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
                       )}
   ch_indexes = Channel.fromList([
     ['cdna_k31_no_sa',
