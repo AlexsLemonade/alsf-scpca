@@ -8,7 +8,7 @@ It can be built with the following command run in this directory:
 docker build . -t ghcr.io/alexslemonade/scpca-r
 ```
 
-Alternatively, the lastest version should be available via:
+Alternatively, the latest version should be available via:
 
 ```
 docker pull ghcr.io/alexslemonade/scpca-r
