@@ -22,13 +22,13 @@ RUN apt-get update -qq && apt-get -y --no-install-recommends install \
 ###############
 
 # Commonly used R packages
-RUN install2.r --error --deps TRUE \
-    optparse \
-    rprojroot
-
+RUN Rscript -e "install.packages(c( \
+    'optparse', \
+    'rprojroot') \
+    )"
 ##########################
 # Install bioconductor packages
-RUN R -e "BiocManager::install(c( \
+RUN Rscript -e "BiocManager::install(c( \
     'AnnotationHub', \
     'DropletUtils', \
     'ensembldb', \
