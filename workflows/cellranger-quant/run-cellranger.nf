@@ -37,7 +37,7 @@ process cellranger{
 }
 
 def getCRsamples(filelist){
-  // takesstring with semicolon separated file names
+  // takes a string with semicolon separated file names
   // returns just the 'sample info' portion of the file names,
   // as cellranger would interpret them, comma separated
   fastq_files = filelist.tokenize(';')
