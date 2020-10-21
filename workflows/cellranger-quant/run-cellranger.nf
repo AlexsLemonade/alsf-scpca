@@ -47,7 +47,8 @@ def getCRsamples(filelist){
     // [0] for the first match set, [1] for the first extracted element
     samples << (it =~ /^(.+)_S.+_L.+_R.+.fastq.gz$/)[0][1]
   }
-  // set to remove dup
+  // convert samples list to a `set` to remove duplicate entries,
+  // then join to a comma separated string.
   return samples.toSet().join(',')
 }
 
