@@ -1,11 +1,13 @@
 This folder contains a Dockerfile for the cellranger analysis.
 
+
 ## Building the image
 
 In order to build this image, the cellranger archive component must be downloaded separately to comply with licensing, and should be placed in this folder (`images/cellranger`).
 The current version of this file is `cellranger-4.0.0.tar.gz` and can be downloaded from [10X Genomics Website](https://support.10xgenomics.com/single-cell-gene-expression/software/downloads/latest) after agreeing to their license terms.
 
 Following download of cellranger, you can build the image running the following command from this `images/cellranger` working directory:
+
 ```
 docker build . -t scpca-cellranger:4.0.0
 ```
@@ -43,3 +45,4 @@ docker tag scpca-cellranger:4.0.0 589864003899.dkr.ecr.us-east-1.amazonaws.com/s
 docker push 589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:4.0.0
 docker push 589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:latest
 ```
+
