@@ -51,5 +51,5 @@ workflows/rnaseq-ref-index/fasta/
 workflows/*/data/
 
 # Ignore cellranger download
-workflows/images/cellranger/cellranger*.tar.gz
+images/cellranger/cellranger*.tar.gz
 
