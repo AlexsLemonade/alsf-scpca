@@ -11,6 +11,8 @@ Management and analysis tools for ALSF Single-cell Pediatric Cancer Atlas data.
     - [Configuring your AWS credentials](#configuring-your-aws-credentials)
     - [AWS infrastructure](#aws-infrastructure)
 - [Running Workflows](#running-workflows)
+- [Running locally](#running-locally)
+  - [Running on AWS Batch](#running-on-aws-batch)
 
 ## Environment Setup
 
@@ -79,6 +81,10 @@ This will allow easy access to the shared `nextflow.config` file and keep all in
 In particular, `nextflow` creates a separate work directory for every task: these will appear by default (for local tasks) in the `workflows/work` directory if the command is invoked from `workflows`.
 As the work directories can get large, it is helpful to have a single location to keep track of and purge as needed.
 
+## Running locally
+
+⚠️ Running workflows in this repository locally is not something to take lightly! It is fine for a quick test, and useful for development, but note that most of the workflows here use very large data files, which will have to be downloaded locally to run. Workflow processing may require large amounts of RAM and time, so the following example commands will rarely be used, and are mostly for illustration. ⚠️
+
 The basic command to run a workflow will look something like the following:
 
 ```
@@ -93,7 +99,11 @@ In most cases, you will want to skip any cached steps that have already run: thi
 nextflow run alevin-quant/run-alevin.nf -resume
 ```
 
-To run the same workflow on AWS Batch, make sure your credentials are configured [as described above](#configuring-your-aws-credentials), and then run with the `batch` profile.
+⚠️ Again, you probably don't want to run locally unless you have a good reason and know the limitations! ⚠️
+
+### Running on AWS Batch
+
+To run the same workflow on AWS Batch, make sure your credentials are configured [as described above](#configuring-your-aws-credentials), and then run with the `batch` profile, which has been configured in `nextflow.config` for the CCDL infrastructure.
 
 ```
 nextflow run alevin-quant/run-alevin.nf -profile batch -resume
