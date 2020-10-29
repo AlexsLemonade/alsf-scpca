@@ -9,6 +9,7 @@ Management and analysis tools for ALSF Single-cell Pediatric Cancer Atlas data.
   - [AWS](#aws)
     - [Installing AWS Command line tools](#installing-aws-command-line-tools)
     - [Configuring your AWS credentials](#configuring-your-aws-credentials)
+    - [AWS infrastructure](#aws-infrastructure)
 - [Running Workflows](#running-workflows)
 
 ## Environment Setup
@@ -63,6 +64,10 @@ You may want to set up your `Default region name`: most of the computing resourc
 The `Default output format` can be left as `None`
 
 The `aws configure` command will create a directory at `~/.aws` with a `config` file and a `credentials` file that will be required for `nextflow` commands to work smoothly with Batch and S3.
+
+#### AWS infrastructure
+
+The infrastructure on AWS (Batch queues, AMIs, etc.) is defined via [terraform](https://www.terraform.io) using the files in the `aws` directory. More details are described in [aws/setup-log.md](aws/setup-log.md)
 
 
 
