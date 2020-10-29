@@ -42,6 +42,9 @@ rstudio-server.json
 # Cache files
 .cache
 
+# Ignore repository data directory
+/data
+
 # intermediate reference and analysis files
 workflows/rnaseq-ref-index/annotation/
 workflows/rnaseq-ref-index/fasta/
@@ -49,3 +52,4 @@ workflows/*/data/
 
 # Ignore cellranger download
 workflows/images/cellranger/cellranger*.tar.gz
+

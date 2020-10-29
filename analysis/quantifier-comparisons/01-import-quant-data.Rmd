@@ -1,0 +1,527 @@
+---
+title: "SCRNAseq quantification comparisons: Data Import"
+author: "Joshua Shapiro for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+This notebook contains code to import and do preliminary processing single cell expression data, quantified by Alevin, Kallisto, and Cellranger. 
+Alevin samples were quantified with and without decoy sequences. 
+The imported data is stored as SingleCellExperiment objects, which are then saved as an `.rds` file for later analysis.
+
+## Setup
+
+### Load Libraries for import
+```{r setup}
+library(ggplot2)
+library(magrittr)
+library(SingleCellExperiment)
+library(DropletUtils)
+library(tximport)
+
+# set seed
+set.seed(2020)
+```
+
+
+
+### File and directory setup
+```{r}
+base_dir <- here::here()
+data_dir <- file.path(base_dir, "data", "quants")
+dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
+
+alevin_data_dir <- file.path(data_dir, "alevin")
+dir.create(alevin_data_dir, recursive = TRUE, showWarnings = FALSE)
+quant_s3_alevin <- "s3://nextflow-ccdl-results/scpca/alevin-quant"
+
+kallisto_data_dir <- file.path(data_dir, "kallisto")
+dir.create(kallisto_data_dir, recursive = TRUE, showWarnings = FALSE)
+quant_s3_kallisto <- "s3://nextflow-ccdl-results/scpca/kallisto-quant"
+
+cellranger_data_dir <- file.path(data_dir, "cellranger")
+dir.create(cellranger_data_dir, recursive = TRUE, showWarnings = FALSE)
+quant_s3_cellranger <- "s3://nextflow-ccdl-results/scpca/cellranger-quant"
+
+```
+
+### Sync S3 files
+
+```{r}
+samples = c("SCPCR000001", "SCPCR000002")
+# generate include statements for sample directories
+includes = stringr::str_glue("--include \"*/{samples}*\"")
+
+# Alevin quantification files
+sync_call <- paste("aws s3 sync", quant_s3_alevin, alevin_data_dir, 
+                   includes)
+system(sync_call, ignore.stdout = TRUE)
+
+# Kallisto quantification files
+# exclude bus files, which are large
+sync_call <- paste("aws s3 sync", quant_s3_kallisto, kallisto_data_dir, 
+                   includes, '--exclude "*/bus/*"')
+system(sync_call, ignore.stdout = TRUE)
+
+# Cellranger quantification files
+# exclude intermediate and bam files
+sync_call <- paste("aws s3 sync", quant_s3_cellranger, cellranger_data_dir, 
+                   includes, 
+                   '--exclude "*/SC_RNA_COUNTER_CS/*"',
+                   '--exclude "*.bam"', '--exclude "*.bam.bai"')
+system(sync_call, ignore.stdout = TRUE)
+```
+
+
+### Generate sample info data frame
+
+```{r}
+quant_dirs <- list.dirs(c(alevin_data_dir, kallisto_data_dir, cellranger_data_dir),
+                        full.names = TRUE, recursive = FALSE) %>%
+  stringr::str_split("/") %>%
+  purrr::map_df( ~ data.frame(tool = .x[3], quant_dir = .x[4], info = .x[4]))
+
+# split ids into components for later processing
+quant_info <- quant_dirs %>%
+  tidyr::separate(info, sep = "[-]", 
+                  into = c("sample", "index_type")) %>%
+  tidyr::separate(index_type, 
+                  into = c("index_content", "kmer", "decoy"), 
+                  extra = "drop") %>%
+  # no decoy samples get NA here, convert to text.
+  dplyr::mutate(decoy = tidyr::replace_na(decoy, "no"))
+  
+```
+
+### Get Annotations from AnnotationHub
+
+```{r }
+hub = AnnotationHub::AnnotationHub(ask = FALSE)
+# Ensembl v100 Homo sapiens is AH79689
+ensdb = hub[["AH79689"]]
+ensg <- genes(ensdb)
+```
+
+Create vectors of mitochondrial genes and coding genes for later.
+
+```{r}
+# create the mitochondrial gene list
+mito_genes <- ensg[seqnames(ensg) == 'MT']$gene_id
+
+coding_genes <- ensg[ensg$gene_biotype == "protein_coding"]$gene_id
+```
+
+## Process quantification files
+
+### Alevin
+
+Use tximport to make SCEs
+
+```{r}
+alevin_quant_ids <- quant_info %>%
+  dplyr::filter(tool == "alevin") %>%
+  dplyr::pull(quant_dir)
+
+alevin_sces <- alevin_quant_ids  %>%
+  purrr::map(
+    ~ tximport(file.path(alevin_data_dir, .x, "alevin", "quants_mat.gz"),
+               type = "alevin")) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x$counts))) 
+
+# add names
+names(alevin_sces) <- alevin_quant_ids
+```
+
+Calculate cell QC statistics for each sample
+
+```{r}
+alevin_sces <- alevin_sces %>% 
+  purrr::map(
+    ~ scater::addPerCellQC(
+      .x,
+      subsets = list(mito = mito_genes[mito_genes %in% rownames(.x)])
+    ) 
+  )
+```
+
+Make a data frame of the cell QCs.
+```{r}
+alevin_cell_qc <- alevin_sces %>%
+  purrr::map_df( ~ as.data.frame(colData(.x)) %>%
+                   tibble::rownames_to_column(var = "cell_id"),
+                 .id = "quant_id") %>%
+  dplyr::left_join(quant_info %>% dplyr::filter(tool == "alevin"), 
+                   by = c("quant_id" = "quant_dir"))
+```
+
+Summarize the total UMIs per cell.
+```{r}
+summary(alevin_cell_qc$sum)
+```
+
+Summarize the number of detected genes per cell.
+```{r}
+summary(alevin_cell_qc$detected)
+```
+
+
+### Kallisto
+
+Get file basenames (no extension) for import
+```{r}
+kallisto_quant_ids <- quant_info %>%
+  dplyr::filter(tool == "kallisto") %>%
+  dplyr::pull(quant_dir)
+
+base_file <- file.path(kallisto_data_dir, kallisto_quant_ids, "counts", "gene_count")
+```
+
+#### Function for reading Kallisto files
+
+Takes a base file name and reads the the `.mtx` file and associated `.barcodes.txt` and `.genes.txt` files.  
+Filters cells/barcodes based on the knee plot using `DropletUtils::barcodeRanks()`
+```{r}
+read_kallisto_counts <- function(base, cellfilter = c("knee", "none")){
+  cellfilter <- match.arg(cellfilter)
+  counts <- Matrix::readMM(paste0(base,".mtx"))%>%
+    t() %>% # transpose to gene x cell orientation
+    as("dgCMatrix") # compress sparse matrix
+  dimnames(counts) <- list(readLines(paste0(base,".", "genes.txt")),
+                           readLines(paste0(base,".barcodes.txt")))
+  if(cellfilter == "knee"){
+    # calculate ranks and find knee
+    rank_df <- DropletUtils::barcodeRanks(counts)
+    cells <- which(rank_df$total >= metadata(rank_df)$knee)
+    counts <- counts[, cells]
+  }
+  return(counts)
+}
+```
+
+Make a list of kallisto runs as SCEs
+```{r}
+kallisto_sces <- base_file %>%
+  purrr::map(read_kallisto_counts) %>%
+  purrr::map(~ SingleCellExperiment(list(counts = .x))) 
+
+# add names
+names(kallisto_sces) <- kallisto_quant_ids
+```
+
+Calculate cell QC statistics for each sample
+
+```{r}
+kallisto_sces <- kallisto_sces %>% 
+  purrr::map(
+    ~ scater::addPerCellQC(
+      .x,
+      subsets = list(mito = mito_genes[mito_genes %in% rownames(.x)])
+    ) 
+  )
+```
+
+Make a table of the SCE cell QCs.
+```{r}
+kallisto_cell_qc <- kallisto_sces %>%
+  purrr::map_df(~ as.data.frame(colData(.x)) %>%
+                  tibble::rownames_to_column(var = "cell_id"),
+                .id = "quant_id") %>%
+  dplyr::left_join(quant_info %>% dplyr::filter(tool == "kallisto"), 
+                   by = c("quant_id" = "quant_dir"))
+```
+
+```{r}
+summary(kallisto_cell_qc$sum)
+```
+
+Summarize the number of detected genes per cell.
+```{r}
+summary(kallisto_cell_qc$detected)
+```
+
+### Cellranger
+
+Use `DropletUtils::read10xCounts` to read cellranger counts as SCEs
+
+```{r}
+cellranger_quant_ids <- quant_info %>%
+  dplyr::filter(tool == "cellranger") %>%
+  dplyr::pull(quant_dir)
+
+
+cellranger_sces <- cellranger_quant_ids  %>%
+  purrr::map(
+    ~ read10xCounts(file.path(cellranger_data_dir, .x, 
+                              "outs", "filtered_feature_bc_matrix.h5"),
+                    col.names = TRUE)
+  ) %>% 
+  purrr::map(
+    # get the portion before the "-" which includes the barcode
+    function(x) {
+      colnames(x) <- stringr::str_extract(colnames(x), "^([^-]+)")
+      return(x)
+    }
+  )
+
+# add names
+names(cellranger_sces) <- cellranger_quant_ids
+```
+
+Calculate cell QC statistics for each sample
+
+```{r}
+cellranger_sces <- cellranger_sces %>% 
+  purrr::map(
+    ~ scater::addPerCellQC(
+      .x,
+      subsets = list(mito = mito_genes[mito_genes %in% rownames(.x)])
+    ) 
+  )
+```
+
+Make a table of the SCE cell QCs.
+```{r}
+cellranger_cell_qc <- cellranger_sces %>%
+  purrr::map_df(~ as.data.frame(colData(.x)) %>%
+                  tibble::rownames_to_column(var = "cell_id"),
+                .id = "quant_id") %>%
+  dplyr::left_join(quant_info %>% dplyr::filter(tool == "cellranger"), 
+                   by = c("quant_id" = "quant_dir"))
+```
+
+```{r}
+summary(cellranger_cell_qc$sum)
+```
+
+Summarize the number of detected genes per cell.
+```{r}
+summary(cellranger_cell_qc$detected)
+```
+
+
+
+## Comparing summary stats across tools
+
+Combine the data frames:
+```{r}
+cell_qc <- dplyr::bind_rows(alevin_cell_qc, kallisto_cell_qc, cellranger_cell_qc)
+rm(alevin_cell_qc, kallisto_cell_qc, cellranger_cell_qc)
+```
+
+Plot distributions of Total UMI counts
+```{r}
+ggplot(cell_qc, aes(x = sum, color = sample)) +
+  geom_density() +
+  xlab("Total UMI count") +
+  facet_grid(tool ~ decoy)
+```
+Plot distributions of Detected gene counts
+```{r}
+ggplot(cell_qc, aes(x = detected, color = sample)) +
+  geom_density() +
+  xlab("Detected genes") +
+  facet_grid(tool ~ decoy)
+```
+Kallisto tends to detect more UMIs and more transcripts per cell. 
+
+Lets make a little table:
+```{r}
+cell_qc %>%
+  dplyr::group_by(tool, decoy) %>%
+  dplyr::summarize(dplyr::across(
+    c(sum, detected, subsets_mito_percent),
+    mean))
+```
+
+
+So, the naive conclusion is that Kallisto is mapping many more UMIs per cell, and capturing more genes (which reduces the mitochondrial percentage).
+
+Is this because we are excluding low count cells in the knee plot? 
+```{r}
+cell_qc %>%
+  dplyr::group_by(tool, decoy) %>%
+  dplyr::tally()
+```
+Ugh, maybe. Cellranger keeps the most cells, with kallisto the fewest.
+
+Lets filter to the cells that are included with all methods and repeat this.
+These will be cells where the count of the cell_id is 4 (2 alevin types, + cellranger and kallisto)
+
+```{r}
+cell_counts <- cell_qc %>%  
+  dplyr::count(cell_id, sample)
+
+common_cells <- cell_counts %>%
+  dplyr::filter(n == 4) %>%
+  dplyr::pull(cell_id)
+
+cell_qc_common <- cell_qc %>%
+  dplyr::filter(
+    (cell_id %in% common_cells) 
+  )
+```
+
+
+```{r}
+ggplot(cell_qc_common, aes(x = sum, color = sample)) +
+  geom_density() +
+  xlab("Total UMI count") +
+  facet_grid(tool ~ decoy)
+```
+Plot distributions of Detected gene counts
+```{r}
+ggplot(cell_qc_common, aes(x = detected, color = sample)) +
+  geom_density() +
+  xlab("Detected genes") +
+  facet_grid(tool ~ decoy)
+```
+More similar, but still kallisto finds more UMIs and genes per cell.
+
+```{r}
+cell_qc_common %>%
+  dplyr::group_by(index_content, tool, decoy) %>%
+  dplyr::summarize(dplyr::across(
+    c(sum, detected, subsets_mito_percent),
+    mean))
+```
+
+## Gene-level correlations among methods
+
+
+Before proceeding, we should reduce our SCEs to our common set of cells for fair comparisons.
+
+```{r}
+#filter and add Feature QC
+alevin_sces <- alevin_sces %>%
+  purrr::map(~ .x[, colnames(.x) %in% common_cells]) %>%
+  purrr::map(scater::addPerFeatureQC)
+
+kallisto_sces <- kallisto_sces %>%
+  purrr::map(~ .x[, colnames(.x) %in% common_cells]) %>%
+  purrr::map(scater::addPerFeatureQC)
+
+cellranger_sces <- cellranger_sces %>%
+  purrr::map(~ .x[, colnames(.x) %in% common_cells]) %>%
+  purrr::map(scater::addPerFeatureQC)
+```
+
+
+Combine all feature QC stats into a single data frame.
+```{r}
+alevin_feature_qc <- purrr::map_df(
+  alevin_sces,
+  ~ as.data.frame(rowData(.x)) %>%
+    tibble::rownames_to_column(var = "gene_id"),
+  .id = "quant_id"
+) %>%
+  dplyr::left_join(quant_info %>% dplyr::filter(tool == "alevin"), 
+                   by = c("quant_id" = "quant_dir"))
+
+kallisto_feature_qc <- purrr::map_df(
+  kallisto_sces,
+  ~ as.data.frame(rowData(.x)) %>%
+    tibble::rownames_to_column(var = "gene_id"),
+  .id = "quant_id"
+) %>%
+  dplyr::left_join(quant_info %>% dplyr::filter(tool == "kallisto"),
+                   by = c("quant_id" = "quant_dir"))
+
+cellranger_feature_qc <- purrr::map_df(
+  cellranger_sces,
+  ~ as.data.frame(rowData(.x)) %>%
+    tibble::rownames_to_column(var = "gene_id"),
+  .id = "quant_id"
+) %>%
+  dplyr::left_join(quant_info %>% dplyr::filter(tool == "cellranger"),
+                   by = c("quant_id" = "quant_dir"))
+
+feature_qc <- dplyr::bind_rows(alevin_feature_qc, 
+                               kallisto_feature_qc, 
+                               cellranger_feature_qc)
+rm(alevin_feature_qc, kallisto_feature_qc, cellranger_feature_qc)
+```
+
+Get features that were found in at least 5% of cells in at least one sample.
+```{r}
+detected_features <- feature_qc %>%
+  dplyr::filter(detected >= 5.0) %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+# How many?
+length(detected_features)
+```
+
+```{r}
+# spread table for comparisons (no decoy samples)
+feature_compare <- feature_qc %>%
+  dplyr::filter(gene_id %in% detected_features,
+                decoy == "no") %>%
+  tidyr::pivot_wider(id_cols = c(gene_id, sample),
+                     names_from = tool,
+                     values_from = mean) %>%
+  # add in the decoys
+  dplyr::inner_join(feature_qc %>% 
+                      dplyr::filter(decoy == "full") %>%
+                      dplyr::select(gene_id,
+                                    sample,
+                                    alevin_decoy = mean ),
+                    by = c("gene_id", "sample")) %>%
+  tidyr::drop_na()
+```
+
+What do the correlations look like? We'll calculate Spearman correlations first, even though those may overemphasize some of the small differences, because they also won't be overwhelmed by the highly expressed genes.
+
+```{r}
+feature_compare %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    cr_al_cor = cor(cellranger, alevin, method = "spearman"),
+    cr_al_decoy_cor = cor(cellranger, alevin_decoy, method = "spearman"),
+    cr_ka_cor = cor(cellranger, kallisto, method = "spearman"),
+    al_ka_cor = cor(alevin, kallisto, method = "spearman")
+  )
+```
+
+Overall, these seem like decent correlations, but the best correlations are between Cellranger and Alevin, with a slightly better correlation when we use the full decoy index.
+I was somewhat surprised by the more divergent showing for Kallisto, but it does seem like it's speed does come with a tradeoff, at least as far as comparing to the "standard" of Cellranger.
+
+Below are plots of the relationships among the callers.
+
+```{r}
+ggplot(feature_compare, aes(x = cellranger, y = alevin)) +
+  geom_point(alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cellranger mean expression", y = "Alevin mean expression")
+```
+```{r}
+ggplot(feature_compare, aes(x = cellranger, y = alevin_decoy)) +
+  geom_point(alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cellranger mean expression", y = "Alevin Decoy mean expression")
+```
+
+
+```{r}
+ggplot(feature_compare, aes(x = cellranger, y = kallisto)) +
+  geom_point(alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cellranger mean expression", y = "Kallisto mean expression")
+```
+
+
+What seems apparent from these plots is that while all quantification methods are generally well correlated, especially for highly expressed genes, there is a class of genes for which the pseudomapping aligners are more likely to call a higher level of expression than Cellranger. 
+This is most pronouced for Kallisto, perhaps because it does not perform a selective alignment step like Alevin does.
+The decoy-aware mapping that Alevin can do improves correlations slightly. It may not be be a major benefit, but the runtime cost did not seem too high. 
+Memory use was higher, but for the machines on AWS, this was not a concern, as there is plenty of available memory per CPU for all machines.
+
+In the future, it may be interesting to explore which genes get the most "benefit" from the decoy index, as well as which genes are most divergent between Alevin and Kallisto. 
+For now though, I think that is beyond the scope of this notebook.
