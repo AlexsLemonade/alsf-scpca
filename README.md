@@ -83,12 +83,16 @@ As the work directories can get large, it is helpful to have a single location t
 
 ## Running locally
 
-⚠️ Running workflows in this repository locally is not something to take lightly! It is fine for a quick test, and useful for development, but note that most of the workflows here use very large data files, which will have to be downloaded locally to run. Workflow processing may require large amounts of RAM and time, so the following example commands will rarely be used, and are mostly for illustration. ⚠️
+⚠️⚠️⚠️
+Running workflows in this repository locally is not something to take lightly!
+It is fine for a quick test, and useful for development, but note that most of the workflows here use very large data files, which will have to be downloaded locally to run.
+Workflow processing may require large amounts of RAM and time, so the following example commands will rarely be used, and are mostly for illustration.
+⚠️⚠️⚠️
 
 The basic command to run a workflow will look something like the following:
 
 ```
-nextflow run alevin-quant/run-alevin.nf
+nextflow run checks/check-md5.nf
 ```
 
 This will run the workflow locally, using the default parameters as defined in the workflow file.
@@ -96,7 +100,7 @@ This will run the workflow locally, using the default parameters as defined in t
 In most cases, you will want to skip any cached steps that have already run: this can be done by adding the `-resume` flag.
 
 ```
-nextflow run alevin-quant/run-alevin.nf -resume
+nextflow run checks/check-md5.nf -resume
 ```
 
 ⚠️ Again, you probably don't want to run locally unless you have a good reason and know the limitations! ⚠️
@@ -106,7 +110,7 @@ nextflow run alevin-quant/run-alevin.nf -resume
 To run the same workflow on AWS Batch, make sure your credentials are configured [as described above](#configuring-your-aws-credentials), and then run with the `batch` profile, which has been configured in `nextflow.config` for the CCDL infrastructure.
 
 ```
-nextflow run alevin-quant/run-alevin.nf -profile batch -resume
+nextflow run checks/check-md5.nf -profile batch -resume
 ```
 
 (Note that the effectiveness `-resume` flag depends on location: locally cached steps will still have to run on AWS, but if they are cached on AWS, they will be skipped.)
@@ -114,11 +118,11 @@ nextflow run alevin-quant/run-alevin.nf -profile batch -resume
 If you have set up [Nextflow Tower](#nextflow-tower), you can add a flag to send progress information there:
 
 ```
-nextflow run alevin-quant/run-alevin.nf -profile batch -resume -with-tower
+nextflow run checks/check-md5.nf -profile batch -resume -with-tower
 ```
 
 Finally, if you want to change any of the parameters that are defined in a workflow, you can do so at the command line using flags that start with with a double dash `--`. For example, to use different run ids for the alevin workflow, you might use:
 
 ```
-nextflow run alevin-quant/run-alevin.nf -profile batch -resume --run-ids SCPCR000003,SCPCR000004
+nextflow run checks/check-md5.nf -profile batch -resume --run_ids SCPCR000003,SCPCR000004
 ```
