@@ -15,14 +15,10 @@ The imported data is stored as SingleCellExperiment objects, which are then save
 
 ### Load Libraries for import
 ```{r setup}
-library(ggplot2)
 library(magrittr)
 library(SingleCellExperiment)
 library(DropletUtils)
 library(tximport)
-
-# set seed
-set.seed(2020)
 ```
 
 
@@ -48,9 +44,15 @@ dir.create(cellranger_data_dir, recursive = TRUE, showWarnings = FALSE)
 quant_s3_cellranger <- 's3://nextflow-ccdl-results/scpca/cellranger-quant'
 ```
 
-Output files will be `.rds` files, stored in a subdirectory of this notebook's location.
+Output files will be a TSV format info file and `.rds` files of the SingleCellExperiment objects, stored in a subdirectory of this notebook's location.
+
 ```{r}
 export_dir <- 'data'
+if (!dir.exists(export_dir)){
+  dir.create(export_dir)
+}
+
+quant_info_file <- file.path(export_dir, 'quant_info.tsv')
 
 alevin_rds <- file.path(export_dir, 'alevin_sces.rds')
 kallisto_rds <- file.path(export_dir, 'kallisto_sces.rds')
@@ -64,6 +66,7 @@ cellranger_rds <- file.path(export_dir, 'cellranger_sces.rds')
 
 ```{r}
 samples = c('SCPCR000001', 'SCPCR000002')
+
 # generate include statements for sample directories
 includes = stringr::str_glue("--include \"*/{samples}*\"")
 
@@ -90,22 +93,34 @@ system(sync_call, ignore.stdout = TRUE)
 
 ### Generate sample info data frame
 
-```{r}
-quant_dirs <- list.dirs(c(alevin_data_dir, kallisto_data_dir, cellranger_data_dir),
-                        full.names = TRUE, recursive = FALSE) %>%
-  stringr::str_split("/") %>%
-  purrr::map_df( ~ data.frame(tool = .x[3], quant_dir = .x[4], info = .x[4]))
+This generates the sample list from the directory names of the downloads. 
 
-# split ids into components for later processing
-quant_info <- quant_dirs %>%
-  tidyr::separate(info, sep = "[-]",
-                  into = c("sample", "index_type")) %>%
+```{r}
+
+quant_info <- c(alevin = alevin_data_dir, 
+                kallisto = kallisto_data_dir,
+                cellranger = cellranger_data_dir) %>%
+  purrr::map(list.dirs, recursive = FALSE, full.names = FALSE) %>%
+  # convert to data frame
+  tibble::enframe(name = "tool", value = "quant_dir") %>%
+  tidyr::unnest(quant_dir) %>%
+  # parse the `quant_dir` into sample and index info
+  tidyr::separate(quant_dir, 
+                  sep = "[-]",
+                  into = c("sample", "index_type"),
+                  remove = FALSE) %>%
   tidyr::separate(index_type, 
                   into = c("index_content", "kmer", "decoy"), 
-                  extra = "drop") %>%
+                  extra = "drop",
+                  fill = "right") %>%
   # no decoy samples get NA here, convert to text.
   dplyr::mutate(decoy = tidyr::replace_na(decoy, "no"))
-  
+
+# save info table
+readr::write_tsv(quant_info, quant_info_file )
+# print the info table
+quant_info
+
 ```
 
 ## Process quantification files
