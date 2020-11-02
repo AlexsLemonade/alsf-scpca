@@ -81,6 +81,9 @@ This will allow easy access to the shared `nextflow.config` file and keep all in
 In particular, `nextflow` creates a separate work directory for every task: these will appear by default (for local tasks) in the `workflows/work` directory if the command is invoked from `workflows`.
 As the work directories can get large, it is helpful to have a single location to keep track of and purge as needed.
 
+Final output file locations are determined on a per-workflow basis, usually by the `params.outdir` setting within the script (possibly overridden by the `--outdir` option).
+In most cases this will be an S3 bucket within `s3://nextflow-ccdl-results`.
+
 ## Running locally
 
 ⚠️⚠️⚠️
