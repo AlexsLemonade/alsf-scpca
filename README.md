@@ -104,6 +104,10 @@ nextflow run checks/check-md5.nf -resume
 ```
 
 ⚠️ Again, you probably don't want to run locally unless you have a good reason and know the limitations! ⚠️
+If you *do* run workflows locally (only recommended for testing!), keep in mind that Nexflow will create a `work` directory in your current directory to store input, output, and intermediate files for the workflow.
+This `work` directory can get large fast, so you will want to periodically purge the subdirectories and/or delete the entire directory.
+Doing so will temporarility eliminate the benefits of `-resume`, but this is the price we pay.
+
 
 ### Running on AWS Batch
 
