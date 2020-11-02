@@ -205,10 +205,10 @@ cell_qc_common %>%
                 "mean mitochondiral percent" = "subsets_mito_percent")
 ```
 
+
 ## Gene-level correlations among methods
 
-
-Before proceeding, we should will our SCEs to the common set of cells for fair comparisons.
+Before proceeding, we will filter our SCEs to the common set of cells for fair comparisons.
 
 ```{r}
 #filter and add Feature QC
@@ -246,7 +246,7 @@ cellranger_feature_qc <- cellranger_sces_reduced %>%
 feature_qc <- dplyr::bind_rows(
   alevin = alevin_feature_qc, 
   kallisto = kallisto_feature_qc, 
-  cellranter = cellranger_feature_qc,
+  cellranger = cellranger_feature_qc,
   .id = "tool"
 ) %>%
   dplyr::left_join(quant_info,
@@ -255,12 +255,14 @@ feature_qc <- dplyr::bind_rows(
 
 ```
 
-Get features that were found in at least 5% of cells in at least one sample.
+Since some features are very rarely detected, we will eliminate those for the purposes of these comparisons.
+Get features that were found in at least 5% of cells in at least three samples.
 ```{r}
 detected_features <- feature_qc %>%
   dplyr::filter(detected >= 5.0) %>%
-  dplyr::pull(gene_id) %>%
-  unique()
+  dplyr::count(gene_id) %>%
+  dplyr::filter(n >= 3) %>%
+  dplyr::pull(gene_id)
 # How many?
 length(detected_features)
 ```
@@ -307,7 +309,7 @@ ggplot(feature_compare, aes(x = cellranger, y = alevin)) +
   facet_wrap(~ sample) + 
   scale_x_log10() + 
   scale_y_log10() + 
-  labs(x = "Cellranger mean expression", y = "Alevin mean expression")
+  labs(x = "Cell Ranger mean expression", y = "Alevin mean expression")
 ```
 ```{r}
 ggplot(feature_compare, aes(x = cellranger, y = alevin_decoy)) +
@@ -315,7 +317,7 @@ ggplot(feature_compare, aes(x = cellranger, y = alevin_decoy)) +
   facet_wrap(~ sample) + 
   scale_x_log10() + 
   scale_y_log10() + 
-  labs(x = "Cellranger mean expression", y = "Alevin Decoy mean expression")
+  labs(x = "Cell Ranger mean expression", y = "Alevin Decoy mean expression")
 ```
 
 
@@ -325,12 +327,14 @@ ggplot(feature_compare, aes(x = cellranger, y = kallisto)) +
   facet_wrap(~ sample) + 
   scale_x_log10() + 
   scale_y_log10() + 
-  labs(x = "Cellranger mean expression", y = "Kallisto mean expression")
+  labs(x = "Cell Ranger mean expression", y = "Kallisto mean expression")
 ```
 
 
-What seems apparent from these plots is that while all quantification methods are generally well correlated, especially for highly expressed genes, there is a class of genes for which the pseudomapping aligners are more likely to call a higher level of expression than Cellranger. 
-This is most pronouced for Kallisto, perhaps because it does not perform a selective alignment step like Alevin does.
+What seems apparent from these plots is that while all quantification methods are generally well correlated, especially for highly expressed genes, there is a class of genes for which the pseudomapping aligners are more likely to call a higher level of expression than Cell Ranger. 
+This may be genes where multimapping occurs, as it is my understanding that Cell Ranger may discard multimapped transcripts.
+
+This is most pronounced for Kallisto, perhaps because it does not perform a selective alignment step like Alevin does.
 The decoy-aware mapping that Alevin can do improves correlations slightly. It may not be be a major benefit, but the runtime cost did not seem too high. 
 Memory use was higher, but for the machines on AWS, this was not a concern, as there is plenty of available memory per CPU for all machines.
 
