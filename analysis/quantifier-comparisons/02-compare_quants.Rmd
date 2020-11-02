@@ -340,3 +340,11 @@ Memory use was higher, but for the machines on AWS, this was not a concern, as t
 
 In the future, it may be interesting to explore which genes get the most "benefit" from the decoy index, as well as which genes are most divergent between Alevin and Kallisto. 
 For now though, I think that is beyond the scope of this notebook.
+
+
+## Session info
+
+```{r paged.print=FALSE}
+sessioninfo::session_info()
+```
+
