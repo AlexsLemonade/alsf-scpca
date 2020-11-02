@@ -228,3 +228,8 @@ readr::write_rds(kallisto_sces, kallisto_rds)
 readr::write_rds(cellranger_sces, cellranger_rds)
 ```
 
+## Session info
+
+```{r paged.print=FALSE}
+sessioninfo::session_info()
+```
