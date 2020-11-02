@@ -144,7 +144,10 @@ cell_qc %>%
   dplyr::group_by(sample, tool, decoy) %>%
   dplyr::summarize(dplyr::across(
     c(sum, detected, subsets_mito_percent),
-    mean))
+    mean)) %>%
+  dplyr::rename("mean UMI count" = "sum", 
+                "mean detected genes" = "detected", 
+                "mean mitochondiral percent" = "subsets_mito_percent")
 ```
 
 
@@ -196,25 +199,28 @@ cell_qc_common %>%
   dplyr::group_by(sample, tool, decoy) %>%
   dplyr::summarize(dplyr::across(
     c(sum, detected, subsets_mito_percent),
-    mean))
+    mean))%>%
+  dplyr::rename("mean UMI count" = "sum", 
+                "mean detected genes" = "detected", 
+                "mean mitochondiral percent" = "subsets_mito_percent")
 ```
 
 ## Gene-level correlations among methods
 
 
-Before proceeding, we should reduce our SCEs to our common set of cells for fair comparisons.
+Before proceeding, we should will our SCEs to the common set of cells for fair comparisons.
 
 ```{r}
 #filter and add Feature QC
-alevin_sces <- alevin_sces %>%
+alevin_sces_reduced <- alevin_sces %>%
   purrr::map(~ .x[, colnames(.x) %in% common_cells]) %>%
   purrr::map(scater::addPerFeatureQC)
 
-kallisto_sces <- kallisto_sces %>%
+kallisto_sces_reduced <- kallisto_sces %>%
   purrr::map(~ .x[, colnames(.x) %in% common_cells]) %>%
   purrr::map(scater::addPerFeatureQC)
 
-cellranger_sces <- cellranger_sces %>%
+cellranger_sces_reduced <- cellranger_sces %>%
   purrr::map(~ .x[, colnames(.x) %in% common_cells]) %>%
   purrr::map(scater::addPerFeatureQC)
 ```
@@ -222,37 +228,31 @@ cellranger_sces <- cellranger_sces %>%
 
 Combine all feature QC stats into a single data frame.
 ```{r}
-alevin_feature_qc <- purrr::map_df(
-  alevin_sces,
-  ~ as.data.frame(rowData(.x)) %>%
-    tibble::rownames_to_column(var = "gene_id"),
-  .id = "quant_id"
-) %>%
-  dplyr::left_join(quant_info %>% dplyr::filter(tool == "alevin"), 
-                   by = c("quant_id" = "quant_dir"))
+genedata_to_df <- function(sce){
+  as.data.frame(rowData(sce)) %>%
+  tibble::rownames_to_column(var = "gene_id")
+}
 
-kallisto_feature_qc <- purrr::map_df(
-  kallisto_sces,
-  ~ as.data.frame(rowData(.x)) %>%
-    tibble::rownames_to_column(var = "gene_id"),
-  .id = "quant_id"
-) %>%
-  dplyr::left_join(quant_info %>% dplyr::filter(tool == "kallisto"),
-                   by = c("quant_id" = "quant_dir"))
+alevin_feature_qc <- alevin_sces_reduced %>%
+  purrr::map_df(genedata_to_df, .id = "quant_id")
 
-cellranger_feature_qc <- purrr::map_df(
-  cellranger_sces,
-  ~ as.data.frame(rowData(.x)) %>%
-    tibble::rownames_to_column(var = "gene_id"),
-  .id = "quant_id"
-) %>%
-  dplyr::left_join(quant_info %>% dplyr::filter(tool == "cellranger"),
-                   by = c("quant_id" = "quant_dir"))
+kallisto_feature_qc <- kallisto_sces_reduced %>%
+  purrr::map_df(genedata_to_df, .id = "quant_id")
 
-feature_qc <- dplyr::bind_rows(alevin_feature_qc, 
-                               kallisto_feature_qc, 
-                               cellranger_feature_qc)
-rm(alevin_feature_qc, kallisto_feature_qc, cellranger_feature_qc)
+cellranger_feature_qc <- cellranger_sces_reduced %>%
+  purrr::map_df(genedata_to_df, .id = "quant_id")
+
+
+feature_qc <- dplyr::bind_rows(
+  alevin = alevin_feature_qc, 
+  kallisto = kallisto_feature_qc, 
+  cellranter = cellranger_feature_qc,
+  .id = "tool"
+) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir"))
+
 ```
 
 Get features that were found in at least 5% of cells in at least one sample.
