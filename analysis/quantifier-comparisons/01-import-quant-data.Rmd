@@ -67,10 +67,10 @@ cellranger_rds <- file.path(export_dir, 'cellranger_sces.rds')
 ### Sync S3 files
 
 ```{r}
-samples = c('SCPCR000001', 'SCPCR000002')
+samples <- c('SCPCR000001', 'SCPCR000002')
 
 # generate include statements for sample directories
-includes = stringr::str_glue("--include \"*/{samples}*\"")
+includes <- stringr::str_glue("--include \"*/{samples}*\"")
 
 # Alevin quantification files
 sync_call <- paste('aws s3 sync', quant_s3_alevin, alevin_data_dir,
@@ -83,7 +83,7 @@ sync_call <- paste('aws s3 sync', quant_s3_kallisto, kallisto_data_dir,
                    includes, '--exclude "*/bus/*"')
 system(sync_call, ignore.stdout = TRUE)
 
-# Cellranger quantification files
+# Cell Ranger quantification files
 # exclude intermediate and bam files
 sync_call <- paste('aws s3 sync', quant_s3_cellranger, cellranger_data_dir,
                    includes, 
