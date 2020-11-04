@@ -14,6 +14,7 @@ The imported data is stored as SingleCellExperiment objects, which are then save
 ## Setup
 
 ### Load Libraries for import
+
 ```{r setup}
 library(magrittr)
 library(SingleCellExperiment)
@@ -25,6 +26,7 @@ library(tximport)
 ### File and directory setup
 
 Input file locations first, local and remote (S3)
+
 ```{r}
 base_dir <- here::here()
 
@@ -126,6 +128,7 @@ quant_info
 ## Process quantification files
 
 ### Alevin
+
 Use tximport to make SCEs
 
 ```{r}
@@ -147,6 +150,7 @@ names(alevin_sces) <- alevin_quant_ids
 ### Kallisto
 
 Get file basenames (no extension) for import
+
 ```{r}
 kallisto_quant_ids <- quant_info %>%
   dplyr::filter(tool == "kallisto") %>%
@@ -180,6 +184,7 @@ read_kallisto_counts <- function(base, cellfilter = c("knee", "none")){
 ```
 
 Make a list of kallisto runs as SCEs
+
 ```{r}
 kallisto_sces <- base_file %>%
   purrr::map(read_kallisto_counts) %>%
@@ -191,7 +196,7 @@ names(kallisto_sces) <- kallisto_quant_ids
 
 ### Cellranger
 
-Use `DropletUtils::read10xCounts` to read cellranger counts as SCEs
+Use `DropletUtils::read10xCounts()` to read cellranger counts as SCEs
 
 ```{r}
 cellranger_quant_ids <- quant_info %>%
