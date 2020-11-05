@@ -17,15 +17,7 @@ RUN apt-get update -qq && apt-get -y --no-install-recommends install \
     libreadline-dev \
     libudunits2-dev
 
-
 #### R packages
-###############
-
-# Commonly used R packages
-RUN Rscript -e "install.packages(c( \
-    'optparse', \
-    'rprojroot') \
-    )"
 ##########################
 # Install bioconductor packages
 RUN Rscript -e "BiocManager::install(c( \
@@ -37,6 +29,14 @@ RUN Rscript -e "BiocManager::install(c( \
     'scater', \
     'tximport'), \
     update = FALSE)"
+
+###############
+# Other R packages
+RUN Rscript -e "install.packages(c( \
+    'here', \
+    'optparse', \
+    'rprojroot') \
+    )"
 
 # set final workdir for commands
 WORKDIR /home/rstudio

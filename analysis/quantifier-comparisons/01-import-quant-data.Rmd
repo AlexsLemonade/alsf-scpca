@@ -1,0 +1,250 @@
+---
+title: "SCRNAseq quantification comparisons: Data Import"
+author: "Joshua Shapiro for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+This notebook contains code to import and do preliminary processing single cell expression data, quantified by Alevin, Kallisto, and Cellranger. 
+Alevin samples were quantified with and without decoy sequences. 
+The imported data is stored as SingleCellExperiment objects, which are then saved as an `.rds` file for later analysis.
+
+## Setup
+
+### Load Libraries for import
+
+```{r setup}
+library(magrittr)
+library(SingleCellExperiment)
+library(DropletUtils)
+library(tximport)
+```
+
+
+### File and directory setup
+
+Input file locations first, local and remote (S3)
+
+```{r}
+base_dir <- here::here()
+
+data_dir <- file.path(base_dir, 'data', 'quants')
+dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
+
+alevin_data_dir <- file.path(data_dir, 'alevin')
+dir.create(alevin_data_dir, recursive = TRUE, showWarnings = FALSE)
+quant_s3_alevin <- 's3://nextflow-ccdl-results/scpca/alevin-quant'
+
+kallisto_data_dir <- file.path(data_dir, 'kallisto')
+dir.create(kallisto_data_dir, recursive = TRUE, showWarnings = FALSE)
+quant_s3_kallisto <- 's3://nextflow-ccdl-results/scpca/kallisto-quant'
+
+cellranger_data_dir <- file.path(data_dir, 'cellranger')
+dir.create(cellranger_data_dir, recursive = TRUE, showWarnings = FALSE)
+quant_s3_cellranger <- 's3://nextflow-ccdl-results/scpca/cellranger-quant'
+```
+
+Output files will be a TSV format info file and `.rds` files of the SingleCellExperiment objects, stored in a subdirectory of this notebook's location.
+
+```{r}
+export_dir <- 'data'
+if (!dir.exists(export_dir)){
+  dir.create(export_dir)
+}
+
+quant_info_file <- file.path(export_dir, 'quant_info.tsv')
+
+alevin_rds <- file.path(export_dir, 'alevin_sces.rds')
+kallisto_rds <- file.path(export_dir, 'kallisto_sces.rds')
+cellranger_rds <- file.path(export_dir, 'cellranger_sces.rds')
+
+```
+
+
+
+### Sync S3 files
+
+```{r}
+samples <- c('SCPCR000001', 'SCPCR000002')
+
+# generate include statements for sample directories
+includes <- stringr::str_glue("--include \"*/{samples}*\"")
+
+# Alevin quantification files
+sync_call <- paste('aws s3 sync', quant_s3_alevin, alevin_data_dir,
+                   includes)
+system(sync_call, ignore.stdout = TRUE)
+
+# Kallisto quantification files
+# exclude bus files, which are large
+sync_call <- paste('aws s3 sync', quant_s3_kallisto, kallisto_data_dir,
+                   includes, '--exclude "*/bus/*"')
+system(sync_call, ignore.stdout = TRUE)
+
+# Cell Ranger quantification files
+# exclude intermediate and bam files
+sync_call <- paste('aws s3 sync', quant_s3_cellranger, cellranger_data_dir,
+                   includes, 
+                   '--exclude "*/SC_RNA_COUNTER_CS/*"',
+                   '--exclude "*.bam"', '--exclude "*.bam.bai"')
+system(sync_call, ignore.stdout = TRUE)
+```
+
+
+### Generate sample info data frame
+
+This generates the sample list from the directory names of the downloads. 
+
+```{r}
+
+quant_info <- c(alevin = alevin_data_dir, 
+                kallisto = kallisto_data_dir,
+                cellranger = cellranger_data_dir) %>%
+  purrr::map(list.dirs, recursive = FALSE, full.names = FALSE) %>%
+  # convert to data frame
+  tibble::enframe(name = "tool", value = "quant_dir") %>%
+  tidyr::unnest(quant_dir) %>%
+  # parse the `quant_dir` into sample and index info
+  tidyr::separate(quant_dir, 
+                  sep = "[-]",
+                  into = c("sample", "index_type"),
+                  remove = FALSE) %>%
+  tidyr::separate(index_type, 
+                  into = c("index_content", "kmer", "decoy"), 
+                  extra = "drop",
+                  fill = "right") %>%
+  # no decoy samples get NA here, convert to text.
+  dplyr::mutate(decoy = tidyr::replace_na(decoy, "no"))
+
+# save info table
+readr::write_tsv(quant_info, quant_info_file )
+# print the info table
+quant_info
+
+```
+
+## Process quantification files
+
+### Alevin
+
+Use tximport to make SCEs
+
+```{r}
+alevin_quant_ids <- quant_info %>%
+  dplyr::filter(tool == "alevin") %>%
+  dplyr::pull(quant_dir)
+
+alevin_sces <- alevin_quant_ids  %>%
+  purrr::map(
+    ~ tximport(file.path(alevin_data_dir, .x, "alevin", "quants_mat.gz"),
+               type = "alevin")) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x$counts))) 
+
+# add names
+names(alevin_sces) <- alevin_quant_ids
+```
+
+### Kallisto
+
+Get file basenames (no extension) for import
+
+```{r}
+kallisto_quant_ids <- quant_info %>%
+  dplyr::filter(tool == "kallisto") %>%
+  dplyr::pull(quant_dir)
+
+base_file <- file.path(kallisto_data_dir, kallisto_quant_ids, "counts", "gene_count")
+```
+
+#### Function for reading Kallisto files
+
+Takes a base file name and reads the the `.mtx` file and associated `.barcodes.txt` and `.genes.txt` files.  
+
+Optionally filters cells/barcodes using `DropletUtils::barcodeRanks()` (set `cellfilter = "knee"`).
+
+This filtering is based on plotting the total UMI count for each barcode against the rank order of those cells by UMI count.
+The point where the UMI count starts to fall rapidly (in log space) relative to the rank change between barcodes is assumed to be a transition point indicating the change from barcodes that capture healthy cells to empty droplets or those only containing only dead cells (see [Lun 2020](https://bioconductor.org/packages/release/bioc/vignettes/DropletUtils/inst/doc/DropletUtils.html#computing-barcode-ranks)).
+By finding the "knee" in this plot and keeping only the barcodes with UMI counts greater than this point, we can enrich for healthy cells.
+Both Alevin and Cell Ranger perform more complicated filtering as part of their default workflows, but the bulk of the included barcodes in those cases will still have UMI counts that fall above the "knee" threshold.
+
+If filtering is not performed, these objects are quite large, as Kallisto seems to do no filtering for empty cells.
+
+
+```{r}
+read_kallisto_counts <- function(base, cellfilter = c("knee", "none")){
+  cellfilter <- match.arg(cellfilter)
+  counts <- Matrix::readMM(paste0(base,".mtx"))%>%
+    t() %>% # transpose to gene x cell orientation
+    as("dgCMatrix") # compress sparse matrix
+  dimnames(counts) <- list(readLines(paste0(base,".", "genes.txt")),
+                           readLines(paste0(base,".barcodes.txt")))
+  if(cellfilter == "knee"){
+    # calculate barcode ranks by UMI count
+    # and find the "knee" threshold in the rank by UMI count plot
+    rank_df <- DropletUtils::barcodeRanks(counts)
+    # filter to cells with UMI counts (rank_df$total) greater than the knee threshold
+    cells <- which(rank_df$total >= metadata(rank_df)$knee)
+    counts <- counts[, cells]
+  }
+  return(counts)
+}
+```
+
+Make a list of kallisto runs as SCEs
+
+```{r}
+kallisto_sces <- base_file %>%
+  purrr::map(read_kallisto_counts) %>%
+  purrr::map(~ SingleCellExperiment(list(counts = .x))) 
+
+# add names
+names(kallisto_sces) <- kallisto_quant_ids
+```
+
+### Cellranger
+
+Use `DropletUtils::read10xCounts()` to read cellranger counts as SCEs
+
+```{r}
+cellranger_quant_ids <- quant_info %>%
+  dplyr::filter(tool == "cellranger") %>%
+  dplyr::pull(quant_dir)
+
+cellranger_sces <- cellranger_quant_ids  %>%
+  purrr::map(
+    ~ read10xCounts(file.path(cellranger_data_dir, .x,
+                              "outs", "filtered_feature_bc_matrix.h5"),
+                    sample.names = .x,
+                    col.names = TRUE)
+  ) %>% 
+  purrr::map(
+    # for consistency with other quantifiers:
+    # change the column names just the barcode value, which is the first part of the barcode name
+    # drop colData
+    function(x) {
+      colnames(x) <- stringr::str_extract(colnames(x), "^([ACGT]+)")
+      colData(x) <- NULL
+      return(x)
+    }
+  )
+
+# add names
+names(cellranger_sces) <- cellranger_quant_ids
+```
+
+## Export SingleCellExperiment objects
+
+```{r}
+readr::write_rds(alevin_sces, alevin_rds)
+readr::write_rds(kallisto_sces, kallisto_rds)
+readr::write_rds(cellranger_sces, cellranger_rds)
+```
+
+## Session info
+
+```{r paged.print=FALSE}
+sessioninfo::session_info()
+```
