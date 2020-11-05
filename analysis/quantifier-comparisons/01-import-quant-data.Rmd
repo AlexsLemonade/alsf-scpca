@@ -168,7 +168,7 @@ Optionally filters cells/barcodes using `DropletUtils::barcodeRanks()` (set `cel
 This filtering is based on plotting the total UMI count for each barcode against the rank order of those cells by UMI count.
 The point where the UMI count starts to fall rapidly (in log space) relative to the rank change between barcodes is assumed to be a transition point indicating the change from barcodes that capture healthy cells to empty droplets or those only containing only dead cells (see [Lun 2020](https://bioconductor.org/packages/release/bioc/vignettes/DropletUtils/inst/doc/DropletUtils.html#computing-barcode-ranks)).
 By finding the "knee" in this plot and keeping only the barcodes with UMI counts greater than this point, we can enrich for healthy cells.
-Both Alevin and Cell Ranger perform more complicated filtering as part of their default workflows that are based on somewhat more elaborate calculations, but the bulk of the included cells will still above below this threshold.
+Both Alevin and Cell Ranger perform more complicated filtering as part of their default workflows, but the bulk of the included barcodes in those cases will still have UMI counts that fall above the "knee" threshold.
 
 If filtering is not performed, these objects are quite large, as Kallisto seems to do no filtering for empty cells.
 
