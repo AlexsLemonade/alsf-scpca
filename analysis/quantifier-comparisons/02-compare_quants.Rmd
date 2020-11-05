@@ -1,5 +1,5 @@
 ---
-title: "SCRNAseq quantification comparisons"
+title: "SCRNAseq quantification comparisons: counts and correlations among callers"
 author: "Joshua Shapiro for CCDL"
 output: 
   html_notebook:
@@ -33,15 +33,14 @@ quant_info_file <- file.path(import_dir, 'quant_info.tsv')
 alevin_rds <- file.path(import_dir, 'alevin_sces.rds')
 kallisto_rds <- file.path(import_dir, 'kallisto_sces.rds')
 cellranger_rds <- file.path(import_dir, 'cellranger_sces.rds')
-
-
 ```
 
 ### Read in data files
 
 ```{r}
-quant_info <- readr::read_tsv(quant_info_file )
+quant_info <- readr::read_tsv(quant_info_file)
 
+# Each RDS file contains a SingleCellExperiment
 alevin_sces <- readr::read_rds(alevin_rds)
 kallisto_sces <- readr::read_rds(kallisto_rds)
 cellranger_sces <- readr::read_rds(cellranger_rds)
@@ -61,7 +60,7 @@ Create vectors of mitochondrial genes and coding genes for later.
 ```{r}
 # create the mitochondrial gene list
 mito_genes <- ensg[seqnames(ensg) == 'MT']$gene_id
-
+# list of coding genes (not currently used)
 coding_genes <- ensg[ensg$gene_biotype == "protein_coding"]$gene_id
 ```
 
@@ -71,6 +70,7 @@ A small function to set default QC calculations for SCEs in a list:
 
 ```{r}
 addPerCellQC_mito <- function(sce, mito = mito_genes){
+  # add per cell QC with mitochondrial genes separately for later comparisons
   scater::addPerCellQC(
     sce, 
     subsets = list(mito = mito[mito %in% rownames(sce)])
@@ -95,6 +95,8 @@ Make a data frames of the cell QCs.
 
 ```{r}
 celldata_to_df <- function(sce){
+  # extract the column (cell) summary data from a SCE, 
+  # convert to data frame and move cell id to a column
   as.data.frame(colData(sce)) %>%
   tibble::rownames_to_column(var = "cell_id")
 }
@@ -218,7 +220,7 @@ cell_qc_common %>%
 Before proceeding, we will filter our SCEs to the common set of cells for fair comparisons.
 
 ```{r}
-#filter and add Feature QC
+# filter and add Feature QC
 alevin_sces_reduced <- alevin_sces %>%
   purrr::map(~ .x[, colnames(.x) %in% common_cells]) %>%
   purrr::map(scater::addPerFeatureQC)
@@ -236,6 +238,8 @@ Combine all feature QC stats into a single data frame.
 
 ```{r}
 genedata_to_df <- function(sce){
+  # extract the feature (gene) summary data from a SCE, 
+  # convert to data frame and move gene id to a column
   as.data.frame(rowData(sce)) %>%
   tibble::rownames_to_column(var = "gene_id")
 }
@@ -278,18 +282,21 @@ length(detected_features)
 ```{r}
 # spread table for comparisons (no decoy samples)
 feature_compare <- feature_qc %>%
+  # filter out decoys 
   dplyr::filter(gene_id %in% detected_features,
                 decoy == "no") %>%
+  # spread the mean expression stats to one column per caller
   tidyr::pivot_wider(id_cols = c(gene_id, sample),
                      names_from = tool,
                      values_from = mean) %>%
-  # add in the decoys
+  # add back the decoys via a join
   dplyr::inner_join(feature_qc %>% 
                       dplyr::filter(decoy == "full") %>%
                       dplyr::select(gene_id,
                                     sample,
                                     alevin_decoy = mean ),
                     by = c("gene_id", "sample")) %>%
+  # drop rows with NA values to ease correlation calculations
   tidyr::drop_na()
 ```
 
