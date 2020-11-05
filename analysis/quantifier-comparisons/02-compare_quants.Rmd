@@ -68,6 +68,7 @@ coding_genes <- ensg[ensg$gene_biotype == "protein_coding"]$gene_id
 ## Calculate cell QC statistics
 
 A small function to set default QC calculations for SCEs in a list:
+
 ```{r}
 addPerCellQC_mito <- function(sce, mito = mito_genes){
   scater::addPerCellQC(
