@@ -1,7 +1,9 @@
 
 ## Docker setup
 
-Running the quantification comparison notebooks are most easily done via Docker, using the `ghcr.io/alexslemonade/scpca-r` image, which contains and RStudio server and all necessary dependencies, including the AWS command line tools and R packages.  AWS credentials are expected to be stored in `~/.aws` on the user's system, having been set up with `aws configure` on the host. https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html#cli-configure-quickstart-config
+Running the quantification comparison notebooks are most easily done via Docker, using the `ghcr.io/alexslemonade/scpca-r` image, which contains and RStudio server and all necessary dependencies, including the AWS command line tools and R packages.  
+AWS credentials are expected to be stored in `~/.aws` on the user's system, having been set up with `aws configure` on the host. 
+https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-quickstart.html#cli-configure-quickstart-config
 
 Use the following command to mount a local directory as the home directory within the image (it is recommended that you use the repository root: `alsf-scpca`), pass in the current user's AWS credentials, and launch RStudio server (substitute a password for <MYPASS>).
 

@@ -20,11 +20,7 @@ params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist
 
 process alevin{
   container 'quay.io/biocontainers/salmon:1.3.0--hf69c8f4_0'
-  cpus 8
-  // try dynamic memory (28.GB so 2x will fit in r4.2xlarge)
-  memory { 28.GB * task.attempt}
-  errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'terminate' }
-  maxRetries 1
+  label 'cpus_8'
   tag "${id}-${index}"
   publishDir "${params.outdir}"
   input:
