@@ -50,9 +50,9 @@ cellranger_sces <- readr::read_rds(cellranger_rds)
 ### Get Annotations from AnnotationHub
 
 ```{r}
-hub = AnnotationHub::AnnotationHub(ask = FALSE)
+hub <- AnnotationHub::AnnotationHub(ask = FALSE)
 # Ensembl v100 Homo sapiens is AH79689
-ensdb = hub[["AH79689"]]
+ensdb <- hub[["AH79689"]]
 ensg <- genes(ensdb)
 ```
 
@@ -78,7 +78,7 @@ addPerCellQC_mito <- function(sce, mito = mito_genes){
 }
 ```
 
-Calculate cell QC statistics for each set of SCES
+Calculate cell QC statistics for each set of SCEs
 
 ```{r}
 alevin_sces <- alevin_sces %>% 
@@ -139,9 +139,10 @@ ggplot(cell_qc, aes(x = detected, color = sample)) +
   xlab("Detected genes") +
   facet_grid(tool ~ decoy)
 ```
+
 Kallisto tends to detect more UMIs and more transcripts per cell. 
 
-Lets make a little table:
+Let's make a little table:
 
 ```{r}
 cell_qc %>%
@@ -151,7 +152,7 @@ cell_qc %>%
     mean)) %>%
   dplyr::rename("mean UMI count" = "sum", 
                 "mean detected genes" = "detected", 
-                "mean mitochondiral percent" = "subsets_mito_percent")
+                "mean mitochondrial percent" = "subsets_mito_percent")
 ```
 
 The naive conclusion is that Kallisto is mapping many more UMIs per cell, and capturing more genes (which reduces the mitochondrial percentage).
@@ -209,7 +210,7 @@ cell_qc_common %>%
     mean))%>%
   dplyr::rename("mean UMI count" = "sum", 
                 "mean detected genes" = "detected", 
-                "mean mitochondiral percent" = "subsets_mito_percent")
+                "mean mitochondrial percent" = "subsets_mito_percent")
 ```
 
 ## Gene-level correlations among methods
@@ -292,7 +293,8 @@ feature_compare <- feature_qc %>%
   tidyr::drop_na()
 ```
 
-What do the correlations look like? We'll calculate Spearman correlations first, even though those may overemphasize some of the small differences, because they also won't be overwhelmed by the highly expressed genes.
+What do the correlations look like? 
+We'll calculate Spearman correlations first, even though those may overemphasize some of the small differences, because they also won't be overwhelmed by the highly expressed genes.
 
 ```{r}
 feature_compare %>% 
@@ -353,4 +355,3 @@ For now though, I think that is beyond the scope of this notebook.
 ```{r paged.print=FALSE}
 sessioninfo::session_info()
 ```
-
