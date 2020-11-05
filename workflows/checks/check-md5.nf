@@ -12,6 +12,7 @@ params.run_ids = "SCPCR000001,SCPCR000002"
 
 process check_md5{
   container 'ubuntu:20.04'
+  label 'bigdisk'
   publishDir "${params.outdir}"
   input:
     tuple val(id), val(md5_file), path(files)
