@@ -4,7 +4,7 @@ nextflow.enable.dsl=2
 // run parameters
 params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100'
 params.index_dir = 'kallisto_index'
-params.index_name = 'cdna_k31'
+params.index_name = 'txome_k31'
 params.annotation_dir = 'annotation'
 params.t2g = 'Homo_sapiens.ensembl.100.tx2gene.tsv'
 params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
@@ -116,9 +116,12 @@ process bustools_count{
 
 workflow{
   run_ids = params.run_ids?.tokenize(',') ?: []
+  run_all = run_ids[0] == "All"
   ch_reads = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
-    .filter{it.scpca_run_id in run_ids} // use only the rows in the sample list
+    .filter{it.technology == "10Xv3"} // only 10X data
+    // use only the rows in the sample list
+    .filter{run_all || (it.scpca_run_id in run_ids)}
     // create tuple of [sample_id, [Read1 files], [Read2 files]]
     .map{row -> tuple(row.scpca_run_id,
                       file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
