@@ -50,7 +50,7 @@ process alevin{
 workflow{
   run_ids = params.run_ids?.tokenize(',') ?: []
   run_all = run_ids[0] == "All"
-  ch_runs = Channel.fromPath(params.run_metafile)
+  ch_reads = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
     .filter{it.technology == "10Xv3"} // only 10X data
     // use only the rows in the sample list
