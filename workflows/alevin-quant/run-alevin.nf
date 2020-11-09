@@ -10,7 +10,10 @@ params.t2g = 'Homo_sapiens.ensembl.100.tx2gene.tsv'
 params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
-params.run_ids = "SCPCR000001,SCPCR000002" //comma separated list to be parsed into a list
+// run_ids are comma separated list to be parsed into a list of run ids,
+// or "All" to process all samples in the metadata file
+params.run_ids = "SCPCR000001,SCPCR000002"
+
 params.outdir = 's3://nextflow-ccdl-results/scpca/alevin-quant'
 
 // build full paths
@@ -46,9 +49,12 @@ process alevin{
 
 workflow{
   run_ids = params.run_ids?.tokenize(',') ?: []
-  ch_reads = Channel.fromPath(params.run_metafile)
+  run_all = run_ids[0] == "All"
+  ch_runs = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
-    .filter{it.scpca_run_id in run_ids} // use only the rows in the sample list
+    .filter{it.technology == "10Xv3"} // only 10X data
+    // use only the rows in the sample list
+    .filter{run_all || (it.scpca_run_id in run_ids)}
     // create tuple of [sample_id, [Read1 files], [Read2 files]]
     .map{row -> tuple(row.scpca_run_id,
                       file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
