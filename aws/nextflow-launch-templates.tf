@@ -21,7 +21,7 @@ resource "aws_launch_template" "nf_lt_bigdisk" {
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
-      volume_size = 500
+      volume_size = 1000
       encrypted = true
       delete_on_termination = true
     }
