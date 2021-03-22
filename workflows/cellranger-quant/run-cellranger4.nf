@@ -16,7 +16,7 @@ params.outdir = 's3://nextflow-ccdl-results/scpca/cellranger-quant'
 params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 
 process cellranger{
-  container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.0.0'
+  container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:4.0.0'
   publishDir "${params.outdir}", mode: 'copy'
   label 'cpus_8'
   label 'bigdisk'
@@ -63,7 +63,7 @@ workflow{
     .filter{it.technology == "10Xv3"} // only 10X data
     // use only the rows in the sample list
     .filter{run_all || (it.scpca_run_id in run_ids)}
-    // create tuple of [sample_id, sample_names, fastq dir]
+    // create tuple of [sample_id, fastq dir]
     .map{row -> tuple(row.scpca_run_id,
                       getCRsamples(row.files),
                       file("s3://${row.s3_prefix}")
