@@ -14,7 +14,7 @@ params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.t
 // or "All" to process all samples in the metadata file
 params.run_ids = "SCPCR000001,SCPCR000002"
 
-params.outdir = 's3://nextflow-ccdl-results/scpca/alevin-quant'
+params.outdir = 's3://nextflow-ccdl-results/scpca/alevin-fry-quant'
 
 // build full paths
 params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
