@@ -22,7 +22,7 @@ params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${params.t2g}"
 params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist}"
 
 process alevin{
-  container 'quay.io/biocontainers/salmon:1.3.0--hf69c8f4_0'
+  container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
   label 'cpus_8'
   tag "${id}-${index}"
   publishDir "${params.outdir}"
