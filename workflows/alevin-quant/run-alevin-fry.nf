@@ -38,7 +38,7 @@ process alevin{
   // run alevin like normal with the --justAlign flag 
   // creates output directory with RAD file needed for alevin-fry
     """
-    mkdir -p ${run_dir}/alevin
+    mkdir -p ${run_dir}
     salmon alevin \
       -l ISR \
       --chromium \
@@ -46,7 +46,7 @@ process alevin{
       -2 ${read2} \
       -i ${index} \
       --tgMap ${tx2gene} \
-      -o ${run_dir}/alevin \
+      -o ${run_dir} \
       -p ${task.cpus} \
       --dumpFeatures \
       --justAlign
@@ -61,67 +61,46 @@ process generate_permit{
   input:
     path run_dir
   output:
-    path permit_list
+    path run_dir
   script: 
-    permit_list = "${run_dir}/permit_list"
   // expected-ori either signifies no filtering of alignments 
   // based on orientation, not sure if this is what we want? 
     """
     alevin-fry generate-permit-list \
-      -i ${run_dir}/alevin \
+      -i ${run_dir} \
       --expected-ori either \
-      -o ${permit_list} \
+      -o ${run_dir} \
       -k
     """
 }
 
 // given permit list and barcode mapping, collate RAD file 
+// then quantify collated RAD file
 process collate{
   container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
   label 'cpus_8'
   publishDir "${params.outdir}"
   input: 
-    path permit_list
-    path run_dir
-  output: 
-    file collate_file
-  script:
-    collate_file = "${run_dir}/permit_list/map.collated.rad"
-    """
-    alevin-fry collate \
-      --input-dir ${permit_list} \
-      --rad-dir ${run_dir}/alevin \
-      -t ${task.cpus}
-    """
-}
-
-// quantify collated RAD file
-process quant{
-  container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
-  label 'cpus_8'
-  publishDir "${params.outdir}"
-  input: 
-    file collate_file
     path run_dir
     path tx2gene
-  output:
+  output: 
     path counts
   script:
-    collate_file = "${run_dir}/permit_list/map.collated.rad"
     counts = "${run_dir}/counts"
-    // run quant command with default full resolution strategy 
-    // gene-level, UMI-deduplicated, equivalence class counts file + gene counts matrix output
     """
-      mkdir -p ${run_dir}/counts
+    alevin-fry collate \
+      --input-dir ${run_dir} \
+      --rad-dir ${run_dir} \
+      -t ${task.cpus}
 
-      alevin-fry quant \
-        -i ${collate_file} \
-        --tg-map ${tx2gene} \
-        -o ${counts} \
-        -t ${task.cpus} \
-        --dump-eqclasses
+    alevin-fry quant \
+     --input-dir ${run_dir} \
+     --tg-map ${tx2gene} \
+     --output-dir ${counts} \
+     -t ${task.cpus}
     """
 }
+// run quant command with default full resolution strategy 
 
 
 workflow{
@@ -141,8 +120,6 @@ workflow{
   alevin(ch_reads, params.index_path, params.t2g_path)
   // generate permit list from alignment 
   generate_permit(alevin.out)
-  // collate RAD files
-  collate(generate_permit.out, alevin.out)
-  // create gene x cell matrix
-  quant(collate.out, alevin.out, params.t2g_path)
+  // collate RAD files and create gene x cell matrix
+  collate(generate_permit.out, params.t2g_path)
 }
