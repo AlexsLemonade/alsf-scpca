@@ -4,7 +4,7 @@ nextflow.enable.dsl=2
 // run parameters
 params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100'
 params.index_dir = 'salmon_index'
-params.index_name = 'txome_k31_full_sa'
+params.index_name = 'txome_k31'
 params.annotation_dir = 'annotation'
 params.t2g = 'Homo_sapiens.ensembl.100.tx2gene.tsv'
 params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
@@ -76,7 +76,7 @@ process generate_permit{
 
 // given permit list and barcode mapping, collate RAD file 
 // then quantify collated RAD file
-process collate{
+process collate_quant{
   container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
   label 'cpus_8'
   publishDir "${params.outdir}"
@@ -102,7 +102,6 @@ process collate{
 }
 // run quant command with default full resolution strategy 
 
-
 workflow{
   run_ids = params.run_ids?.tokenize(',') ?: []
   run_all = run_ids[0] == "All"
@@ -121,5 +120,5 @@ workflow{
   // generate permit list from alignment 
   generate_permit(alevin.out)
   // collate RAD files and create gene x cell matrix
-  collate(generate_permit.out, params.t2g_path)
+  collate_quant(generate_permit.out, params.t2g_path)
 }
