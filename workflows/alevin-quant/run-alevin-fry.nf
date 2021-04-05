@@ -74,8 +74,25 @@ process generate_permit{
 }
 
 // given permit list and barcode mapping, collate RAD file 
+process collate_fry{
+  container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
+  label 'cpus_8'
+  publishDir "${params.outdir}"
+  input: 
+    path run_dir
+  output: 
+    path run_dir
+  script:
+    """
+    alevin-fry collate \
+      --input-dir ${run_dir} \
+      --rad-dir ${run_dir} \
+      -t ${task.cpus}
+    """
+}
+
 // then quantify collated RAD file
-process collate_quant{
+process quant_fry{
   container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
   label 'cpus_8'
   publishDir "${params.outdir}"
@@ -86,11 +103,6 @@ process collate_quant{
     path run_dir
   script:
     """
-    alevin-fry collate \
-      --input-dir ${run_dir} \
-      --rad-dir ${run_dir} \
-      -t ${task.cpus}
-
     alevin-fry quant \
      --input-dir ${run_dir} \
      --tg-map ${tx2gene} \
@@ -117,6 +129,8 @@ workflow{
   alevin(ch_reads, params.index_path, params.t2g_path)
   // generate permit list from alignment 
   generate_permit(alevin.out)
-  // collate RAD files and create gene x cell matrix
-  collate_quant(generate_permit.out, params.t2g_path)
+  // collate RAD files 
+  collate_fry(generate_permit.out)
+  // create gene x cell matrix
+  quant_fry(collate_fry.out, params.t2g_path)
 }
