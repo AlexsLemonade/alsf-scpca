@@ -56,7 +56,6 @@ process alevin{
 //generate permit list from RAD input 
 process generate_permit{
   container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
-  label 'cpus_8'
   publishDir "${params.outdir}"
   input:
     path run_dir
@@ -68,7 +67,7 @@ process generate_permit{
     """
     alevin-fry generate-permit-list \
       -i ${run_dir} \
-      --expected-ori either \
+      --expected-ori fw \
       -o ${run_dir} \
       -k
     """
@@ -84,9 +83,8 @@ process collate_quant{
     path run_dir
     path tx2gene
   output: 
-    path counts
+    path run_dir
   script:
-    counts = "${run_dir}/counts"
     """
     alevin-fry collate \
       --input-dir ${run_dir} \
@@ -96,7 +94,7 @@ process collate_quant{
     alevin-fry quant \
      --input-dir ${run_dir} \
      --tg-map ${tx2gene} \
-     --output-dir ${counts} \
+     --output-dir ${run_dir} \
      -t ${task.cpus}
     """
 }
