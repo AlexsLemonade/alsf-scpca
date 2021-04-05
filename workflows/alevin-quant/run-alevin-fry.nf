@@ -48,7 +48,8 @@ process alevin{
       -o ${run_dir} \
       -p ${task.cpus} \
       --dumpFeatures \
-      --justAlign
+      --justAlign \
+      --sketch
     """
 }
 
