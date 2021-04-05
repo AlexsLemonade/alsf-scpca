@@ -12,7 +12,7 @@ params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 // run_ids are comma separated list to be parsed into a list of run ids,
 // or "All" to process all samples in the metadata file
-params.run_ids = "SCPCR000001,SCPCR000002"
+params.run_ids = "SCPCR000003"
 
 params.outdir = 's3://nextflow-ccdl-results/scpca/alevin-fry-quant'
 
@@ -26,7 +26,6 @@ process alevin{
   container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
   label 'cpus_8'
   tag "${id}-${index}"
-  publishDir "${params.outdir}"
   input:
     tuple val(id), path(read1), path(read2)
     path index
@@ -56,8 +55,6 @@ process alevin{
 //generate permit list from RAD input 
 process generate_permit{
   container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
-  label 'cpus_8'
-  publishDir "${params.outdir}"
   input:
     path run_dir
   output:
@@ -76,7 +73,24 @@ process generate_permit{
 
 // given permit list and barcode mapping, collate RAD file 
 // then quantify collated RAD file
-process collate_quant{
+process collate_fry{
+  container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
+  label 'cpus_8'
+  publishDir "${params.outdir}"
+  input: 
+    path run_dir
+  output: 
+    path run_dir
+  script:
+    """
+    alevin-fry collate \
+      --input-dir ${run_dir} \
+      --rad-dir ${run_dir} \
+      -t ${task.cpus}
+    """
+}
+
+process quant_fry{
   container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
   label 'cpus_8'
   publishDir "${params.outdir}"
@@ -84,22 +98,17 @@ process collate_quant{
     path run_dir
     path tx2gene
   output: 
-    path counts
+    path run_dir
   script:
-    counts = "${run_dir}/counts"
     """
-    alevin-fry collate \
-      --input-dir ${run_dir} \
-      --rad-dir ${run_dir} \
-      -t ${task.cpus}
-
     alevin-fry quant \
      --input-dir ${run_dir} \
      --tg-map ${tx2gene} \
-     --output-dir ${counts} \
+     --output-dir ${run_dir} \
      -t ${task.cpus}
     """
 }
+    
 // run quant command with default full resolution strategy 
 
 workflow{
@@ -120,5 +129,6 @@ workflow{
   // generate permit list from alignment 
   generate_permit(alevin.out)
   // collate RAD files and create gene x cell matrix
-  collate_quant(generate_permit.out, params.t2g_path)
+  collate_fry(generate_permit.out)
+  quant_fry(collate_fry.out, params.t2g_path)
 }
