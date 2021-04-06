@@ -15,8 +15,6 @@ def main():
     parser.add_argument('-p', '--s3_prefix',
                         dest = 'prefix',
                         help = 'The s3 location of the files, including bucket')
-    parser.add_argument('-o', '--outfile',
-                        help = 'Output file location')
     args = parser.parse_args()
 
     ## Read md5 file
@@ -36,19 +34,16 @@ def main():
         try:
             obj = s3.get_object(Bucket = bucket, Key = f"{prefix}/{filename}")
         except:
-            print(f"Error getting {filename} from {args.prefix}")
+            print(f"{prefix}/{filename}: Missing")
             continue
 
         chunks = obj['Body'].iter_chunks(65536)
         for chunk in chunks:
             md5_hash.update(chunk)
         if md5 == md5_hash.hexdigest():
-            print(f"Success for {filename}")
+            print(f"{prefix}/{filename}: OK")
         else: 
-            print(f"Failed {filename}: expected {md5}, got {md5_hash.hexdigest()}")
-        
-
-
+            print(f"{prefix}/{filename}: MD5 mismatch")
 
 if __name__ == "__main__":
     main()
