@@ -5,6 +5,7 @@
 ### Batch Role
 resource "aws_iam_role" "nf_batch_role" {
   name = "nextflow-batch-service-role"
+  tags = var.default_tags
   assume_role_policy = <<EOF
 {
     "Version": "2012-10-17",
@@ -19,7 +20,6 @@ resource "aws_iam_role" "nf_batch_role" {
     ]
 }
 EOF
-  tags = var.default_tags
 }
 
 resource "aws_iam_role_policy_attachment" "nf_batch_role" {
@@ -31,6 +31,7 @@ resource "aws_iam_role_policy_attachment" "nf_batch_role" {
 ### ECS Role
 resource "aws_iam_role" "nf_ecs_role" {
   name = "nextflow-ecs-instance-role"
+  tags = var.default_tags
   assume_role_policy = <<EOF
 {
     "Version": "2012-10-17",
@@ -45,7 +46,6 @@ resource "aws_iam_role" "nf_ecs_role" {
     ]
 }
 EOF
-  tags = var.default_tags
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_ec2_container" {

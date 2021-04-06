@@ -6,6 +6,7 @@
 # This policy allows read and write access to specific buckets for nextflow processing
 resource "aws_iam_policy" "nf_readwrite_S3" {
   name   = "nextflow-ccdl-readwrite-s3"
+  tags = var.default_tags
   policy = <<EOF
 {
  "Version": "2012-10-17",
@@ -103,6 +104,7 @@ EOF
 # This policy gives read access to all S3 buckets
 resource "aws_iam_policy" "nf_read_S3" {
   name   = "nextflow-ccdl-read-s3"
+  tags = var.default_tags
   policy = <<EOF
 {
   "Version": "2012-10-17",

@@ -1,5 +1,6 @@
-# Local .terraform directories
+# Local .terraform directories & files
 **/.terraform/*
+**/.terraform.lock.hcl
 
 # .tfstate files
 *.tfstate
@@ -52,4 +53,6 @@ workflows/*/data/
 
 # Ignore cellranger download
 images/cellranger/cellranger*.tar.gz
+
+
 
