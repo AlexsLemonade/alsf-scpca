@@ -35,7 +35,7 @@ process cat_md5{
   script:
     outfile = "00_all-md5check.txt"
     """
-    cat ${files} | sed '/^\\s+\$/d' > ${outfile}
+    cat ${files} | sed '/^\\s+\$/d' | sort > ${outfile}
     """
 }
 
