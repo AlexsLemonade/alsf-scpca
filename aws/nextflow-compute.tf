@@ -4,6 +4,7 @@
 
 resource "aws_iam_instance_profile" "nf_ecs_instance_role" {
   name = "nextflow-ecs-instance-role"
+  tags = var.default_tags
   role = aws_iam_role.nf_ecs_role.name
 }
 
@@ -11,6 +12,7 @@ resource "aws_iam_instance_profile" "nf_ecs_instance_role" {
 # the AMI used is described in setup-log.md
 resource "aws_batch_compute_environment" "nf_spot" {
   compute_environment_name = "nextflow-spot-compute"
+  tags = var.default_tags
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
     instance_type = [
@@ -50,6 +52,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
 
 resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
   compute_environment_name = "nextflow-spot-compute-bigdisk"
+  tags = var.default_tags
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
     instance_type = [
@@ -89,6 +92,7 @@ resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
 # # the AMI used is described in setup-log.md
 # resource "aws_batch_compute_environment" "nf_ondemand" {
 #   compute_environment_name = "nextflow-ondemand-compute"
+#   tags = var.default_tags
 #   compute_resources {
 #     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
 #     instance_type = [
