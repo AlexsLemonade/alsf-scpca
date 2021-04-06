@@ -28,7 +28,6 @@ process kallisto_bus{
   container 'quay.io/biocontainers/kallisto:0.46.2--h4f7b962_1'
   label 'cpus_8'
   tag "${id}-${index}"
-  publishDir "${params.outdir}"
   input:
     tuple val(id), val(tech), path(read1), path(read2)
     path index
@@ -58,7 +57,6 @@ process kallisto_bus{
 process bustools_whitelist{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
   label 'cpus_8'
-  publishDir "${params.outdir}"
   input:
     path run_dir
   output:
