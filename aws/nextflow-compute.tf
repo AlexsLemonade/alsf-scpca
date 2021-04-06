@@ -4,6 +4,7 @@
 
 resource "aws_iam_instance_profile" "nf_ecs_instance_role" {
   name = "nextflow-ecs-instance-role"
+  tags = var.default_tags
   role = aws_iam_role.nf_ecs_role.name
 }
 

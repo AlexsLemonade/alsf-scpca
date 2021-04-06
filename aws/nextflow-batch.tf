@@ -18,6 +18,7 @@ variable "default_tags" {
 
 resource "aws_batch_job_queue" "nf_default_queue" {
   name     = "nextflow-batch-default-queue"
+  tags     = var.default_tags
   state    = "ENABLED"
   priority = 1
   compute_environments = [
@@ -27,6 +28,7 @@ resource "aws_batch_job_queue" "nf_default_queue" {
 
 resource "aws_batch_job_queue" "nf_bigdisk_queue" {
   name     = "nextflow-batch-bigdisk-queue"
+  tags     = var.default_tags
   state    = "ENABLED"
   priority = 1
   compute_environments = [
