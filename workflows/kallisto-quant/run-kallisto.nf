@@ -127,7 +127,7 @@ workflow{
   run_all = run_ids[0] == "All"
   samples_ch = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
-    .filter{it.technology == "10Xv3"} // only 10X data
+    .filter{it.technology in barcodes} // only 10X data
     // use only the rows in the sample list
     .filter{run_all || (it.scpca_run_id in run_ids)}
   // create tuple of [sample_id, technology, [Read1 files], [Read2 files]]
