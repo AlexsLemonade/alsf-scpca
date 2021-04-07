@@ -2,18 +2,23 @@
 
 # This script takes the input reference fasta of the genome and the 
 # corresponding gtf file, identifies the regions of interest corresponding
-# to spliced transcripts and unspliced transcripts, then subsets the genome 
-# and gtf for only those particular regions, and finally outputs an expanded.fa, 
+# to spliced and unspliced transcripts, then subsets the genome and gtf for 
+# only those particular regions, and finally outputs an expanded.fa, 
 # expanded.gtf, and expanded.tx2gene.tsv all corresponding to the genomic 
-# regions with spliced and unspliced transcripts. 
+# regions with spliced and unspliced transcripts.
+
+# Additionally this script creates a transcript2gene mapping file 
+# for use in salmon alevin, and a output a list of mitochondrial 
+# genes for use in QC. 
 
 # load needed packages
+library(Biostrings)
+library(BSgenome)
+library(eisaR)
+library(GenomicFeatures)
 library(magrittr)
 library(optparse)
-library(eisaR)
-library(Biostrings)
-library(GenomicFeatures)
-library(BSgenome)
+library(tidyverse)
 
 # Set up optparse options
 option_list <- list(
@@ -32,7 +37,7 @@ option_list <- list(
   make_option(
     opt_str = c("-O", "--output_dir"),
     type = "character",
-    default = "expanded_annotation",
+    default = "annotation",
     help = "Directory to write output files",
   )
 )
@@ -42,11 +47,15 @@ opt <- parse_args(OptionParser(option_list = option_list))
 
 # Make output paths 
 expanded_fasta <- file.path(opt$output_dir, 
-                            "ensembl.GRCh38.annotation.expanded.fa")
+                            "Homo_sapiens.ensembl.103.expanded.fa")
 expanded_gtf <- file.path(opt$output_dir, 
-                          "ensembl.GRCh38.annotation.expanded.gtf")
+                          "Homo_sapiens.ensembl.103.expanded.gtf")
 expanded_tx2gene <- file.path(opt$output_dir, 
-                              "ensembl.GRCh38.annotation.expanded.tx2gene.tsv")
+                              "Homo_sapiens.ensembl.103.tx2gene_expanded.tsv")
+tx2_gene_out <- file.path(opt$output_dir, 
+                      "Homo_sapiens.ensembl.103.tx2gene.tsv")
+mito_out <- file.path(opt$output_dir,
+                      "Homo_sapiens.ensembl.103.mitogenes.txt")
 
 # Check for output directory 
 if (!dir.exists(opt$output_dir)) {
@@ -54,31 +63,25 @@ if (!dir.exists(opt$output_dir)) {
 }
 
 # extract GRanges object containing genomic coordinates of each 
-# annotated transcript and intron 
-gtf <- opt$gtf
+# annotated transcript - both spliced and unspliced transcripts
 grl <- eisaR::getFeatureRanges(
-  gtf = gtf,
-  featureType = c("spliced", "intron"), 
-  intronType = "separate", 
-  flankLength = 90L, 
-  joinOverlappingIntrons = FALSE,
+  gtf = opt$gtf,
+  featureType = c("spliced", "unspliced"), 
   verbose = TRUE
 )
-#grl[4:6]
 
 # load in primary genome
 genome <- Biostrings::readDNAStringSet(opt$genome)
-head(genome)
 names(genome) <- sapply(strsplit(names(genome), " "), .subset, 1)
 
-# extract sequences for features of interest based on spliced and intronic
+# extract unspliced and spliced sequences
 # genomic regions defined above
 seqs <- GenomicFeatures::extractTranscriptSeqs(
   x = genome, 
   transcripts = grl
 )
 
-# write regions of interest to fasta file
+# write unspliced and spliced sequences to fasta file
 Biostrings::writeXStringSet(
   seqs, filepath = expanded_fasta
 )
@@ -91,6 +94,28 @@ eisaR::exportToGtf(
 
 # create text file mapping transcript and intron identifiers to 
 # corresponding gene identifiers
-df <- eisaR::getTx2Gene(
+# first make Tx2Gene for all spliced and unspliced sequences
+full_tx2gene <- eisaR::getTx2Gene(
   grl, filepath = expanded_tx2gene
 )
+
+# next make Tx2gene for only spliced transcripts 
+
+# get list of all spliced transcript ID's
+spliced_genes = metadata(grl)$corrtx %>%
+  pull(spliced)
+
+# subset sequences for only 
+splice_grl = grl[spliced_genes]
+
+# export Tx2Gene for spliced transcripts
+spliced_tx2gene <- eisaR::getTx2Gene(
+  splice_grl, filepath = tx2_gene_out
+)
+
+# reimport gtf to get list of mito genes 
+gtf <- rtracklayer::import(expanded_gtf)
+mitogenes <- gtf[seqnames(gtf) == 'MT']
+
+# write out mitochondrial gene list
+writeLines(mitogenes$gene_id, mito_out)
