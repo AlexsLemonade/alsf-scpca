@@ -80,7 +80,7 @@ process generate_permit{
       -i ${run_dir} \
       --expected-ori fw \
       -o ${run_dir} \
-      -k
+      --knee-distance
     """
 }
 
