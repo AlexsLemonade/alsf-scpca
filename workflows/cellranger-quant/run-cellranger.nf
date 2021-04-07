@@ -63,7 +63,7 @@ workflow{
   run_all = run_ids[0] == "All"
   ch_reads = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
-    .filter{it.technology in technology} // only 10X data
+    .filter{it.technology in tech_list} // only 10X data
     // use only the rows in the sample list
     .filter{run_all || (it.scpca_run_id in run_ids)}
     // create tuple of [sample_id, sample_names, fastq dir]
