@@ -8,6 +8,7 @@ params.index_name = 'txome_k31'
 params.annotation_dir = 'annotation'
 params.t2g = 'Homo_sapiens.ensembl.100.tx2gene.tsv'
 params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
+params.sketch = false // use sketch mode for mapping with flag `--sketch`
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 // run_ids are comma separated list to be parsed into a list of run ids,
@@ -21,6 +22,9 @@ params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${params.t2g}"
 params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist}"
 
+// supported single cell technologies
+tech_list = ['10Xv2', '10Xv3', '10Xv3.1'] 
+
 // generates RAD file using alevin
 process alevin{
   container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
@@ -28,20 +32,26 @@ process alevin{
   tag "${id}-${index}"
   publishDir "${params.outdir}"
   input:
-    tuple val(id), path(read1), path(read2)
+    tuple val(id), val(tech), path(read1), path(read2)
     path index
     path tx2gene
   output:
     path run_dir
   script:
-    run_dir = "${id}-${index}"
-  // run alevin like normal with the --justAlign flag 
-  // creates output directory with RAD file needed for alevin-fry
+    // label the run directory by id, index, and mapping mode
+    run_dir = "${id}-${index}-${params.sketch ? 'sketch' : 'salign'}"
+    // choose flag by technology
+    tech_flag = ['10Xv2': '--chromium',
+                 '10Xv3': '--chromiumV3',
+                 '10Xv3.1': '--chromiumV3']
+    // run alevin like normal with the --justAlign flag 
+    // creates output directory with RAD file needed for alevin-fry
+    // uses sketch mode if --sketch was included at invocation
     """
     mkdir -p ${run_dir}
     salmon alevin \
       -l ISR \
-      --chromium \
+      ${tech_flag[tech]} \
       -1 ${read1} \
       -2 ${read2} \
       -i ${index} \
@@ -49,7 +59,8 @@ process alevin{
       -o ${run_dir} \
       -p ${task.cpus} \
       --dumpFeatures \
-      --justAlign
+      --justAlign \
+      ${params.sketch ? '--sketch' : ''}
     """
 }
 
@@ -115,18 +126,20 @@ process quant_fry{
 workflow{
   run_ids = params.run_ids?.tokenize(',') ?: []
   run_all = run_ids[0] == "All"
-  ch_reads = Channel.fromPath(params.run_metafile)
+  samples_ch = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
-    .filter{it.technology == "10Xv3"} // only 10X data
+    .filter{it.technology in tech_list} 
     // use only the rows in the sample list
     .filter{run_all || (it.scpca_run_id in run_ids)}
-    // create tuple of [sample_id, [Read1 files], [Read2 files]]
+  // create tuple of [sample_id, technology, [Read1 files], [Read2 files]]
+  reads_ch = samples_ch
     .map{row -> tuple(row.scpca_run_id,
+                      row.technology,
                       file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
                       file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
                       )}
   // run Alevin
-  alevin(ch_reads, params.index_path, params.t2g_path)
+  alevin(reads_ch, params.index_path, params.t2g_path)
   // generate permit list from alignment 
   generate_permit(alevin.out)
   // collate RAD files 
