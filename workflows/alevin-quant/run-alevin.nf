@@ -21,45 +21,54 @@ params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${params.t2g}"
 params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist}"
 
+// supported single cell technologies
+tech_list = ['10Xv2', '10Xv3', '10Xv3.1'] 
+
 process alevin{
   container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
   label 'cpus_8'
   tag "${id}-${index}"
   publishDir "${params.outdir}"
   input:
-    tuple val(id), path(read1), path(read2)
+    tuple val(id), val(tech), path(read1), path(read2)
     path index
     path tx2gene
   output:
     path "${id}-${index}"
   script:
+    // choose flag by technology
+    tech_flag = ['10Xv2': '--chromium',
+                 '10Xv3': '--chromiumV3',
+                 '10Xv3.1': '--chromiumV3']
     """
     salmon alevin \
       -l ISR \
-      --chromium \
+      ${tech_flag[tech]} \
       -1 ${read1} \
       -2 ${read2} \
       -i ${index} \
       --tgMap ${tx2gene} \
       -o ${id}-${index} \
       -p ${task.cpus} \
-      --dumpFeatures \
+      --dumpFeatures
     """
 }
 
 workflow{
   run_ids = params.run_ids?.tokenize(',') ?: []
   run_all = run_ids[0] == "All"
-  ch_reads = Channel.fromPath(params.run_metafile)
+  samples_ch = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
-    .filter{it.technology == "10Xv3"} // only 10X data
+    .filter{it.technology in tech_list} 
     // use only the rows in the sample list
     .filter{run_all || (it.scpca_run_id in run_ids)}
-    // create tuple of [sample_id, [Read1 files], [Read2 files]]
+  // create tuple of [sample_id, technology, [Read1 files], [Read2 files]]
+  reads_ch = samples_ch
     .map{row -> tuple(row.scpca_run_id,
+                      row.technology,
                       file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
                       file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
                       )}
   // run Alevin
-  alevin(ch_reads, params.index_path, params.t2g_path)
+  alevin(reads_ch, params.index_path, params.t2g_path)
 }
