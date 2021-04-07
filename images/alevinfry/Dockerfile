@@ -1,0 +1,10 @@
+FROM continuumio/miniconda3:4.9.2
+LABEL maintainer="ccdl@alexslemonade.org"
+
+# Install apt-getable packages needed for nextflow
+RUN apt-get update && apt-get install -y procps
+
+# Install alevin-fry using bioconda
+RUN conda install -c bioconda alevin-fry 
+
+WORKDIR /home

@@ -4,7 +4,7 @@ nextflow.enable.dsl=2
 // run parameters
 params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100'
 params.index_dir = 'salmon_index'
-params.index_name = 'txome_k31_full_sa'
+params.index_name = 'txome_k31'
 params.annotation_dir = 'annotation'
 params.t2g = 'Homo_sapiens.ensembl.100.tx2gene.tsv'
 params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
@@ -14,13 +14,14 @@ params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.t
 // or "All" to process all samples in the metadata file
 params.run_ids = "SCPCR000001,SCPCR000002"
 
-params.outdir = 's3://nextflow-ccdl-results/scpca/alevin-quant'
+params.outdir = 's3://nextflow-ccdl-results/scpca/alevin-fry-quant'
 
 // build full paths
 params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${params.t2g}"
 params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist}"
 
+// generates RAD file using alevin
 process alevin{
   container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
   label 'cpus_8'
@@ -31,9 +32,13 @@ process alevin{
     path index
     path tx2gene
   output:
-    path "${id}-${index}"
+    path run_dir
   script:
+    run_dir = "${id}-${index}"
+  // run alevin like normal with the --justAlign flag 
+  // creates output directory with RAD file needed for alevin-fry
     """
+    mkdir -p ${run_dir}
     salmon alevin \
       -l ISR \
       --chromium \
@@ -41,11 +46,71 @@ process alevin{
       -2 ${read2} \
       -i ${index} \
       --tgMap ${tx2gene} \
-      -o ${id}-${index} \
+      -o ${run_dir} \
       -p ${task.cpus} \
       --dumpFeatures \
+      --justAlign
     """
 }
+
+//generate permit list from RAD input 
+process generate_permit{
+  container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
+  publishDir "${params.outdir}"
+  input:
+    path run_dir
+  output:
+    path run_dir
+  script: 
+  // expected-ori either signifies no filtering of alignments 
+  // based on orientation, not sure if this is what we want? 
+    """
+    alevin-fry generate-permit-list \
+      -i ${run_dir} \
+      --expected-ori fw \
+      -o ${run_dir} \
+      -k
+    """
+}
+
+// given permit list and barcode mapping, collate RAD file 
+process collate_fry{
+  container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
+  label 'cpus_8'
+  publishDir "${params.outdir}"
+  input: 
+    path run_dir
+  output: 
+    path run_dir
+  script:
+    """
+    alevin-fry collate \
+      --input-dir ${run_dir} \
+      --rad-dir ${run_dir} \
+      -t ${task.cpus}
+    """
+}
+
+// then quantify collated RAD file
+process quant_fry{
+  container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
+  label 'cpus_8'
+  publishDir "${params.outdir}"
+  input: 
+    path run_dir
+    path tx2gene
+  output: 
+    path run_dir
+  script:
+    """
+    alevin-fry quant \
+     --input-dir ${run_dir} \
+     --tg-map ${tx2gene} \
+     --output-dir ${run_dir} \
+     -t ${task.cpus}
+    """
+}
+// run quant command with default full resolution strategy 
 
 workflow{
   run_ids = params.run_ids?.tokenize(',') ?: []
@@ -62,4 +127,10 @@ workflow{
                       )}
   // run Alevin
   alevin(ch_reads, params.index_path, params.t2g_path)
+  // generate permit list from alignment 
+  generate_permit(alevin.out)
+  // collate RAD files 
+  collate_fry(generate_permit.out)
+  // create gene x cell matrix
+  quant_fry(collate_fry.out, params.t2g_path)
 }
