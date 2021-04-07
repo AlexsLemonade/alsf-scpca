@@ -21,6 +21,9 @@ params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${params.t2g}"
 params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist}"
 
+// supported single cell technologies
+tech_list = ['10Xv2', '10Xv3', '10Xv3.1'] 
+
 process alevin{
   container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
   label 'cpus_8'
@@ -54,10 +57,9 @@ process alevin{
 workflow{
   run_ids = params.run_ids?.tokenize(',') ?: []
   run_all = run_ids[0] == "All"
-  techs = ['10Xv2', '10Xv3', '10Xv3.1'] // supported technologies
   samples_ch = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
-    .filter{it.technology in techs} 
+    .filter{it.technology in tech_list} 
     // use only the rows in the sample list
     .filter{run_all || (it.scpca_run_id in run_ids)}
   // create tuple of [sample_id, technology, [Read1 files], [Read2 files]]
