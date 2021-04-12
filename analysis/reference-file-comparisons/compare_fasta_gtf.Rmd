@@ -1,0 +1,188 @@
+---
+title: "Compare Fasta and GTF Files"
+output: html_notebook
+---
+
+## Setup
+
+### Load Libraries for import
+
+```{r setup}
+library(Biostrings)
+library(BSgenome)
+library(eisaR)
+library(GenomicFeatures)
+library(tidyverse)
+library(rtracklayer)
+```
+
+### File and Directory Setup
+
+```{r}
+## get file directories
+ref_dir <- file.path("..", "..", "workflows", "rnaseq-ref-index")
+
+txome_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.103.txome.fa.gz")
+ensembl_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.txome.fa.gz")
+ncrna_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.ncrna.fa.gz")
+```
+
+### Load fastas and gtf files for comparisons
+
+```{r}
+# read in fastas
+txome_genome <- Biostrings::readDNAStringSet(txome_fasta)
+names(txome_genome) <- sapply(strsplit(names(txome_genome), " "), .subset, 1)
+
+ensembl_genome <- Biostrings::readDNAStringSet(ensembl_fasta)
+names(ensembl_genome) <- sapply(strsplit(names(ensembl_genome), " "), .subset, 1)
+
+ncrna_genome <- Biostrings::readDNAStringSet(ncrna_fasta)
+names(ncrna_genome) <- sapply(strsplit(names(ncrna_genome), " "), .subset, 1)
+```
+
+```{r}
+# load in the gtf files
+txome_gtf_file <- file.path(ref_dir, "annotation", "Homo_sapiens.GRCh38.103.txome.gtf")
+genome_gtf_file <- file.path(ref_dir, "annotation", "Homo_sapiens.GRCh38.103.gtf")
+
+txome_gtf <- rtracklayer::import(txome_gtf_file)
+genome_gtf <- rtracklayer::import(genome_gtf_file)
+```
+
+## Fasta Comparisons
+
+Start by looking at the fasta files and which sequences are shared across 
+the fasta directly from ensembl vs. the fasta created from 
+eisaR::getFeatureRegions for spliced regions only. 
+
+```{r echo = FALSE}
+message("Ensembl fasta w/ncRNA") 
+length(ensembl_genome)
+head(ensembl_genome)
+
+message("Spliced gene only from eisaR") 
+length(txome_genome)
+head(txome_genome)
+```
+
+One concern is that any differences could be from loss of ncRNA, so also going 
+to take a look at those for comparison. 
+```{r}
+length(ncrna_genome)
+head(ncrna_genome)
+```
+
+First, I wanted to check and see how many of the sequences are overlapping and 
+what sequences we might be losing. 
+
+```{r}
+## remove the version numbers from ensembl_genome
+names(ensembl_genome) = gsub("\\..*", "", names(ensembl_genome))
+```
+
+
+```{r}
+## how many transcripts are shared
+shared_tx= intersect(names(ensembl_genome), names(txome_genome))
+length(shared_tx)
+lost_tx <- ensembl_genome[!names(ensembl_genome) %in% shared_tx]
+
+length(lost_tx)
+head(lost_tx)
+```
+
+How many of the missing transcripts are ncRNA transcripts? 
+```{r echo = FALSE}
+# how many ncrna sequences are present in the new transcriptome? 
+names(ncrna_genome) = gsub("\\..*", "", names(ncrna_genome))
+shared_ncrna= intersect(names(ncrna_genome), names(txome_genome))
+
+message("Ensembl ncRNA fasta") 
+length(ncrna_genome)
+
+message("ncRNA found in both eisaR fasta and ncRNA.fa from ensembl")
+length(shared_ncrna)
+
+```
+
+```{r}
+## how many of the lost transcripts are ncRNA transcripts? 
+length(intersect(names(lost_tx), names(ncrna_genome)))
+
+```
+
+It looks like only 1/4 of the missing transcript sequences are from the ncRNA.fa
+file. So that doesn't account for the other 75% of the sequences. Can we figure
+out what type of sequences are missing? 
+
+## GTF Comparisons
+
+I then looked at the gtf files to see what type of transcript sequences 
+are missing. 
+
+```{r}
+## subset gtf by transcripts in the fasta file made from combining cdna/ncrna.fa
+genome_gtf <- genome_gtf[genome_gtf$transcript_id %in% 
+                           names(ensembl_genome)]
+
+# find the features that are in the eisaR gtf and also in the ensembl gtf
+shared_gtf <- txome_gtf[txome_gtf$transcript_id %in% 
+                          genome_gtf$transcript_id]
+
+# get the features only found in the eisaR txome
+txome_only_gtf <- txome_gtf[!txome_gtf$transcript_id %in% 
+                              genome_gtf$transcript_id]
+length(genome_gtf)
+length(txome_gtf)
+length(shared_gtf)
+length(txome_only_gtf)
+```
+
+It looks like there are a bunch of missing annotations from the ensembl gtf
+and there are ~60,000 new annotations that weren't there before. 
+What is missing from the eisaR gtf?
+
+```{r}
+# look specifically at features in the ensembl gtf that are not in the txome gtf
+missing_gtf <- genome_gtf[!txome_gtf$transcript_id %in% 
+                            genome_gtf$transcript_id]
+length(missing_gtf)
+head(missing_gtf)
+table(missing_gtf$gene_biotype)
+```
+
+It looks like we are missing almost 100,000 protein coding regions including 
+8,000 long non coding RNA. 
+
+
+```{r}
+head(txome_gtf)
+table(txome_gtf$gene_biotype)
+```
+
+The additional fields in the gtf file are also missing from the "homemade" gtf
+from eisaR. 
+
+
+Based on this brief comparison, it looks like there are quite a lot of 
+differences between the transcriptome obtained directly from ensembl and the 
+transcriptome obtained by subsetting the ensembl gtf for only regions 
+corresponding to spliced mRNA. Also in looking through a few of the genes, 
+there doesn't appear to be any clear type of transcripts that are lost. One 
+hypothesis was that they would belong to genes with one exon, but many are 
+transcripts from genes with multiple exons. It also appears that the standard 
+is to use the fasta and gtf directly from ensembl in scRNA-seq. Based on the 
+information found here, it doesn't seem to be in our best interest to change 
+what we are using to generate our reference files for scRNA-seq. One potential 
+problem that might come up is if the reference files being generated this way 
+for snRNA-seq will be adequate in comparison to using the full genome with 
+cellranger. There is no clear gold standard for snRNA-seq index 
+generation with Alevin or Kallisto, but the approach of combining cDNA sequences
+with flanking intronic sequences was the recommended approach for both. 
+
+## Session info
+
+```{r paged.print=FALSE}
+sessioninfo::session_info()
+```
