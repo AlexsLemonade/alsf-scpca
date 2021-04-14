@@ -22,7 +22,7 @@ library(rtracklayer)
 ## get file directories
 ref_dir <- file.path("..", "..", "workflows", "rnaseq-ref-index")
 
-txome_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.103.txome.fa.gz")
+txome_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.103.spliced.txome.fa.gz")
 ensembl_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.txome.fa.gz")
 ncrna_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.ncrna.fa.gz")
 ```
@@ -43,7 +43,7 @@ names(ncrna_genome) <- sapply(strsplit(names(ncrna_genome), " "), .subset, 1)
 
 ```{r}
 # load in the gtf files
-txome_gtf_file <- file.path(ref_dir, "annotation", "Homo_sapiens.GRCh38.103.txome.gtf")
+txome_gtf_file <- file.path(ref_dir, "annotation", "Homo_sapiens.GRCh38.103.spliced.txome.gtf")
 genome_gtf_file <- file.path(ref_dir, "annotation", "Homo_sapiens.GRCh38.103.gtf")
 
 txome_gtf <- rtracklayer::import(txome_gtf_file)
