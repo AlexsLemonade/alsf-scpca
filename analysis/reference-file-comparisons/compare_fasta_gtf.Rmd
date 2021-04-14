@@ -185,6 +185,39 @@ table(genome_only_gtf$gene_biotype)
 It looks like we are missing almost 500,000 protein coding regions, which seems
 relatively important.
 
+Are these protein coding genes corresponding to loss of genes from or loss of 
+transcripts? 
+
+```{r}
+# genes in ensembl gtf
+ensembl_genes <- unique(genome_gtf$gene_id)
+length(ensembl_genes)
+
+# genes in eisaR gtf
+txome_genes <- unique(txome_gtf$gene_id)
+length(txome_genes)
+
+# how many are found in both
+shared_genes <- intersect(ensembl_genes, txome_genes)
+length(shared_genes)
+
+# how many are found in ensembl that are missing from eisaR? 
+lost_genes <- genome_gtf[!genome_gtf$gene_id %in% shared_genes]
+length(lost_genes)
+
+# how many are found in eisaR that are missing from ensembl?
+txome_only_genes <- txome_gtf[!txome_gtf$gene_id %in% shared_genes]
+length(txome_only_genes)
+```
+
+It looks like the eisaR created gtf has all of the genes that are found in 
+ensembl and then some. What are the new genes that are added? 
+
+```{r}
+txome_only_genes$gene_id[1:20]
+```
+
+Many of these genes show up as uncategorized. 
 
 Based on this brief comparison, it looks like there are quite a lot of 
 differences between the transcriptome.fa obtained directly from ensembl and the 
