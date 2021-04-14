@@ -62,14 +62,12 @@ txome_gtf_file <- paste0(file_base, ".spliced.txome.gtf")
 txome_tx2gene_file <- paste0(file_base, ".spliced.tx2gene.tsv")
 
 ## files with spliced + intron regions
-spliced_intron_fasta_file <- paste0(file_base,".", "spliced_intron.txome.fa.gz")
-spliced_intron_gtf_file <- paste0(file_base, ".", "spliced_intron.txome.gtf")
-spliced_intron_tx2gene_file <- paste0(file_base, ".", 
-                                      "spliced_intron.tx2gene.tsv")
-spliced_intron_metadata_file <- paste0(file_base, ".", 
-                                       "spliced_intron.metadata.tsv")
+spliced_intron_fasta_file <- paste0(file_base, ".spliced_intron.txome.fa.gz")
+spliced_intron_gtf_file <- paste0(file_base, ".spliced_intron.txome.gtf")
+spliced_intron_tx2gene_file <- paste0(file_base, ".spliced_intron.tx2gene.tsv")
+spliced_intron_metadata_file <- paste0(file_base, ".spliced_intron.metadata.tsv")
 
-mito_file <- paste0(file_base, ".", "mitogenes.txt")
+mito_file <- paste0(file_base, ".mitogenes.txt")
 
 # make final output file names needed
 txome_fasta <- file.path(opt$fasta_output, txome_fasta_file)
