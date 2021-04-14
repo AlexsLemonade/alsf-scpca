@@ -57,9 +57,9 @@ opt <- parse_args(OptionParser(option_list = option_list))
 file_base <- stringr::str_replace(basename(opt$gtf), "\\.gtf(\\.gz)?$", "")
 
 # main files with only spliced regions
-txome_fasta_file <- paste0(file_base, ".", "txome.fa.gz")
-txome_gtf_file <- paste0(file_base, ".", "txome.gtf")
-txome_tx2gene_file <- paste0(file_base, ".", "tx2gene.tsv")
+txome_fasta_file <- paste0(file_base, ".spliced.txome.fa.gz")
+txome_gtf_file <- paste0(file_base, ".spliced.txome.gtf")
+txome_tx2gene_file <- paste0(file_base, ".spliced.tx2gene.tsv")
 
 ## files with spliced + intron regions
 spliced_intron_fasta_file <- paste0(file_base,".", "spliced_intron.txome.fa.gz")
