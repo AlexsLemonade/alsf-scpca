@@ -28,7 +28,7 @@ gzip annotation/*.gtf
 
 # the sync with fasta would need to happen here if we are to remove the
 # previous step of combining cdna & ncrna fasta files
-#aws s3 sync fasta $s3_base/fasta
+aws s3 sync fasta $s3_base/fasta
 
 aws s3 sync annotation $s3_base/annotation
   
