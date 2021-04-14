@@ -25,24 +25,24 @@ RUN apt-get update -qq && apt-get -y --no-install-recommends install \
 RUN Rscript -e "install.packages(c( \
     'here', \
     'optparse', \
-    'rprojroot', \
-    'matrixStats') \
+    'matrixStats', \
+    'rprojroot') \
     )"
 
 ##########################
 # Install bioconductor packages
 RUN Rscript -e "BiocManager::install(c( \
     'AnnotationHub', \
+    'Biostrings', \
+    'BSgenome', \
     'DropletUtils', \
+    'eisaR', \
     'ensembldb', \
     'fishpond', \
+    'GenomicFeatures', \
     'scran', \
     'scater', \
-    'tximport', \
-    'eisaR', \
-    'Biostrings', \
-    'GenomicFeatures', \
-    'BSgenome'), \
+    'tximport'), \
     update = FALSE)"
 
 # set final workdir for commands
