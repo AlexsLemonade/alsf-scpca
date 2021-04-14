@@ -103,7 +103,7 @@ grl <- eisaR::getFeatureRanges(
 
 # load in primary genome
 genome <- Biostrings::readDNAStringSet(opt$genome)
-names(genome) <- sapply(strsplit(names(genome), " "), .subset, 1)
+names(genome) <- stringr::word(names(genome), 1)
 
 # extract spliced and intron sequences
 # genomic regions defined above
