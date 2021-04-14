@@ -92,6 +92,34 @@ length(lost_tx)
 head(lost_tx)
 ```
 
+At first glance it looks like the missing transcripts are really short, so maybe
+it doesn't matter if we lose them. Let's look at the length of these transcripts
+in comparison to the transcripts we do capture and see if they are in fact much
+shorter. 
+
+```{r}
+ensembl_width_df <- data.frame("width" = width(ensembl_genome), 
+                               "group" = "Ensembl")
+txome_width_df <- data.frame("width" = width(txome_genome),
+                             "group" = "EisaR_Txome")
+lost_width_df <- data.frame("width" = width(lost_tx),
+                            "group" = "Lost Tx")
+
+all_width_df <- bind_rows(ensembl_width_df,
+                          txome_width_df, lost_width_df)
+```
+
+```{r}
+ggplot(all_width_df, aes(x = width, color = group)) +
+  geom_density() + 
+  theme_classic() + 
+  xlim(c(0,4000))
+```
+From this plot you can see that there are still a lot of transcripts that are 
+of similar size to the main transcriptome that are lost, so it isn't just small
+transcripts that are getting lost. 
+
+
 How many of the missing transcripts are ncRNA transcripts? 
 ```{r echo = FALSE}
 # how many ncrna sequences are present in the new transcriptome? 
@@ -127,58 +155,53 @@ genome_gtf <- genome_gtf[genome_gtf$transcript_id %in%
                            names(ensembl_genome)]
 
 # find the features that are in the eisaR gtf and also in the ensembl gtf
-shared_gtf <- txome_gtf[txome_gtf$transcript_id %in% 
-                          genome_gtf$transcript_id]
+shared_gtf <- genome_gtf[genome_gtf %in% txome_gtf]
 
 # get the features only found in the eisaR txome
-txome_only_gtf <- txome_gtf[!txome_gtf$transcript_id %in% 
-                              genome_gtf$transcript_id]
+txome_only_gtf <- txome_gtf[!txome_gtf %in% genome_gtf]
+
+# get the features only found in the ensembl gtf
+genome_only_gtf <- genome_gtf[!genome_gtf %in% txome_gtf]
+
 length(genome_gtf)
 length(txome_gtf)
 length(shared_gtf)
 length(txome_only_gtf)
+length(genome_only_gtf)
 ```
 
-It looks like there are a bunch of missing annotations from the ensembl gtf
-and there are ~60,000 new annotations that weren't there before. 
-What is missing from the eisaR gtf?
+It looks like if we were to use the ensembl version, we would be missing around
+500,000 annotations. Additionally, the eisaR version includes ~17,000 
+annotations that are not found in the ensembl gtf. 
+
+So what type of annotations would we be missing if we were to use the eisaR 
+version over the ensembl version?
 
 ```{r}
-# look specifically at features in the ensembl gtf that are not in the txome gtf
-missing_gtf <- genome_gtf[!genome_gtf$transcript_id %in% txome_gtf$transcript_id ]
-length(missing_gtf)
-head(missing_gtf)
-table(missing_gtf$gene_biotype)
+# look specifically at features in the ensembl gtf that are not in the eisaR gtf
+table(genome_only_gtf$gene_biotype)
 ```
 
-It looks like we are missing almost 100,000 protein coding regions including 
-8,000 long non coding RNA. 
-
-
-```{r}
-head(txome_gtf)
-table(txome_gtf$gene_biotype)
-```
-
-The additional fields in the gtf file are also missing from the "homemade" gtf
-from eisaR. 
+It looks like we are missing almost 500,000 protein coding regions, which seems
+relatively important.
 
 
 Based on this brief comparison, it looks like there are quite a lot of 
-differences between the transcriptome obtained directly from ensembl and the 
-transcriptome obtained by subsetting the ensembl gtf for only regions 
+differences between the transcriptome.fa obtained directly from ensembl and the 
+transcriptome.fa obtained by subsetting the ensembl gtf for only regions 
 corresponding to spliced mRNA. Also in looking through a few of the genes, 
 there doesn't appear to be any clear type of transcripts that are lost. One 
 hypothesis was that they would belong to genes with one exon, but many are 
-transcripts from genes with multiple exons. It also appears that the standard 
-is to use the fasta and gtf directly from ensembl in scRNA-seq. Based on the 
-information found here, it doesn't seem to be in our best interest to change 
-what we are using to generate our reference files for scRNA-seq. One potential 
-problem that might come up is if the reference files being generated this way 
-for snRNA-seq will be adequate in comparison to using the full genome with 
-cellranger. There is no clear gold standard for snRNA-seq index 
-generation with Alevin or Kallisto, but the approach of combining cDNA sequences
-with flanking intronic sequences was the recommended approach for both. 
+transcripts from genes with multiple exons (based on searching through ensembl).
+It also appears that the standard is to use the fasta and gtf directly from 
+ensembl in scRNA-seq. Based on the information found here, it doesn't seem to 
+be in our best interest to change what we are using to generate our reference 
+files for scRNA-seq. One potential problem that might come up is if the 
+reference files being generated this way for snRNA-seq will be adequate in 
+comparison to using the full genome with cellranger. There is no clear gold 
+standard for snRNA-seq index generation with Alevin or Kallisto, but the 
+approach of combining cDNA sequences with flanking intronic sequences was the 
+recommended approach for both. 
 
 ## Session info
 
