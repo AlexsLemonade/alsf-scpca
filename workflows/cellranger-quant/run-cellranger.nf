@@ -12,6 +12,9 @@ params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.t
 params.run_ids = "SCPCR000001,SCPCR000002"
 params.outdir = 's3://nextflow-ccdl-results/scpca/cellranger-quant'
 
+// technology options
+tech_list = ["10Xv2", "10Xv3", "10Xv3.1"]
+
 // build full paths
 params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 
@@ -47,7 +50,7 @@ def getCRsamples(filelist){
   fastq_files.each{
     // append sample names to list, using regex to extract element before S001, etc.
     // [0] for the first match set, [1] for the first extracted element
-    samples << (it =~ /^(.+)_S.+_L.+_R.+.fastq.gz$/)[0][1]
+    samples << (it =~ /^(.+)_S.+_L.+_[R|I].+.fastq.gz$/)[0][1]
   }
   // convert samples list to a `set` to remove duplicate entries,
   // then join to a comma separated string.
@@ -60,7 +63,7 @@ workflow{
   run_all = run_ids[0] == "All"
   ch_reads = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
-    .filter{it.technology == "10Xv3"} // only 10X data
+    .filter{it.technology in tech_list} // only 10X data
     // use only the rows in the sample list
     .filter{run_all || (it.scpca_run_id in run_ids)}
     // create tuple of [sample_id, sample_names, fastq dir]

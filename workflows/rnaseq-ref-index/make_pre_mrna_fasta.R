@@ -103,7 +103,7 @@ grl <- eisaR::getFeatureRanges(
 
 # load in primary genome
 genome <- Biostrings::readDNAStringSet(opt$genome)
-names(genome) <- sapply(strsplit(names(genome), " "), .subset, 1)
+names(genome) <- stringr::word(names(genome), 1)
 
 # extract spliced and intron sequences
 # genomic regions defined above
@@ -130,7 +130,6 @@ full_tx2gene <- eisaR::getTx2Gene(
   grl, filepath = spliced_intron_tx2gene
 )
 
-# next make Tx2gene for only spliced transcripts 
 ## need to write out to metadata 
 readr::write_tsv(metadata(grl)$corrgene, spliced_intron_metadata)
 
