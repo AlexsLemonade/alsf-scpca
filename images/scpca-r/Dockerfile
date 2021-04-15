@@ -1,4 +1,4 @@
-FROM rocker/tidyverse:4.0.2
+FROM rocker/tidyverse:4.0.5
 LABEL maintainer="ccdl@alexslemonade.org"
 
 ### Install apt-getable packages to start
@@ -17,26 +17,33 @@ RUN apt-get update -qq && apt-get -y --no-install-recommends install \
     libreadline-dev \
     libudunits2-dev
 
+
 #### R packages
+###############
+# this comes first since bioconductor packages are 
+# dependent on updated matrixStats
+RUN Rscript -e "install.packages(c( \
+    'here', \
+    'optparse', \
+    'matrixStats', \
+    'rprojroot') \
+    )"
+
 ##########################
 # Install bioconductor packages
 RUN Rscript -e "BiocManager::install(c( \
     'AnnotationHub', \
+    'Biostrings', \
+    'BSgenome', \
     'DropletUtils', \
+    'eisaR', \
     'ensembldb', \
     'fishpond', \
+    'GenomicFeatures', \
     'scran', \
     'scater', \
     'tximport'), \
     update = FALSE)"
-
-###############
-# Other R packages
-RUN Rscript -e "install.packages(c( \
-    'here', \
-    'optparse', \
-    'rprojroot') \
-    )"
 
 # set final workdir for commands
 WORKDIR /home/rstudio
