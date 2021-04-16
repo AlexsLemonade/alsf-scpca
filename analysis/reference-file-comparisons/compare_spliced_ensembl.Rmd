@@ -31,18 +31,25 @@ ref_dir <- file.path("..", "..", "workflows", "rnaseq-ref-index")
 spliced_gtf_file <- file.path(ref_dir, "annotation", "Homo_sapiens.GRCh38.103.spliced.txome.gtf.gz")
 ensembl_gtf_file <- file.path(ref_dir, "annotation", "Homo_sapiens.GRCh38.103.gtf.gz")
 
-spliced_gtf <- rtracklayer::import(spliced_gtf_file)
-ensembl_gtf <- rtracklayer::import(ensembl_gtf_file)
+spliced_gtf <- rtracklayer::import(spliced_gtf_file) %>% as.data.frame()
+ensembl_gtf <- rtracklayer::import(ensembl_gtf_file) %>% as.data.frame()
 ```
 
 ## GTF Comparison
 
-Start by getting just the transcipt ids for each set, and compare them.
+Start by getting just the transcript ids for each set, and compare them.
 
 ```{r}
-spliced_gtf_txs <- unique(spliced_gtf$transcript_id[!is.na(spliced_gtf$transcript_id)]) %>%
+spliced_gtf_txs <- spliced_gtf %>%
+  drop_na(transcript_id) %>%
+  pull(transcript_id) %>%
+  unique() %>% 
   sort()
-ensembl_gtf_txs <- unique(ensembl_gtf$transcript_id[!is.na(ensembl_gtf$transcript_id)]) %>%
+
+ensembl_gtf_txs <- ensembl_gtf %>%
+  drop_na(transcript_id) %>%
+  pull(transcript_id) %>%
+  unique() %>% 
   sort()
 
 # Are these the same? 
@@ -58,10 +65,7 @@ spliced_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.103.spliced.tx
 ensembl_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.txome.fa.gz")
 
 spliced_txome <- Biostrings::readDNAStringSet(spliced_fasta)
-names(spliced_txome) <- stringr::word(names(spliced_txome), 1)
-
 ensembl_txome <- Biostrings::readDNAStringSet(ensembl_fasta)
-names(ensembl_txome) <- stringr::word(names(ensembl_txome), 1)
 
 ```
 
@@ -75,8 +79,8 @@ glue::glue("
 
 So there are more in the ensembl fasta file, but what are they?
 ```{r}
-spliced_fa_txs <- names(spliced_txome)
-ensembl_fa_txs <- names(ensembl_txome) %>%
+spliced_fa_txs <- stringr::word(names(spliced_txome), 1)
+ensembl_fa_txs <- stringr::word(names(ensembl_txome), 1) %>%
   stringr::word(1, sep = fixed('.')) # strip version
 ```
 
@@ -88,32 +92,76 @@ length(shared_fa_tx)
 
 Some are apparently unique to the spliced fasta file.
 ```{r}
-spliced_only <- spliced_fa_txs[! spliced_fa_txs %in% ensembl_fa_txs] %>%
-  sort()
-length(spliced_only)
-head(spliced_only)
+spliced_only <- ! spliced_fa_txs %in% shared_fa_tx
+sum(spliced_only)
+
+head(spliced_txome[spliced_only])
 ```
 All of these are in the spliced gtf:
 ```{r}
-sum(spliced_only %in% spliced_gtf_txs)
+sum(names(spliced_txome)[spliced_only] %in% spliced_gtf_txs)
+```
+
+What are they?
+
+```{r}
+spliced_gtf %>%
+  filter(transcript_id %in% names(spliced_txome)[spliced_only],
+         type == 'transcript')
 ```
 
 
+### Ensembl only
+
 Some are unique to the ensembl fasta.
 ```{r}
-ensembl_only <- ensembl_fa_txs[! ensembl_fa_txs %in% spliced_fa_txs] %>%
-  sort()
+ensembl_only <- ! ensembl_fa_txs %in% shared_fa_tx 
 
-length(ensembl_only)
-head(ensembl_only)
+sum(ensembl_only)
+head(ensembl_txome[ensembl_only])
 ```
 
 These seem to be missing from the gtf file!
 ```{r}
-sum(ensembl_only %in% ensembl_gtf_txs)
+sum(ensembl_fa_txs[ensembl_only] %in% ensembl_gtf_txs)
 ```
 
+Since the Ensembl fasta file encodes more info in the names, we can look at that:
 
+```{r}
+info_fields = c('transcript', 
+                'type', 
+                'location', 
+                'gene',
+                'gene_biotype', 
+                'transcript_biotype', 
+                'gene_symbol',
+                'description')
+missing_tx_info <- data.frame(transcripts = names(ensembl_txome[ensembl_only])) %>%
+  separate(transcripts, 
+           sep = ' ',
+           into = info_fields,
+           extra = 'merge') %>%
+  mutate(location = str_replace(location, "chromosome:GRCh38:", ""),
+         gene = str_replace(gene, "gene:", ""),
+         gene_biotype = str_replace(gene_biotype, "gene_biotype:", ""),
+         transcript_biotype = str_replace(transcript_biotype, "transcript_biotype:", ""),
+         gene_symbol = str_replace(gene_symbol, "gene_symbol:", ""),
+         description = str_replace(description, "description:", ""),
+         )
+```
+
+At a glance, it looks like all of these are on "extra" chromosomes. Is that true?
+
+```{r}
+missing_tx_info %>%
+  mutate(chromosome = word(location, 1, sep = ':')) %>%
+  count(chromosome) %>%
+  arrange(desc(n))
+```
+It certainly seems to be.
+
+Should we add the non-primary assembly to our references, or are we okay with these differences?
 
 ## Session info
 
