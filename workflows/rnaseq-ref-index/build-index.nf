@@ -3,7 +3,6 @@ nextflow.enable.dsl=2
 
 // basic parameters
 params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103'
-params.cdna = 'fasta/Homo_sapiens.GRCh38.cdna.all.fa.gz'
 params.spliced_txome = 'fasta/Homo_sapiens.GRCh38.103.spliced.txome.fa.gz'
 params.spliced_intron_txome = 'fasta/Homo_sapiens.GRCh38.103.spliced_intron.txome.fa.gz'
 params.ensembl_txome = 'fasta/Homo_sapiens.GRCh38.txome.fa.gz'
@@ -39,7 +38,6 @@ process salmon_index_no_sa{
       -i ${index_base}_k${kmer} \
       -k ${kmer} \
       -p ${task.cpus} \
-      --gencode
     """
 }
 
@@ -68,7 +66,6 @@ process salmon_index_full_sa{
       -i ${index_base}_k${kmer}_full_sa \
       -k ${kmer} \
       -p ${task.cpus} \
-      --gencode
     """
 }
 
@@ -95,8 +92,7 @@ process kallisto_index{
 workflow {
   // channel of the reference files and labels
   ch_ref = Channel
-    .fromList([["cdna", params.ref_dir + "/" + params.cdna, params.kmer],
-               ["ensembl_txome", params.ref_dir + "/" + params.ensembl_txome, params.kmer],
+    .fromList([["ensembl_txome", params.ref_dir + "/" + params.ensembl_txome, params.kmer],
                ["spliced_txome", params.ref_dir + "/" + params.spliced_txome, params.kmer],
                ["spliced_intron_txome", params.ref_dir + "/" + params.spliced_intron_txome, params.kmer]])
 
