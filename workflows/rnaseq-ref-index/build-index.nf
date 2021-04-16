@@ -24,6 +24,7 @@ def get_base(file){
 process salmon_index_no_sa{
   container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
   publishDir "${params.ref_dir}/salmon_index", mode: 'copy'
+  memory { 28.GB * task.attempt}
   cpus 8
   errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'terminate' }
   maxRetries 1
@@ -74,7 +75,10 @@ process salmon_index_full_sa{
 process kallisto_index{
   container 'quay.io/biocontainers/kallisto:0.46.2--h4f7b962_1'
   publishDir "${params.ref_dir}/kallisto_index", mode: 'copy'
-  memory 32.GB
+  memory { 120.GB * task.attempt}
+  cpus 8
+  errorStrategy { task.exitStatus in 137..140 ? 'retry' : 'terminate' }
+  maxRetries 1
   input:
     tuple val(index_base), path(reference), val(kmer)
   output:
