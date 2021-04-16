@@ -1,0 +1,122 @@
+---
+title: "Compare eisaR spliced & ensembl transcriptomes"
+output: html_notebook
+---
+
+## Setup
+
+### Load Libraries for import
+
+```{r setup}
+library(Biostrings)
+library(BSgenome)
+library(eisaR)
+library(GenomicFeatures)
+library(tidyverse)
+library(rtracklayer)
+```
+
+### File and Directory Setup
+
+```{r}
+## get file directories
+ref_dir <- file.path("..", "..", "workflows", "rnaseq-ref-index")
+
+```
+
+### Load gtf files for comparisons
+
+```{r}
+# load in the gtf files
+spliced_gtf_file <- file.path(ref_dir, "annotation", "Homo_sapiens.GRCh38.103.spliced.txome.gtf.gz")
+ensembl_gtf_file <- file.path(ref_dir, "annotation", "Homo_sapiens.GRCh38.103.gtf.gz")
+
+spliced_gtf <- rtracklayer::import(spliced_gtf_file)
+ensembl_gtf <- rtracklayer::import(ensembl_gtf_file)
+```
+
+## GTF Comparison
+
+Start by getting just the transcipt ids for each set, and compare them.
+
+```{r}
+spliced_gtf_txs <- unique(spliced_gtf$transcript_id[!is.na(spliced_gtf$transcript_id)]) %>%
+  sort()
+ensembl_gtf_txs <- unique(ensembl_gtf$transcript_id[!is.na(ensembl_gtf$transcript_id)]) %>%
+  sort()
+
+# Are these the same? 
+all.equal(spliced_gtf_txs, ensembl_gtf_txs)
+```
+So every transcript in one GTF seems to appear in the other!
+
+## Fasta comparison
+Lets look at the fasta files too...
+
+```{r}
+spliced_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.103.spliced.txome.fa.gz")
+ensembl_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.txome.fa.gz")
+
+spliced_txome <- Biostrings::readDNAStringSet(spliced_fasta)
+names(spliced_txome) <- stringr::word(names(spliced_txome), 1)
+
+ensembl_txome <- Biostrings::readDNAStringSet(ensembl_fasta)
+names(ensembl_txome) <- stringr::word(names(ensembl_txome), 1)
+
+```
+
+How long is each?
+```{r}
+glue::glue("
+  The eisaR transcriptome has:   {length(spliced_txome)} transcripts.
+  The ensembl transcriptome has: {length(ensembl_txome)} transcripts.
+  ")
+```
+
+So there are more in the ensembl fasta file, but what are they?
+```{r}
+spliced_fa_txs <- names(spliced_txome)
+ensembl_fa_txs <- names(ensembl_txome) %>%
+  stringr::word(1, sep = fixed('.')) # strip version
+```
+
+The vast majority are shared.
+```{r}
+shared_fa_tx <- intersect(spliced_fa_txs, ensembl_fa_txs)
+length(shared_fa_tx)
+```
+
+Some are apparently unique to the spliced fasta file.
+```{r}
+spliced_only <- spliced_fa_txs[! spliced_fa_txs %in% ensembl_fa_txs] %>%
+  sort()
+length(spliced_only)
+head(spliced_only)
+```
+All of these are in the spliced gtf:
+```{r}
+sum(spliced_only %in% spliced_gtf_txs)
+```
+
+
+Some are unique to the ensembl fasta.
+```{r}
+ensembl_only <- ensembl_fa_txs[! ensembl_fa_txs %in% spliced_fa_txs] %>%
+  sort()
+
+length(ensembl_only)
+head(ensembl_only)
+```
+
+These seem to be missing from the gtf file!
+```{r}
+sum(ensembl_only %in% ensembl_gtf_txs)
+```
+
+
+
+## Session info
+
+```{r paged.print=FALSE}
+sessioninfo::session_info()
+```
