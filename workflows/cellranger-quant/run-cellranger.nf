@@ -15,6 +15,8 @@ params.outdir = 's3://nextflow-ccdl-results/scpca/cellranger-quant'
 // technology options
 tech_list = ["10Xv2", "10Xv3", "10Xv3.1"]
 
+params.include_introns = false 
+
 // build full paths
 params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 
@@ -29,7 +31,7 @@ process cellranger{
   output:
     path output_id
   script:
-    output_id = "${id}-${index}"
+    output_id = "${id}-${index}-${params.include_introns ? '--include-introns' : 'pre_mRNA'}"
     """
     cellranger count \
       --id=${output_id} \
@@ -37,7 +39,9 @@ process cellranger{
       --fastqs=${fastq_dir} \
       --sample=${samples} \
       --localcores=${task.cpus} \
-      --localmem=${task.memory.toGiga()}
+      --localmem=${task.memory.toGiga()} \
+      ${params.include_introns ? '--include-introns' : ''}
+
     """
 }
 
