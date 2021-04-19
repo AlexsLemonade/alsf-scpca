@@ -165,4 +165,4 @@ gtf <- rtracklayer::import(txome_gtf)
 mitogenes <- gtf[seqnames(gtf) == 'MT']
 
 # write out mitochondrial gene list
-writeLines(mitogenes$gene_id, mito_file)
+writeLines(mitogenes$gene_id, mito_out)
