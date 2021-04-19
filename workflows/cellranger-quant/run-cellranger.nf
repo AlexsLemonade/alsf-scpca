@@ -11,6 +11,7 @@ params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.t
 // or "All" to process all samples in the metadata file
 params.run_ids = "SCPCR000001,SCPCR000002"
 params.outdir = 's3://nextflow-ccdl-results/scpca/cellranger-quant'
+params.include_introns = false // use --include-introns to align to pre mRNA index
 
 // technology options
 tech_list = ["10Xv2", "10Xv3", "10Xv3.1"]
@@ -21,15 +22,17 @@ params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 process cellranger{
   container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.0.0'
   publishDir "${params.outdir}", mode: 'copy'
+  tag "${id}-${index}" // add tag for tracking sample names in trace file  
   label 'cpus_8'
   label 'bigdisk'
   input:
     tuple val(id), val(samples), path(fastq_dir)
     path index
+    val include_introns
   output:
     path output_id
   script:
-    output_id = "${id}-${index}"
+    output_id = "${id}-${index}-${include_introns ? 'pre_mRNA' : ''}"
     """
     cellranger count \
       --id=${output_id} \
@@ -37,7 +40,9 @@ process cellranger{
       --fastqs=${fastq_dir} \
       --sample=${samples} \
       --localcores=${task.cpus} \
-      --localmem=${task.memory.toGiga()}
+      --localmem=${task.memory.toGiga()} \
+      ${include_introns ? '--include-introns' : ''}
+
     """
 }
 
@@ -72,5 +77,5 @@ workflow{
                       file("s3://${row.s3_prefix}")
                       )}
   // run cellranger
-  cellranger(ch_reads, params.index_path)
+  cellranger(ch_reads, params.index_path, params.include_introns)
 }
