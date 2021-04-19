@@ -22,15 +22,17 @@ params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 process cellranger{
   container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.0.0'
   publishDir "${params.outdir}", mode: 'copy'
+  tag "${id}-${index}" // add tag for tracking sample names in trace file  
   label 'cpus_8'
   label 'bigdisk'
   input:
     tuple val(id), val(samples), path(fastq_dir)
     path index
+    val include_introns
   output:
     path output_id
   script:
-    output_id = "${id}-${index}-${params.include_introns ? '--include-introns' : 'pre_mRNA'}"
+    output_id = "${id}-${index}-${include_introns ? 'pre_mRNA' : ''}"
     """
     cellranger count \
       --id=${output_id} \
@@ -39,7 +41,7 @@ process cellranger{
       --sample=${samples} \
       --localcores=${task.cpus} \
       --localmem=${task.memory.toGiga()} \
-      ${params.include_introns ? '--include-introns' : ''}
+      ${include_introns ? '--include-introns' : ''}
 
     """
 }
@@ -75,5 +77,5 @@ workflow{
                       file("s3://${row.s3_prefix}")
                       )}
   // run cellranger
-  cellranger(ch_reads, params.index_path)
+  cellranger(ch_reads, params.index_path, params.include_introns)
 }
