@@ -1,0 +1,5 @@
+task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
+1	12/293638	46877d6e-d8d9-4177-8483-129cc2195adb	alevin (SCPCR000003-txome_k31_full_sa)	COMPLETED	0	2021-04-08 09:09:08.341	45m 52s	40m 28s	533.2%	17.9 GB	26.1 GB	44.8 GB	33.5 MB
+1	75/446d86	1d88db9e-3c1d-43ac-81fb-e5d1d3ad6dcd	alevin (SCPCR000006-txome_k31_full_sa)	COMPLETED	0	2021-04-08 10:00:00.470	1h 5m 8s	1h 27s	567.8%	19.6 GB	22.9 GB	36.1 GB	58.5 MB
+1	e7/17f0d9	cf947f55-def1-4364-ba43-cb793c42ac58	alevin (SCPCR000126-txome_k31_full_sa)	COMPLETED	0	2021-04-08 13:59:06.315	37m 7s	31m 30s	454.0%	19.9 GB	24.1 GB	41.7 GB	126.2 MB
+1	94/362448	3405dbe3-02ae-4b32-9b28-c91d24e7fa04	alevin (SCPCR000127-txome_k31_full_sa)	COMPLETED	0	2021-04-08 14:45:48.467	43m 38s	37m 49s	497.8%	20.7 GB	24.6 GB	42.6 GB	132.9 MB
