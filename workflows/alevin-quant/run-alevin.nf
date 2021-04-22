@@ -2,12 +2,12 @@
 nextflow.enable.dsl=2
 
 // run parameters
-params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100'
+params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103'
 params.index_dir = 'salmon_index'
-params.index_name = 'txome_k31_full_sa'
+params.index_name = 'spliced_txome_k31_full_sa'
 params.annotation_dir = 'annotation'
-params.t2g = 'Homo_sapiens.ensembl.100.tx2gene.tsv'
-params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
+params.t2g = 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv'
+params.mitolist = 'Homo_sapiens.GRCh38.103.mitogenes.txt'
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 // run_ids are comma separated list to be parsed into a list of run ids,

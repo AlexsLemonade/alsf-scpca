@@ -2,12 +2,12 @@
 nextflow.enable.dsl=2
 
 // run parameters
-params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100'
+params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103'
 params.index_dir = 'kallisto_index'
-params.index_name = 'txome_k31'
+params.index_name = 'spliced_txome_k31'
 params.annotation_dir = 'annotation'
-params.t2g = 'Homo_sapiens.ensembl.100.tx2gene.tsv'
-params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
+params.t2g = 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv'
+params.mitolist = 'Homo_sapiens.GRCh38.103.mitogenes.txt'
 params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
 // 10X barcode files
 barcodes = ['10Xv2': '737K-august-2016.txt',
@@ -77,6 +77,7 @@ process bustools_whitelist{
 process bustools_correct{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
   label 'cpus_8'
+  tag "${id}-${index}"
   publishDir "${params.outdir}"
   input:
     path run_dir
@@ -99,6 +100,7 @@ process bustools_correct{
 process bustools_count{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
   label 'cpus_8'
+  tag "${id}-${index}"
   publishDir "${params.outdir}"
   input:
     path run_dir
