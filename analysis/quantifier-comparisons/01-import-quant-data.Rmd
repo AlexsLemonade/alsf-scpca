@@ -37,6 +37,10 @@ alevin_data_dir <- file.path(data_dir, 'alevin')
 dir.create(alevin_data_dir, recursive = TRUE, showWarnings = FALSE)
 quant_s3_alevin <- 's3://nextflow-ccdl-results/scpca/alevin-quant'
 
+alevin_fry_data_dir <- file.path(data_dir, 'alevin-fry')
+dir.create(alevin_fry_data_dir, recursive = TRUE, showWarnings = FALSE)
+quant_s3_alevin_fry <- 's3://nextflow-ccdl-results/scpca/alevin-fry-quant'
+
 kallisto_data_dir <- file.path(data_dir, 'kallisto')
 dir.create(kallisto_data_dir, recursive = TRUE, showWarnings = FALSE)
 quant_s3_kallisto <- 's3://nextflow-ccdl-results/scpca/kallisto-quant'
@@ -57,6 +61,8 @@ if (!dir.exists(export_dir)){
 quant_info_file <- file.path(export_dir, 'quant_info.tsv')
 
 alevin_rds <- file.path(export_dir, 'alevin_sces.rds')
+alevin_fry_rds <- file.path(export_dir, 'alevin_fry_sces.rds')
+alevin_fry_sketch_rds <- file.path(export_dir, 'alevin_fry_sketch_sces.rds')
 kallisto_rds <- file.path(export_dir, 'kallisto_sces.rds')
 cellranger_rds <- file.path(export_dir, 'cellranger_sces.rds')
 
@@ -67,7 +73,7 @@ cellranger_rds <- file.path(export_dir, 'cellranger_sces.rds')
 ### Sync S3 files
 
 ```{r}
-samples <- c('SCPCR000001', 'SCPCR000002')
+samples <- c('SCPCR000003', 'SCPCR000006', 'SCPCR000126', 'SCPCR000127')
 
 # generate include statements for sample directories
 includes <- stringr::str_glue("--include \"*/{samples}*\"")
@@ -75,6 +81,11 @@ includes <- stringr::str_glue("--include \"*/{samples}*\"")
 # Alevin quantification files
 sync_call <- paste('aws s3 sync', quant_s3_alevin, alevin_data_dir,
                    includes)
+system(sync_call, ignore.stdout = TRUE)
+
+# Alevin fry quantification files 
+sync_call <- paste('aws s3 sync', quant_s3_alevin_fry, alevin_fry_data_dir,
+                   includes, '--exclude "*.rad"')
 system(sync_call, ignore.stdout = TRUE)
 
 # Kallisto quantification files
@@ -98,8 +109,8 @@ system(sync_call, ignore.stdout = TRUE)
 This generates the sample list from the directory names of the downloads. 
 
 ```{r}
-
 quant_info <- c(alevin = alevin_data_dir, 
+                alevin_fry = alevin_fry_data_dir,
                 kallisto = kallisto_data_dir,
                 cellranger = cellranger_data_dir) %>%
   purrr::map(list.dirs, recursive = FALSE, full.names = FALSE) %>%
@@ -109,20 +120,21 @@ quant_info <- c(alevin = alevin_data_dir,
   # parse the `quant_dir` into sample and index info
   tidyr::separate(quant_dir, 
                   sep = "[-]",
-                  into = c("sample", "index_type"),
+                  into = c("sample", "index_type", "alevin_alignment"),
                   remove = FALSE) %>%
   tidyr::separate(index_type, 
                   into = c("index_content", "kmer", "decoy"), 
                   extra = "drop",
                   fill = "right") %>%
+  dplyr::filter(sample %in% samples) %>%
   # no decoy samples get NA here, convert to text.
-  dplyr::mutate(decoy = tidyr::replace_na(decoy, "no"))
+  dplyr::mutate(decoy = tidyr::replace_na(decoy, "no")) %>%
+  dplyr::mutate(alevin_alignment = tidyr::replace_na(alevin_alignment, "no"))
 
 # save info table
 readr::write_tsv(quant_info, quant_info_file )
 # print the info table
 quant_info
-
 ```
 
 ## Process quantification files
@@ -145,6 +157,40 @@ alevin_sces <- alevin_quant_ids  %>%
 
 # add names
 names(alevin_sces) <- alevin_quant_ids
+```
+
+```{r}
+## alevin fry, no sketch 
+alevin_fry_quant_ids <- quant_info %>%
+  dplyr::filter(tool == "alevin_fry" & alevin_alignment == "salign") %>%
+  dplyr::pull(quant_dir)
+
+alevin_fry_sces <- alevin_fry_quant_ids  %>%
+  purrr::map(
+    ~ tximport(file.path(alevin_fry_data_dir, .x, "alevin", "quants_mat.gz"),
+               type = "alevin")) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x$counts))) 
+
+# add names
+names(alevin_fry_sces) <- alevin_fry_quant_ids
+```
+
+```{r}
+## alevin fry, with sketch 
+alevin_fry_sketch_quant_ids <- quant_info %>%
+  dplyr::filter(tool == "alevin_fry" & alevin_alignment == "sketch") %>%
+  dplyr::pull(quant_dir)
+
+alevin_fry_sketch_sces <- alevin_fry_sketch_quant_ids  %>%
+  purrr::map(
+    ~ tximport(file.path(alevin_fry_data_dir, .x, "alevin", "quants_mat.gz"),
+               type = "alevin")) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x$counts))) 
+
+# add names
+names(alevin_fry_sketch_sces) <- alevin_fry_sketch_quant_ids
 ```
 
 ### Kallisto
@@ -239,6 +285,8 @@ names(cellranger_sces) <- cellranger_quant_ids
 
 ```{r}
 readr::write_rds(alevin_sces, alevin_rds)
+readr::write_rds(alevin_fry_sces, alevin_fry_rds)
+readr::write_rds(alevin_fry_sketch_sces, alevin_fry_sketch_rds)
 readr::write_rds(kallisto_sces, kallisto_rds)
 readr::write_rds(cellranger_sces, cellranger_rds)
 ```
