@@ -1,0 +1,287 @@
+---
+title: "ScPCA Benchmarking: Run Time and Memory Comparison"
+output: html_notebook
+---
+
+This notebook compares the run time and memory footprint of pre-processing 4 
+scRNA-seq samples across 5 different tools. We used cellranger v6, kallisto, 
+alevin, and alevin-fry with and without --sketch mode. The purpose of this 
+notebook is to gain an understanding on how much time and memory each of the
+processes uses. We are starting with just looking at these 4 scRNA-seq samples,
+and next will add snRNA-seq samples for comparison. 
+
+```{r libary import}
+library(tidyverse)
+library(rjson)
+```
+
+
+```{r}
+## set up file paths 
+base_dir <- getwd()
+
+logs_dir <- file.path(base_dir, "nextflow_logs")
+alevin_dir <- file.path(logs_dir, "alevin-quant", "alevin")
+kallisto_dir <- file.path(logs_dir, "kallisto-quant")
+cellranger_dir <- file.path(logs_dir, "cellranger-quant")
+alevin_fry_dir <- file.path(logs_dir, "alevin-quant", "alevin-fry")
+alevin_fry_sketch_dir <- file.path(logs_dir, "alevin-quant", "alevin-fry-sketch")
+```
+
+```{r}
+# setup directories and paths for kallisto logs 
+
+data_dir <- file.path(base_dir, 'data', 'quants')
+dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
+
+kallisto_quants_dir <- file.path(data_dir, 'kallisto')
+dir.create(kallisto_quants_dir, recursive = TRUE, showWarnings = FALSE)
+quant_s3_kallisto <- 's3://nextflow-ccdl-results/scpca/kallisto-quant'
+```
+
+
+```{r}
+# get log files from S3
+# include json file from each kallisto run 
+samples <- c('SCPCR000003', 'SCPCR000006', 'SCPCR000126', 'SCPCR000127')
+
+includes <- stringr::str_glue("--include \"*/{samples}\"")
+
+sync_call <- paste('aws s3 sync', quant_s3_kallisto, kallisto_quants_dir,
+                   includes,'--exclude "*/bus/*"', '--exclude "*/counts/*"',
+                   '--include "*/bus/run_info.json"')
+system(sync_call, ignore.stdout = TRUE)
+```
+
+
+For each run, we asked nextflow to ouput a trace.txt txt file using the 
+-with-trace flag. These [trace files](https://www.nextflow.io/docs/latest/tracing.html) 
+include important information about each process such as run time and memory. 
+
+## Alevin
+
+```{r}
+# read in alevin trace files
+alevin_trace <- readr::read_tsv(file.path(alevin_dir,
+                                          "alevin.trace.allsamples.txt"))
+alevin_trace$Tool = "Alevin"
+alevin_trace
+```
+## Alevin Fry 
+
+```{r}
+alevin_fry_trace <- readr::read_tsv(
+  file.path(alevin_fry_dir, "alevin-fry.trace.allsamples.txt")
+)
+
+alevin_fry_sketch_trace <- readr::read_tsv(
+  file.path(alevin_fry_sketch_dir, "alevin-fry-sketch.trace.allsamples.txt")
+)
+
+alevin_fry_trace$name = gsub("alevin", "alevin-fry", alevin_fry_trace$name)
+alevin_fry_trace$Tool = "Alevin-Fry"
+
+alevin_fry_sketch_trace$name = gsub("alevin", "alevin-fry-sketch", alevin_fry_sketch_trace$name)
+alevin_fry_sketch_trace$Tool = "Alevin-Fry-Sketch"
+```
+
+
+
+## Kallisto
+
+```{r}
+kallisto_trace <- readr::read_tsv(file.path(kallisto_dir, 
+                                            "kallisto.trace.allsamples.txt"))
+kallisto_trace$Tool = "Kallisto"
+kallisto_trace
+```
+
+## CellRanger
+
+```{r}
+cellranger_trace <- readr::read_tsv(file.path(cellranger_dir,
+                                              "cellranger.trace.allsamples.txt"))
+cellranger_trace$Tool = "Cellranger"
+cellranger_trace
+```
+
+
+## Run time comparison 
+
+```{r}
+## first make a joint dataframe
+all_trace <- bind_rows(list(alevin_trace, alevin_fry_trace, 
+                            alevin_fry_sketch_trace, kallisto_trace, 
+                            cellranger_trace))
+all_trace
+```
+We need to do some manipulation to this data frame to the peak_rss and 
+realtime columns so they are all in the right units and of class(numeric)
+for plotting.
+
+```{r}
+## now separate the columns by process and sample_id to make cleaner for plotting
+all_trace <- all_trace %>% 
+  separate(name, into = c("process", "sample_id"), sep = " ") %>%
+  separate(sample_id, into = c("sample_id", "index_name"), sep = "-")
+
+all_trace$sample_id = gsub("[()]", "", all_trace$sample_id)
+all_trace$index_name = gsub("[()]", "", all_trace$index_name)
+
+## make separate column for either GB or MB for peak_rss
+all_trace <- all_trace %>%
+  separate(peak_rss, into = c("peak_rss", "rss_units"), sep = " ") %>%
+  mutate(peak_rss = as.numeric(peak_rss)) %>%
+  mutate(peak_rss = case_when(rss_units == "MB" ~ (peak_rss/1000),
+         TRUE ~ peak_rss))
+  
+
+## convert from hours, minutes, to seconds
+all_trace <- all_trace %>% 
+  mutate(hours = str_extract(all_trace$duration, "\\d+h"),
+         minutes = str_extract(all_trace$duration, "\\d+m"),
+         seconds = str_extract(all_trace$duration, "\\d+s")) %>%
+  mutate(hours = gsub("h", "", hours),
+         minutes = gsub("m", "", minutes),
+         seconds = gsub("s", "", seconds)) %>%
+  mutate(hours = as.numeric(hours),
+         minutes = as.numeric(minutes), 
+         seconds = as.numeric(seconds))
+all_trace$hours[is.na(all_trace$hours)] = 0
+all_trace$minutes[is.na(all_trace$minutes)] = 0
+all_trace$seconds[is.na(all_trace$seconds)] = 0
+
+all_trace <- all_trace %>%
+  mutate(total_time = hours*60 + minutes + seconds/60)
+all_trace
+```
+We will also want to compare the number of reads in each sample to the memory/
+runtime so let's add in that information. 
+
+```{r}
+## add in number of reads/ sample 
+## found in individual logfiles from kallisto 
+
+all_trace$Reads = 0
+for (sample in samples) {
+  sample_file <- paste0(sample, "-txome_k31")
+  # read in run_info.json log from each kallisto run 
+  log <- fromJSON(file = file.path(kallisto_quants_dir, sample_file, 
+                                 "bus", "run_info.json"))
+  #n_processed gives amount of reads for each sample
+  all_trace[which(all_trace$sample_id == sample), "Reads"] <- log$n_processed
+}
+
+```
+
+
+```{r}
+# create a summary data frame that merges total time and memory for all steps
+summary_stats_df <- all_trace %>% 
+  group_by(Tool, sample_id) %>% 
+  summarise(total_time = sum(total_time), 
+            total_rss = sum(peak_rss), 
+            Reads = mean(Reads))
+summary_stats_df
+```
+
+## Time and Memory with Sample ID on x-axis
+
+```{r}
+ggplot(summary_stats_df, aes(x = sample_id, y = total_time, color = Tool)) +
+  geom_point(size = 2) + 
+  theme_classic() + 
+  xlab("") +
+  ylab("Run Time (Minutes)")
+```
+
+```{r}
+# another way to visualize it if we want to group all the samples together
+summary_stats_df %>%
+  mutate(Tool = fct_reorder(Tool, total_time, .fun = 'median')) %>%
+  ggplot(aes(x = reorder(Tool, total_time), y = total_time, fill = Tool)) + 
+  geom_boxplot() + 
+  theme_classic() +
+  xlab("") +
+  ylab("Run Time (Minutes)")
+```
+
+
+```{r}
+ggplot(summary_stats_df, aes(x = sample_id, y = total_rss, color = Tool)) + 
+  geom_point(size = 2) + 
+  theme_classic() + 
+  xlab("") +
+  ylab("Memory (GB)")
+```
+
+```{r}
+# another way to visualize it if we want to group all the samples together
+summary_stats_df %>%
+  mutate(Tool = fct_reorder(Tool, total_rss, .fun = 'median')) %>%
+  ggplot(aes(x = reorder(Tool, total_rss), y = total_rss, fill = Tool)) +
+  geom_boxplot() + 
+  theme_classic() +
+  xlab("") +
+  ylab("Memory (GB)")
+```
+
+
+After looking at the runtime and memory used independently of any other 
+observations, we can see that Kallisto is consistently the fastest, although 
+alevin-fry in --sketch mode is also quite fast. This is probably because it is
+supposed to mimic kallisto. Cellranger is consistently the slowest by almost 
+3x more than the next fastest, Alevin/Alevin-fry without --sketch mode which 
+are both somewhere in the middle.
+
+In terms of memory, Alevin-fry with/without --sketch uses the least amount
+of memory using < 5 total GB of memory on all 4 samples. Kallisto is also 
+consistently using ~ 11 GB of memory for all 4 samples. Alevin and cellranger
+are higher than this, with Alevin requiring the most amount of memory closer
+to ~ 20 GB of memory per sample. 
+
+Next, let's see if the number of reads in each fastq file impacts the runtime
+and/or memory usage. 
+
+## Time and Memory vs. # of Reads 
+
+```{r}
+# run time vs. # of fastq reads
+ggplot(summary_stats_df, aes(x = Reads, y = total_time, color = Tool)) +
+  geom_point(size = 2) + 
+  geom_line() +
+  theme_classic() + 
+  xlab("Number of Reads") +
+  ylab("Run Time (Minutes)")
+```
+
+
+```{r}
+ggplot(summary_stats_df, aes(x = Reads, y = total_rss, color = Tool)) + 
+  geom_point(size = 2) + 
+  geom_line() +
+  theme_classic() + 
+  xlab("Number of Reads") +
+  ylab("Memory (GB)")
+```
+
+From this, it looks like there is no effect on the number of reads found in 
+the fastq files to the memory that is required for any of the processes, except
+maybe with alevin-fry both with/without --sketch. It appears that the memory
+usage almost doubles from ~2-3 GB to closer to ~5-6 GB. Even though memory
+usage doesn't appear to be that affected, run time does appear to be affected
+by the number of reads in the sample if running on cellranger. As the number
+of reads increase, there is a sharp increase in the run time for cellranger, 
+where as that is not the case for the other tools.
+
+It is clear that cellranger has both the biggest footprint in time and memory 
+usage. However, the question remains how the count matrices compare across the 
+tools, and whether the quantification performed by alevin and kallisto is 
+comparable to cellranger even with a lower footprint. 
+
+## Session Info
+
+```{r}
+sessionInfo()
+```
+

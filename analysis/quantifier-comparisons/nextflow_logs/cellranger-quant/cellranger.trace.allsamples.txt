@@ -1,0 +1,5 @@
+task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
+1	f2/dab07c	3e005608-cffa-4c44-bdc7-c2aa6a578f42	cellranger (SCPCR000006-txome_k31)	COMPLETED	0	2021-04-08 16:49:20.398	1h 45m 24s	1h 34m 35s	352.1%	14.2 GB	17.8 GB	155.4 GB	50.1 GB
+2	71/333e2e	b168c370-e816-4931-ab03-16a60710e7af	cellranger (SCPCR000126-txome_k31)	COMPLETED	0	2021-04-08 16:49:20.498	4h 14m 27s	3h 54m 10s	364.8%	14.3 GB	20.8 GB	431.8 GB	111.1 GB
+3	19/740296	0cffeeed-4735-4a65-ae35-07a31efc875c	cellranger (SCPCR000127-txome_k31)	COMPLETED	0	2021-04-08 16:49:20.476	4h 36m 43s	4h 16m 3s	359.5%	14.3 GB	20.9 GB	448.7 GB	113.9 GB
+1	c0/609326	6d6e89dd-b361-487f-b6fd-648ae5a227ff	cellranger (SCPCR000003-txome_k31)	COMPLETED	0	2021-04-08 15:40:34.020	2h 10m 30s	1h 57m 32s	367.9%	15.1 GB	18.7 GB	202.5 GB	64.1 GB
