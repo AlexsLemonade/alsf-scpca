@@ -23,10 +23,9 @@ params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${params.t2g}"
 params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist}"
 
-
 process kallisto_bus{
   container 'quay.io/biocontainers/kallisto:0.46.2--h4f7b962_1'
-  label 'cpus_8'
+  label 'bigdisk' 
   tag "${id}-${index}"
   input:
     tuple val(id), val(tech), path(read1), path(read2)
@@ -77,7 +76,6 @@ process bustools_whitelist{
 process bustools_correct{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
   label 'cpus_8'
-  tag "${id}-${index}"
   publishDir "${params.outdir}"
   input:
     path run_dir
@@ -100,7 +98,6 @@ process bustools_correct{
 process bustools_count{
   container 'quay.io/biocontainers/bustools:0.40.0--h4f7b962_0'
   label 'cpus_8'
-  tag "${id}-${index}"
   publishDir "${params.outdir}"
   input:
     path run_dir
@@ -135,7 +132,7 @@ workflow{
     .map{row -> tuple(row.scpca_run_id,
                       row.technology,
                       file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
-                      file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
+                      file("s3://${row.s3_prefix}/*_R2_*.fastq.gz")
                       )}
   barcodes_ch = samples_ch
     .map{row -> file("${params.barcode_dir}/${barcodes[row.technology]}")}
