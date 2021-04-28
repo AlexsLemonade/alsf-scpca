@@ -25,7 +25,8 @@ params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist
 
 process kallisto_bus{
   container 'quay.io/biocontainers/kallisto:0.46.2--h4f7b962_1'
-  label 'bigdisk' 
+  label 'bigdisk'
+  label 'bigmem'
   tag "${id}-${index}"
   input:
     tuple val(id), val(tech), path(read1), path(read2)
