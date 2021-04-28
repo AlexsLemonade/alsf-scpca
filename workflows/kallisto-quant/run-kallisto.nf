@@ -26,10 +26,11 @@ params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist
 process kallisto_bus{
   container 'quay.io/biocontainers/kallisto:0.46.2--h4f7b962_1'
   label 'bigdisk'
-  label 'bigmem'
+  memory { sequnit == 'nucleus' ? '120.GB' : '28.GB'}
+  cpus 8
   tag "${id}-${index}"
   input:
-    tuple val(id), val(tech), path(read1), path(read2)
+    tuple val(id), val(tech), path(read1), path(read2), val(sequnit)
     path index
   output:
     path run_dir
@@ -133,7 +134,8 @@ workflow{
     .map{row -> tuple(row.scpca_run_id,
                       row.technology,
                       file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
-                      file("s3://${row.s3_prefix}/*_R2_*.fastq.gz")
+                      file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
+                      row.seq_unit
                       )}
   barcodes_ch = samples_ch
     .map{row -> file("${params.barcode_dir}/${barcodes[row.technology]}")}
