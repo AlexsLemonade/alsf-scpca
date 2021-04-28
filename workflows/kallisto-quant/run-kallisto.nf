@@ -2,12 +2,12 @@
 nextflow.enable.dsl=2
 
 // run parameters
-params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100'
+params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103'
 params.index_dir = 'kallisto_index'
-params.index_name = 'txome_k31'
+params.index_name = 'spliced_txome_k31'
 params.annotation_dir = 'annotation'
-params.t2g = 'Homo_sapiens.ensembl.100.tx2gene.tsv'
-params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
+params.t2g = 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv'
+params.mitolist = 'Homo_sapiens.GRCh38.103.mitogenes.txt'
 params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
 // 10X barcode files
 barcodes = ['10Xv2': '737K-august-2016.txt',
@@ -23,13 +23,14 @@ params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${params.t2g}"
 params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist}"
 
-
 process kallisto_bus{
   container 'quay.io/biocontainers/kallisto:0.46.2--h4f7b962_1'
-  label 'cpus_8'
+  label 'bigdisk'
+  memory { sequnit == 'nucleus' ? '120.GB' : '28.GB'}
+  cpus 8
   tag "${id}-${index}"
   input:
-    tuple val(id), val(tech), path(read1), path(read2)
+    tuple val(id), val(tech), path(read1), path(read2), val(sequnit)
     path index
   output:
     path run_dir
@@ -134,6 +135,7 @@ workflow{
                       row.technology,
                       file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
                       file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
+                      row.seq_unit
                       )}
   barcodes_ch = samples_ch
     .map{row -> file("${params.barcode_dir}/${barcodes[row.technology]}")}

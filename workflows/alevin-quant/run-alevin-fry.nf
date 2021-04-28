@@ -2,12 +2,12 @@
 nextflow.enable.dsl=2
 
 // run parameters
-params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100'
+params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103'
 params.index_dir = 'salmon_index'
-params.index_name = 'txome_k31'
+params.index_name = 'spliced_txome_k31'
 params.annotation_dir = 'annotation'
-params.t2g = 'Homo_sapiens.ensembl.100.tx2gene.tsv'
-params.mitolist = 'Homo_sapiens.ensembl.100.mitogenes.txt'
+params.t2g = 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv'
+params.mitolist = 'Homo_sapiens.GRCh38.103.mitogenes.txt'
 params.sketch = false // use sketch mode for mapping with flag `--sketch`
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
