@@ -82,21 +82,13 @@ process generate_permit{
   output:
     path run_dir
   script: 
-    if(params.unfiltered == true)
+    
     """
     alevin-fry generate-permit-list \
       -i ${run_dir} \
       --expected-ori fw \
       -o ${run_dir} \
-      -u ${barcode_file}
-    """
-    else
-    """
-    alevin-fry generate-permit-list \
-      -i ${run_dir} \
-      --expected-ori fw \
-      -o ${run_dir} \
-      --knee-distance
+      ${params.unfiltered ? "-u ${barcode_file}" : '--knee-distance'}
     """
 }
 
