@@ -169,21 +169,16 @@ Let's first start by taking a look at some general information across all of our
 ## make new data frame with mean of cells detected and standard dev
 cells_detected_stats <- cell_qc %>%
   group_by(sample, tool) %>%
-  summarise(cells_detected = mean(cells_detected)) %>%
-  group_by(tool) %>%
-  summarise(mean = mean(cells_detected),
-            standard_error = sd(cells_detected)/sqrt(length(cells_detected)))
+  summarise(cells_detected = mean(cells_detected))
 
 ## first look at cells detected
-ggplot(cells_detected_stats, aes(x = tool,y = mean)) +
-  geom_bar(stat = "identity", fill = "darkblue") +
-  geom_errorbar(aes(x = tool, ymin=mean-standard_error, 
-                    ymax = mean + standard_error), 
-                width = 0.4, colour = "black", alpha = 0.9, size = 1.3)+
+ggplot(cells_detected_stats, aes(x = tool, y = cells_detected)) +
+  geom_jitter(mapping = aes(color = sample)) +
+  geom_boxplot(alpha = 0.6)
   theme_classic() +
   ylab("Total Cells Detected") + 
   xlab("")
-```
+
 Based on this, we can see that Cellranger is detecting what looks like the most number of cells with Alevin the least number of cells. However, Cellranger also looks like it has the largest variation, and all of the tools appear to have quite a bit of variation. It does make sense to have variation because it's likely that samples just have lower cells than other samples. Let's look at a plot that may be a little more informative and break down the number of cells detected/sample across all the tools. 
 
 
