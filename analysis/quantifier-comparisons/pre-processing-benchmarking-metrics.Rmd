@@ -534,7 +534,7 @@ feature_qc_common <- feature_qc %>%
 
 
 ```{r}
-# make a table with information about each cell identified by a tool and how many other tools 
+# make a table with information about each gene identified by a tool and how many other tools 
 # that cell is identified in
 gene_counts <- feature_qc %>%
   dplyr::filter(detected >= 5.0) %>%
@@ -609,4 +609,3 @@ Additionally, we will need to incorporate snRNA-seq and other 10X modalities int
 ```{r}
 sessionInfo()
 ```
-
