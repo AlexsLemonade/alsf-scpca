@@ -5,6 +5,6 @@ LABEL maintainer="ccdl@alexslemonade.org"
 RUN apt-get update && apt-get install -y procps
 
 # Install alevin-fry using bioconda
-RUN conda install -c bioconda alevin-fry 
+RUN conda install -c conda-forge -c bioconda alevin-fry=0.2.0
 
 WORKDIR /home

@@ -9,6 +9,14 @@ params.annotation_dir = 'annotation'
 params.t2g = 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv'
 params.mitolist = 'Homo_sapiens.GRCh38.103.mitogenes.txt'
 params.sketch = false // use sketch mode for mapping with flag `--sketch`
+params.resolution = 'full' //default resolution is full, can also use cr-like, cr-like-em, parsimony, and trivial
+
+params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
+// 10X barcode files
+barcodes = ['10Xv2': '737K-august-2016.txt',
+            '10Xv3': '3M-february-2018.txt',
+            '10Xv3.1': '3M-february-2018.txt']
+params.unfiltered = false // use unfiltered list mode to include 10X barcode list with flat `--unfiltered`
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 // run_ids are comma separated list to be parsed into a list of run ids,
@@ -39,7 +47,7 @@ process alevin{
     path run_dir
   script:
     // label the run directory by id, index, and mapping mode
-    run_dir = "${id}-${index}-${params.sketch ? 'sketch' : 'salign'}"
+    run_dir = "${id}-${index}-${params.sketch ? 'sketch' : 'salign'}-${params.unfiltered ? 'unfiltered' : 'knee'}"
     // choose flag by technology
     tech_flag = ['10Xv2': '--chromium',
                  '10Xv3': '--chromiumV3',
@@ -70,17 +78,17 @@ process generate_permit{
   publishDir "${params.outdir}"
   input:
     path run_dir
+    path barcode_file
   output:
     path run_dir
   script: 
-  // expected-ori either signifies no filtering of alignments 
-  // based on orientation, not sure if this is what we want? 
+    
     """
     alevin-fry generate-permit-list \
       -i ${run_dir} \
       --expected-ori fw \
       -o ${run_dir} \
-      --knee-distance
+      ${params.unfiltered ? "-u ${barcode_file}" : '--knee-distance'}
     """
 }
 
@@ -118,6 +126,7 @@ process quant_fry{
      --input-dir ${run_dir} \
      --tg-map ${tx2gene} \
      --output-dir ${run_dir} \
+     -r ${params.resolution} \
      -t ${task.cpus}
     """
 }
@@ -138,10 +147,13 @@ workflow{
                       file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
                       file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
                       )}
+
+  barcodes_ch = samples_ch
+    .map{row -> file("${params.barcode_dir}/${barcodes[row.technology]}")}
   // run Alevin
   alevin(reads_ch, params.index_path, params.t2g_path)
   // generate permit list from alignment 
-  generate_permit(alevin.out)
+  generate_permit(alevin.out, barcodes_ch)
   // collate RAD files 
   collate_fry(generate_permit.out)
   // create gene x cell matrix
