@@ -73,7 +73,7 @@ cellranger_rds <- file.path(export_dir, 'cellranger_sces.rds')
 ### Sync S3 files
 
 ```{r}
-samples <- c('SCPCR000003', 'SCPCR000006', 'SCPCR000126', 'SCPCR000127')
+samples <- c('SCPCR000003', 'SCPCR000006', 'SCPCR000118', 'SCPCR000119', 'SCPCR000126', 'SCPCR000127')
 
 # generate include statements for sample directories
 includes <- stringr::str_glue("--include \"*/{samples}*\"")
@@ -123,14 +123,53 @@ quant_info <- c(alevin = alevin_data_dir,
                   into = c("sample", "index_type", "alevin_alignment"),
                   remove = FALSE) %>%
   tidyr::separate(index_type, 
-                  into = c("index_content", "kmer", "decoy"), 
+                  into = c("index_type", "kmer"), 
                   extra = "drop",
+                  fill = "right",
+                  sep = "txome_") %>%
+  tidyr::separate(kmer, 
+                  into = c("kmer", "decoy"),
+                  extra = "drop", 
                   fill = "right") %>%
   dplyr::filter(sample %in% samples) %>%
   # no decoy samples get NA here, convert to text.
   dplyr::mutate(decoy = tidyr::replace_na(decoy, "no")) %>%
+  dplyr::mutate(index_type = ifelse(index_type == "", "txome", index_type)) %>%
   dplyr::mutate(alevin_alignment = tidyr::replace_na(alevin_alignment, "no"))
+```
 
+```{r}
+# add in sample metadata for each sample  
+library_data_dir <- file.path(base_dir, 'sample-info')
+dir.create(library_data_dir, recursive = TRUE, showWarnings = FALSE)
+sample_info_dir_s3 <- 's3://ccdl-scpca-data/sample_info'
+
+# grab sample and library metadata from location in s3
+sync_call <- paste('aws s3 sync', sample_info_dir_s3, library_data_dir,
+                   '--exclude "*"', 
+                   '--include "*scpca-sample-metadata.tsv"',
+                   '--include "*scpca-library-metadata.tsv"')
+system(sync_call, ignore.stdout = TRUE)
+```
+
+```{r}
+# read in sample metadata
+sample_df <- readr::read_tsv(file.path(library_data_dir, "scpca-sample-metadata.tsv"))
+library_df <- readr::read_tsv(file.path(library_data_dir, "scpca-library-metadata.tsv"))
+```
+
+```{r}
+# create combined data frame with information that might be relevant for looking at these samples
+comb_metadata_df <- library_df %>%
+  dplyr::select(scpca_run_id, scpca_sample_id, seq_unit, technology) %>%
+  dplyr::inner_join(sample_df) %>%
+  dplyr::select(-subdiagnosis, -tissue_location, -disease_timing)
+```
+
+```{r}
+# add relevant metadata to quant information table
+quant_info <- quant_info %>%
+  dplyr::inner_join(comb_metadata_df, by = c("sample" = "scpca_run_id" ))
 # save info table
 readr::write_tsv(quant_info, quant_info_file )
 # print the info table
