@@ -7,8 +7,9 @@ output:
     toc_float: true
 ---
 
-This notebook contains code to import and do preliminary processing single cell expression data, quantified by Alevin, Kallisto, and Cellranger. 
-Alevin samples were quantified with and without decoy sequences. 
+This notebook contains code to import and do preliminary processing single cell expression data, quantified by Alevin, Alevin-fry, Kallisto, and Cellranger. 
+Alevin samples were quantified with and without decoy sequences.
+Alevin-fry samples were quantified with and without `--sketch` mode and with and without `--unfiltered` mode to allow for the permitted 10x barcode list. 
 The imported data is stored as SingleCellExperiment objects, which are then saved as an `.rds` file for later analysis.
 
 ## Setup
@@ -63,6 +64,8 @@ quant_info_file <- file.path(export_dir, 'quant_info.tsv')
 alevin_rds <- file.path(export_dir, 'alevin_sces.rds')
 alevin_fry_rds <- file.path(export_dir, 'alevin_fry_sces.rds')
 alevin_fry_sketch_rds <- file.path(export_dir, 'alevin_fry_sketch_sces.rds')
+alevin_fry_unfiltered_rds <- file.path(export_dir, 'alevin_fry_unfiltered_sces.rds')
+alevin_fry_unfiltered_sketch_rds <- file.path(export_dir, 'alevin_fry_unfiltered_sketch_sces.rds')
 kallisto_rds <- file.path(export_dir, 'kallisto_sces.rds')
 cellranger_rds <- file.path(export_dir, 'cellranger_sces.rds')
 
@@ -120,7 +123,7 @@ quant_info <- c(alevin = alevin_data_dir,
   # parse the `quant_dir` into sample and index info
   tidyr::separate(quant_dir, 
                   sep = "[-]",
-                  into = c("sample", "index_type", "alevin_alignment"),
+                  into = c("sample", "index_type", "alevin_alignment", "alevin_permit_list"),
                   remove = FALSE) %>%
   tidyr::separate(index_type, 
                   into = c("index_type", "kmer"), 
@@ -135,8 +138,10 @@ quant_info <- c(alevin = alevin_data_dir,
   # no decoy samples get NA here, convert to text.
   dplyr::mutate(decoy = tidyr::replace_na(decoy, "no")) %>%
   dplyr::mutate(index_type = ifelse(index_type == "", "txome", index_type)) %>%
-  dplyr::mutate(alevin_alignment = tidyr::replace_na(alevin_alignment, "no"))
+  dplyr::mutate(alevin_alignment = tidyr::replace_na(alevin_alignment, "not_alevin")) %>%
+  dplyr::mutate(alevin_permit_list = tidyr::replace_na(alevin_permit_list, "not_alevin"))
 ```
+
 
 ```{r}
 # add in sample metadata for each sample  
@@ -199,9 +204,9 @@ names(alevin_sces) <- alevin_quant_ids
 ```
 
 ```{r}
-## alevin fry, no sketch 
+## alevin fry, no permit list, no sketch 
 alevin_fry_quant_ids <- quant_info %>%
-  dplyr::filter(tool == "alevin_fry" & alevin_alignment == "salign") %>%
+  dplyr::filter(tool == "alevin_fry" & alevin_permit_list != "unfiltered" & alevin_alignment == "salign") %>%
   dplyr::pull(quant_dir)
 
 alevin_fry_sces <- alevin_fry_quant_ids  %>%
@@ -216,9 +221,9 @@ names(alevin_fry_sces) <- alevin_fry_quant_ids
 ```
 
 ```{r}
-## alevin fry, with sketch 
+## alevin fry, no permit list, with sketch 
 alevin_fry_sketch_quant_ids <- quant_info %>%
-  dplyr::filter(tool == "alevin_fry" & alevin_alignment == "sketch") %>%
+  dplyr::filter(tool == "alevin_fry" & alevin_permit_list != "unfiltered" & alevin_alignment == "sketch") %>%
   dplyr::pull(quant_dir)
 
 alevin_fry_sketch_sces <- alevin_fry_sketch_quant_ids  %>%
@@ -231,6 +236,41 @@ alevin_fry_sketch_sces <- alevin_fry_sketch_quant_ids  %>%
 # add names
 names(alevin_fry_sketch_sces) <- alevin_fry_sketch_quant_ids
 ```
+
+```{r}
+## alevin fry, permit list, no sketch 
+alevin_fry_unfiltered_quant_ids <- quant_info %>%
+  dplyr::filter(tool == "alevin_fry" & alevin_permit_list == "unfiltered" & alevin_alignment == "salign") %>%
+  dplyr::pull(quant_dir)
+
+alevin_fry_unfiltered_sces <- alevin_fry_unfiltered_quant_ids  %>%
+  purrr::map(
+    ~ tximport(file.path(alevin_fry_data_dir, .x, "alevin", "quants_mat.gz"),
+               type = "alevin")) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x$counts))) 
+
+# add names
+names(alevin_fry_unfiltered_sces) <- alevin_fry_unfiltered_quant_ids
+```
+
+```{r}
+## alevin fry, permit list, with sketch 
+alevin_fry_unfiltered_sketch_quant_ids <- quant_info %>%
+  dplyr::filter(tool == "alevin_fry" & alevin_permit_list == "unfiltered" & alevin_alignment == "sketch") %>%
+  dplyr::pull(quant_dir)
+
+alevin_fry_unfiltered_sketch_sces <- alevin_fry_unfiltered_sketch_quant_ids  %>%
+  purrr::map(
+    ~ tximport(file.path(alevin_fry_data_dir, .x, "alevin", "quants_mat.gz"),
+               type = "alevin")) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x$counts))) 
+
+# add names
+names(alevin_fry_unfiltered_sketch_sces) <- alevin_fry_unfiltered_sketch_quant_ids
+```
+
 
 ### Kallisto
 
@@ -326,6 +366,8 @@ names(cellranger_sces) <- cellranger_quant_ids
 readr::write_rds(alevin_sces, alevin_rds)
 readr::write_rds(alevin_fry_sces, alevin_fry_rds)
 readr::write_rds(alevin_fry_sketch_sces, alevin_fry_sketch_rds)
+readr::write_rds(alevin_fry_unfiltered_sces, alevin_fry_unfiltered_rds)
+readr::write_rds(alevin_fry_unfiltered_sketch_sces, alevin_fry_unfiltered_sketch_rds)
 readr::write_rds(kallisto_sces, kallisto_rds)
 readr::write_rds(cellranger_sces, cellranger_rds)
 ```
