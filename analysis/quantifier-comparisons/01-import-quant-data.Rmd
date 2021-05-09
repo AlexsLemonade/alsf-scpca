@@ -21,8 +21,8 @@ library(magrittr)
 library(SingleCellExperiment)
 library(DropletUtils)
 library(tximport)
+library(Matrix.utils)
 ```
-
 
 ### File and directory setup
 
@@ -82,7 +82,7 @@ samples <- c('SCPCR000003', 'SCPCR000006', 'SCPCR000118', 'SCPCR000119', 'SCPCR0
 includes <- stringr::str_glue("--include \"*/{samples}*\"")
 
 # Alevin quantification files
-sync_call <- paste('aws s3 sync', quant_s3_alevin, alevin_data_dir,
+sync_call <- paste('aws s3 sync', quant_s3_alevin, alevin_data_dir, 
                    includes)
 system(sync_call, ignore.stdout = TRUE)
 
@@ -142,43 +142,70 @@ quant_info <- c(alevin = alevin_data_dir,
   dplyr::mutate(alevin_permit_list = tidyr::replace_na(alevin_permit_list, "not_alevin"))
 ```
 
+```{r}
+# collapse by index type so that everything is either labeled as cDNA or pre-mRNA
+quant_info <- quant_info %>% 
+  dplyr::mutate(index_type = ifelse(
+    index_type %in% c("cdnapre_mRNA", "spliced_intron_"), "pre-mRNA", "cDNA"))
+```
+
+
 
 ```{r}
-# add in sample metadata for each sample  
+# add in library metadata for each sample  
 library_data_dir <- file.path(base_dir, 'sample-info')
 dir.create(library_data_dir, recursive = TRUE, showWarnings = FALSE)
 sample_info_dir_s3 <- 's3://ccdl-scpca-data/sample_info'
 
-# grab sample and library metadata from location in s3
+# grab library metadata from location in s3
 sync_call <- paste('aws s3 sync', sample_info_dir_s3, library_data_dir,
                    '--exclude "*"', 
-                   '--include "*scpca-sample-metadata.tsv"',
                    '--include "*scpca-library-metadata.tsv"')
 system(sync_call, ignore.stdout = TRUE)
 ```
 
 ```{r}
 # read in sample metadata
-sample_df <- readr::read_tsv(file.path(library_data_dir, "scpca-sample-metadata.tsv"))
 library_df <- readr::read_tsv(file.path(library_data_dir, "scpca-library-metadata.tsv"))
 ```
 
 ```{r}
-# create combined data frame with information that might be relevant for looking at these samples
-comb_metadata_df <- library_df %>%
-  dplyr::select(scpca_run_id, scpca_sample_id, seq_unit, technology) %>%
-  dplyr::inner_join(sample_df) %>%
-  dplyr::select(-subdiagnosis, -tissue_location, -disease_timing)
+# filter data frame with information that might be relevant for looking at these samples
+select_metadata_df <- library_df %>%
+  dplyr::select(scpca_run_id, scpca_sample_id, seq_unit, technology)
 ```
 
 ```{r}
 # add relevant metadata to quant information table
 quant_info <- quant_info %>%
-  dplyr::inner_join(comb_metadata_df, by = c("sample" = "scpca_run_id" ))
+  dplyr::inner_join(select_metadata_df, by = c("sample" = "scpca_run_id" ))
 # save info table
 readr::write_tsv(quant_info, quant_info_file )
 # print the info table
 quant_info
+```
+
+
+```{r}
+annotation_data_dir <- file.path(base_dir, 'annotation')
+dir.create(annotation_data_dir, recursive = TRUE, showWarnings = FALSE)
+annotation_data_dir_s3 <- 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103/annotation'
+
+# grab spliced_intron metadata table
+sync_call <- paste('aws s3 sync', annotation_data_dir_s3, annotation_data_dir,
+                   '--exclude "*"', 
+                   '--include "*Homo_sapiens.GRCh38.103.spliced_intron.metadata.tsv"')
+system(sync_call, ignore.stdout = TRUE)
+```
+
+```{r}
+intron_metadata <- readr::read_tsv(
+  file.path(annotation_data_dir, "Homo_sapiens.GRCh38.103.spliced_intron.metadata.tsv")
+  ) %>%
+  # move intron column to rownames to use for collapsing counts matrix later
+  tibble::column_to_rownames("intron")
+
+head(intron_metadata)
 ```
 
 ## Process quantification files
@@ -203,6 +230,41 @@ alevin_sces <- alevin_quant_ids  %>%
 names(alevin_sces) <- alevin_quant_ids
 ```
 
+
+```{r}
+# for every combination of mrna + intronic region create a collapsed counts matrix that contains the sum of the total counts for that gene (mrna + intron)
+# we could use tximeta::splitSE but it just creates two separate matrices rather than one combined one 
+collapse_intron_counts <- function(counts) {
+  # find the shared genes in that counts matrix 
+  shared_genes = intersect(row.names(counts), rownames(intron_metadata))
+  # replace row names with -I appended with corresponding spliced gene 
+  row.names(counts)[which(row.names(counts) %in% shared_genes)] = intron_metadata[shared_genes, "spliced"]
+  # aggregate Matrix counts by gene name 
+  aggregate.Matrix(counts, row.names(counts))
+}
+
+```
+
+
+```{r}
+# collapse intron counts for only counts matrices containing intron regions
+alevin_nucleus_sces <- alevin_sces[grep("spliced_intron", names(alevin_sces))] %>%
+  purrr::map(
+    ~ counts(.x)
+  ) %>%
+  purrr::map(
+    ~ collapse_intron_counts(.x)
+  ) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x))
+  )
+
+# replace the sces in the original list with the collapsed sces
+alevin_sces[which(names(alevin_sces) %in% names(alevin_nucleus_sces))] <- 
+  alevin_nucleus_sces
+```
+
+
 ```{r}
 ## alevin fry, no permit list, no sketch 
 alevin_fry_quant_ids <- quant_info %>%
@@ -219,6 +281,25 @@ alevin_fry_sces <- alevin_fry_quant_ids  %>%
 # add names
 names(alevin_fry_sces) <- alevin_fry_quant_ids
 ```
+
+```{r}
+# collapse intron counts for only counts matrices containing intron regions
+alevin_fry_nucleus_sces <- alevin_fry_sces[grep("spliced_intron", names(alevin_fry_sces))] %>%
+  purrr::map(
+    ~ counts(.x)
+  ) %>%
+  purrr::map(
+    ~ collapse_intron_counts(.x)
+  ) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x))
+  )
+
+# replace the sces in the original list with the collapsed sces
+alevin_fry_sces[which(names(alevin_fry_sces) %in% names(alevin_fry_nucleus_sces))] <- 
+  alevin_fry_nucleus_sces
+```
+
 
 ```{r}
 ## alevin fry, no permit list, with sketch 
@@ -238,6 +319,49 @@ names(alevin_fry_sketch_sces) <- alevin_fry_sketch_quant_ids
 ```
 
 ```{r}
+# collapse intron counts for only counts matrices containing intron regions
+alevin_fry_sketch_nucleus_sces <- alevin_fry_sketch_sces[grep("spliced_intron", names(alevin_fry_sketch_sces))] %>%
+  purrr::map(
+    ~ counts(.x)
+  ) %>%
+  purrr::map(
+    ~ collapse_intron_counts(.x)
+  ) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x))
+  )
+
+# replace the sces in the original list with the collapsed sces
+alevin_fry_sketch_sces[which(names(alevin_fry_sketch_sces) %in% names(alevin_fry_sketch_nucleus_sces))] <- 
+  alevin_fry_sketch_nucleus_sces
+```
+
+When we read in the counts data that has been processed with alevin-fry using the --unfiltered flag rather than using --knee-distance, all cells that are identified in the 10X whitelist are output. 
+This means that we are going to have cells that are not considered 'true' cells and we need to filter them out before doing any comparisons across the tools. 
+We could use `DropletUtils::barcodeRanks` but even after using that we still see some samples with 50,000 cells above the knee. 
+According to the documenation for DropletUtils another recommendation is to use their method for detecting [empty droplets](https://www.bioconductor.org/packages/devel/bioc/vignettes/DropletUtils/inst/doc/DropletUtils.html#detecting-empty-droplets). 
+Here, I am implementing `DropletUtils::emptyDrops` for the alevin-fry samples used with the `--unfiltered` flag. 
+
+According to the documentation, `DropletUtils::emptyDrops` tests for empty drops in the following way: 
+> The emptyDrops function is designed to distinguish between empty droplets and cells. It does so by testing each barcode’s expression profile for significant deviation from the ambient profile.
+> Droplets with significant deviations from the ambient profile are detected at a specified FDR threshold, e.g., with FDR below 1%. These can be considered to be cell-containing droplets, with a frequency of false positives (i.e., empty droplets) at the specified FDR. Furthermore, droplets with very large counts are automatically retained by setting their p-values to zero. This avoids discarding droplets containing cells that are very similar to the ambient profile.
+> The p-values are calculated by permutation testing, hence the need to set a seed. The Limited field indicates whether a lower p-value could be obtained by increasing the number of permutations. If there are any entries with FDR above the desired threshold and Limited==TRUE, it indicates that npts should be increased in the emptyDrops call.
+
+```{r}
+filter_counts_mtx <- function(sce){
+    # grab counts from single cell experiment
+    counts <- counts(sce)
+    # calculate probability of being an empty droplet
+    empty_df <- DropletUtils::emptyDrops(counts)
+    cells <- rownames(empty_df[which(empty_df$Limited == "TRUE" & empty_df$FDR <= 0.01),])
+    # subset original counts matrix by cells that pass filter
+    counts <- counts[, cells]
+    return(counts)
+}
+```
+
+
+```{r}
 ## alevin fry, permit list, no sketch 
 alevin_fry_unfiltered_quant_ids <- quant_info %>%
   dplyr::filter(tool == "alevin_fry" & alevin_permit_list == "unfiltered" & alevin_alignment == "salign") %>%
@@ -248,11 +372,45 @@ alevin_fry_unfiltered_sces <- alevin_fry_unfiltered_quant_ids  %>%
     ~ tximport(file.path(alevin_fry_data_dir, .x, "alevin", "quants_mat.gz"),
                type = "alevin")) %>%
   purrr::map(
-    ~ SingleCellExperiment(list(counts = .x$counts))) 
+    ~ SingleCellExperiment(list(counts = .x$counts)))
 
 # add names
 names(alevin_fry_unfiltered_sces) <- alevin_fry_unfiltered_quant_ids
 ```
+
+
+```{r}
+alevin_fry_unfiltered_nucleus_sces <- alevin_fry_unfiltered_sces[grep("spliced_intron", names(alevin_fry_unfiltered_sces))] %>%
+  purrr::map(
+    ~ counts(.x)
+  ) %>%
+  purrr::map(
+    ~ collapse_intron_counts(.x)
+  ) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x))
+  )
+
+# replace the sces in the original list with the collapsed sces
+alevin_fry_unfiltered_sces[which(names(alevin_fry_unfiltered_sces) %in% names(alevin_fry_unfiltered_nucleus_sces))] <- 
+  alevin_fry_unfiltered_nucleus_sces
+
+
+## for now remove alevin_fry_unfiltered_nucleus_sces because they are empty runs and giving empty matrices... 
+alevin_fry_unfiltered_sces <- alevin_fry_unfiltered_sces[-which(names(alevin_fry_unfiltered_sces) %in% names(alevin_fry_unfiltered_nucleus_sces))]
+```
+
+```{r}
+# cell filtering 
+alevin_fry_unfiltered_sces <- alevin_fry_unfiltered_sces %>% 
+  purrr::map(
+    ~ filter_counts_mtx(.x)) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x)))
+
+alevin_fry_unfiltered_sces
+```
+
 
 ```{r}
 ## alevin fry, permit list, with sketch 
@@ -269,6 +427,35 @@ alevin_fry_unfiltered_sketch_sces <- alevin_fry_unfiltered_sketch_quant_ids  %>%
 
 # add names
 names(alevin_fry_unfiltered_sketch_sces) <- alevin_fry_unfiltered_sketch_quant_ids
+```
+
+```{r}
+alevin_fry_unfiltered_sketch_nucleus_sces <- alevin_fry_unfiltered_sketch_sces[grep("spliced_intron", names(alevin_fry_unfiltered_sketch_sces))] %>%
+  purrr::map(
+    ~ counts(.x)
+  ) %>%
+  purrr::map(
+    ~ collapse_intron_counts(.x)
+  ) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x))
+  )
+
+# replace the sces in the original list with the collapsed sces
+alevin_fry_unfiltered_sketch_sces[which(names(alevin_fry_unfiltered_sketch_sces) %in% names(alevin_fry_unfiltered_sketch_nucleus_sces))] <- 
+  alevin_fry_unfiltered_sketch_nucleus_sces
+```
+
+
+```{r}
+# cell filtering 
+alevin_fry_unfiltered_sketch_sces <- alevin_fry_unfiltered_sketch_sces %>% 
+  purrr::map(
+    ~ filter_counts_mtx(.x)) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x)))
+
+alevin_fry_unfiltered_sketch_sces
 ```
 
 
