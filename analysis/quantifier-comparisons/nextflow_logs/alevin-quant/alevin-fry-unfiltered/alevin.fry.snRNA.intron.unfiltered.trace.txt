@@ -1,0 +1,9 @@
+task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
+2	ff/b2a024	2a0055df-0fe7-4592-a414-a608c2de2cd1	alevin (SCPCR000119-spliced_intron_txome_k31)	COMPLETED	0	2021-05-04 10:44:44.237	1h 31m 18s	1h 22m 45s	658.1%	12.9 GB	15.6 GB	27.3 GB	288.7 MB
+3	9a/aa0394	c2b68d05-f2b8-4ed7-8332-5e6551fefd0b	generate_permit (SCPCR000119-spliced_intron_txome_k31)	COMPLETED	0	2021-05-04 12:16:03.702	28.7s	2.5s	100.3%	279.2 MB	555.4 MB	121.4 MB	1.6 KB
+4	05/5e6057	88ed4742-634b-4383-935e-9d9c643c47b7	collate_fry (SCPCR000119-spliced_intron_txome_k31)	COMPLETED	0	2021-05-04 12:16:33.669	2m 19s	530ms	102.2%	24.3 MB	399.3 MB	223.7 MB	11.2 MB
+5	53/53a1c5	50b2f6a9-2c85-40b9-bf34-770cb4700339	quant_fry (SCPCR000119-spliced_intron_txome_k31)	COMPLETED	0	2021-05-04 12:18:53.472	29s	729ms	101.8%	20.6 MB	399.3 MB	61.7 MB	1.6 MB
+1	e4/951a4f	78cdcd3b-e5f9-4bee-9eaa-a37515f3a462	alevin (SCPCR000118-spliced_intron_txome_k31)	COMPLETED	0	2021-05-04 10:44:44.098	2h 27m 11s	2h 18m 46s	618.0%	12.9 GB	15.6 GB	28.3 GB	413.1 MB
+6	58/33c2d6	fd57abd9-7766-4752-8c61-e66e2d2270c5	generate_permit (SCPCR000118-spliced_intron_txome_k31)	COMPLETED	0	2021-05-04 13:11:55.926	29s	2.4s	100.4%	279.1 MB	555.4 MB	121.4 MB	1.6 KB
+7	0a/dc662d	0b2f75a8-6d4b-4204-8a86-f15f2d35aa38	collate_fry (SCPCR000118-spliced_intron_txome_k31)	COMPLETED	0	2021-05-04 13:12:25.983	2m 9s	530ms	100.7%	21.8 MB	399.3 MB	234.9 MB	11.2 MB
+8	8a/d20b40	dcc726c0-b537-4e0d-b844-9f7e23d089e6	quant_fry (SCPCR000118-spliced_intron_txome_k31)	COMPLETED	0	2021-05-04 13:14:36.157	8m 39s	771ms	101.6%	21.2 MB	399.3 MB	61.7 MB	1.6 MB
