@@ -1,20 +1,24 @@
 ---
 title: "Pre Processing Metrics Benchmarking"
-output: html_notebook
+author: "Ally Hawkins for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
 ---
 
 This notebook is a follow up notebook to previous benchmarking done in `02-compare-quants.RMD`. 
 Here, we have used the most recent release of [Salmon](https://github.com/COMBINE-lab/salmon/releases/tag/v1.4.0) and [Cellranger 6.0.0](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/release-notes), and included the new [Alevin-Fry](https://alevin-fry.readthedocs.io/en/latest/getting_started.html) method. 
 Alevin-Fry can use either a selective alignment strategy or pseudoalignment strategy (with the `--sketch` flag),so here we are testing both strategies. 
-Alevin-Fry also can use the 10X whitelist for barcode assignment rather than generating the putative whitelist using the `--unfiltered` flag, so we have also included that in our tests.
+Alevin-Fry also can use the 10X whitelist for barcode assignment rather than generating the putative whitelist using the `--unfiltered-pl` flag, so we have also included that in our tests.
 
 The resolution currently used for Alevin-Fry is the Full resolution. See the documentation for more information on different options for resolution that could be used. 
 
 The goal of this notebook is to compare the quantification performed by each tool across the samples we have currently run. 
 Thus far, we have 4 10Xv3 single cell RNA-seq samples that have been run on all tools, SCPCR000003, SCPCR000006, SCPCR000126, and SCPCR000127. 
 We also have 2 10Xv3.1 single nucleus RNA-seq samples that have been run on all tools, SCPCR000118 and SCPCR000119.
-All the snRNA-seq samples have been run using either the pre-mRNA index (spliced_intron_ label for alevin and kallisto) or the mRNA index (spliced_ label for alevin and kallisto). 
-One thing to note is that the spliced_ index is different from the previously used index's with the single cell RNA seq samples in that it was created by grabbing the genomic regions corresponding to spliced cDNA only from the ensembl gtf, rather than taking the cDNA.fasta directly from ensembl. 
+All the snRNA-seq samples have been run using either the pre-mRNA index or the mRNA index. 
+One thing to note is that the new spliced index is different from the previously used index's with the single cell RNA seq samples in that it was created by grabbing the genomic regions corresponding to spliced cDNA only from the ensembl gtf, rather than taking the cDNA.fasta directly from ensembl. 
 
 ## Setup 
 
@@ -24,7 +28,7 @@ One thing to note is that the spliced_ index is different from the previously us
 library(tidyverse)
 library(ggplot2)
 library(SingleCellExperiment)
-library(forcats)
+library(ggforce)
 ```
 
 ### File and Directory Setup
@@ -170,9 +174,14 @@ cell_qc <- dplyr::bind_rows(
 ) %>%
   dplyr::left_join(quant_info,
                    by = c("tool" = "tool", 
-                          "quant_id" = "quant_dir"))
+                          "quant_id" = "quant_dir")) %>%
+  # remove extraneous run from 119 with txome index since we have the run with the spliced index
+  dplyr::filter(quant_id != "SCPCR000119-txome_k31") %>%
+  # remove duplicate runs of alevin-fry --knee on 118, 119
+  dplyr::filter(quant_id !="SCPCR000118-spliced_intron_txome_k31-salign") %>%
+  dplyr::filter(quant_id != "SCPCR000119-spliced_intron_txome_k31-salign")
+                  
 ```
-
 
 
 ## Comparison of QC Metrics across all tools
@@ -197,18 +206,17 @@ cells_detected_stats
 ## first look at cells detected
 ggplot(cells_detected_stats, aes(x = tool, y = cells_detected)) +
   geom_jitter(mapping = aes(color = sample)) +
-  geom_boxplot(alpha = 0.6) + 
+  geom_violin() +
   theme_classic() +
   ylab("Total Cells Detected") + 
   xlab("") + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
-Based on this, I am extremely concerned by the amount of cells that Alevin-fry `--sketch` and `--unfiltered` is detecting.
-It looks like for every sample, the `--unfiltered` option is detecting a ton more cells than alevin-fry using the `--knee-distance` rather than less cells which is what I would have expected.
-I am not entirely sure what the explanation for this is...  
- 
+Based on this, it looks like alevin-fry using the `--knee-distance` and kallisto do not handle single-nuclei samples well. 
+In contrast, the alevin-fry `--unfiltered-pl` samples were filtered using `DropletUtils::emptyDrops` and they have much lower numbers for the same single-nuclei samples. 
 
 Let's take a look at the mitochondrial content per cell across the tools and see if we see variation there. 
+
 
 ```{r fig.height = 10, fig.width = 10}
 ggplot(cell_qc, aes(x = tool, y = subsets_mito_percent, fill = tool)) + 
@@ -220,7 +228,7 @@ ggplot(cell_qc, aes(x = tool, y = subsets_mito_percent, fill = tool)) +
 ```
 It looks like SCPCR000003 is a very poor sample across all tools and has a lot of dead cells. 
 It might be a good idea to remove that from our comparisons and not consider this for benchmarking. 
-Additionally, it looks like we can see that SCPCR000006 (scRNAseq) and SCPCR000118 (snRNAseq) vary across tools, but the other three samples tend to be fairly consistent. 
+Additionally, it looks like we can see that SCPCR000118 (snRNAseq) also has some variation, but the other samples tend to be fairly consistent. 
 
 
 ```{r}
@@ -261,7 +269,7 @@ cell_qc_filter %>%
   xlab("")
 ```
 In general, it looks like SCPCR000118 has lower coverage than 119. 
-Cellranger and Kallisto (with the pre mRNA/spliced_intron index) actually seem to be have the highest UMIs/cell. 
+Cellranger and Kallisto (with the pre mRNA index) actually seem to be have the highest UMIs/cell. 
 In general, there is quite low coverage so it is hard to make a lot of big conclusions here. 
 
 ```{r fig.height = 5, fig.width=10}
@@ -276,9 +284,8 @@ cell_qc_filter %>%
   ylab("UMI/cell") + 
   xlab("")
 ```
-Alevin-fry `--unfiltered` is consistently on the low end, with alevin fry `--sketch`, alevin, kallisto, and cellranger all being quite similar. 
-I am a bit worried that the alevin-fry `--unfiltered` version has quite a high false positive rate of calling cell barcodes as 'true cells' thus leading to a lower amount of reads/ cell. 
-It is probably worth going back to double check that we have the workflow setup properly since this is a consistent finding, but I do know this flag is in beta. 
+In general, these all look quite similar to each other. Alevin seems to be the outlier here and varies across samples. 
+Kallisto is also on the slightly higher end than cellranger.
 
 I think keeping the single cell and single nuclei samples separate is helpful for visualization so I'm going to keep them separate from here on out. 
 
@@ -295,6 +302,8 @@ cell_qc_filter %>%
   theme(axis.ticks.x = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 Here, we see a bit more variation in genes/cell for the single nucleus samples than we did with the UMI/cell. 
+It looks like kallisto and alevin-fry `--unfiltered-pl` with the `--sketch` mode looks comparable to cellranger. 
+Kallisto is on the higher end, but is consistently capturing information. 
 
 ```{r fig.height=5, fig.width = 10}
 # single cell samples only 
@@ -311,8 +320,7 @@ cell_qc_filter %>%
 Here we are seeing similar trends in genes/cell as we did with UMI/cell for the single cell samples. 
 We do see that alevin tends to report high genes/cell in all but 1 of the scRNA-seq samples. 
 That same sample was the one that alevin also showed high mito content for, so perhaps that is why 006 is not as high for alevin.
-In general, cellranger and kallisto tend to do better with the snRNA-seq samples, but not as high in scRNA-seq samples. 
-For single cell RNA seq there is a lot more consistency across the tools. 
+Cellranger is on the low end for all single cell samples, with alevin-fry `--unfiltered-pl` being mostly comparable. 
 
 ### Shared Cell QC, No Minimum Gene Coverage
 
@@ -343,22 +351,17 @@ cell_only_qc_common <- cell_only_qc_filter %>%
 
 
 ```{r}
-# filter for cells that are found in all 13 combinations of tools + index's for nucleus
-# keep in mind that we have one sample (SCPCR000119) that was run on 14 combinations (!) and we need to filter accordingly 
+# filter for cells that are found in 13 combinations of tools + index's for nucleus
 nuclei_counts <- nucleus_qc_filter %>%
   dplyr::count(cell_id, sample)
 
-common_nuclei_118 <- nuclei_counts %>%
+common_nuclei <- nuclei_counts %>%
   dplyr::filter(n == 13) %>%
-  dplyr::pull(cell_id)
-
-common_nuclei_119 <- nuclei_counts %>%
-  dplyr::filter(n==14) %>%
   dplyr::pull(cell_id)
 
 nucleus_qc_common <- nucleus_qc_filter %>%
   dplyr::filter(
-    (cell_id %in% c(common_nuclei_118, common_nuclei_119))
+    (cell_id %in% common_nuclei)
   )
 ```
 
@@ -398,9 +401,12 @@ ggplot(nucleus_qc_common, aes(x = tool, y = sum, fill = tool)) +
   ylab("UMI/cell") + 
   xlab("")
 ```
-Interestingly, when we look at shared cells only, we see that there is clearly higher UMIs/cell in the snRNA-seq samples with kallisto, in particular with using the spliced_intron index. 
-The next highest coverage looks like it is observed in cellranger (?) and we see a bump in UMIs/cell when looking at the pre-mRNA index vs. the cDNA index alone.
-The Alevin-fry sketch and unfiltered with the spliced intron index actually might be higher than cellranger.
+Interestingly, when we look at shared cells only, we see an increase in coverage across the board. 
+One thing to note, is that there is a drop off in number of shared cells from those found in 11 tools (~4000) to those found in 13 (~120).
+
+Alevin-fry `--sketch` looks similar to cellranger. 
+Alevin-fry `--unfiltered-pl` is also similar to cellranger and closer to kallisto having higher UMI/cell. 
+In general, we see increased coverage using the pre mRNA index. 
 
 What about the single cell samples? 
 
@@ -416,9 +422,7 @@ ggplot(cell_only_qc_common, aes(x = tool, y = sum, fill = tool)) +
   xlab("")
 
 ```
-So it looks like there is generally uniform coverage across all the samples in all tools with the exception of alevin-fry unfiltered. 
-Alevin-fry --sketch actually looks like it is edging out above the rest.  
-Kallisto doesn't appear to have the advantage here like it does in the single nuclei samples. 
+So it looks like there is generally uniform coverage across all the samples in all tools.  
 
 Is that same pattern consistent in genes/cell in shared cells only? 
 
@@ -434,9 +438,9 @@ ggplot(nucleus_qc_common, aes(x = tool, y = detected, fill = tool)) +
   xlab("")
 
 ```
-So no longer is kallisto in the lead, with alevin-fry sketch and alevin-fry unfiltered sketch starting to increase. 
-Something that seems very clear is the advantage of using the pre mRNA or spliced_intron index for single nuclei samples. 
-I am still worried about the cell numbers for alevin-fry --unfiltered and am not sure what to think about that... 
+Overall, the single nuclei samples have a lot more variation. 
+Alevin-fry `--sketch` still seem to be the most similar to cellranger (with the pre mRNA index).
+Alevin-fry `--unfiltered-pl` and `--sketch` is more on par with kallisto in terms of coverage, but higher than cellranger in both samples. 
 
 ```{r fig.height = 5, fig.width = 10}
 # single cell samples only 
@@ -449,7 +453,8 @@ ggplot(cell_only_qc_common, aes(x = tool, y = detected, fill = tool)) +
   xlab("")
 
 ```
-We see a similar trend to UMIs/cell, with alevin alevin-fry starting to edge out as being the highest. 
+Generally, the coverage is still quite uniform. 
+However, it looks like cellranger has one of the lowest genes/cell means with alevin-fry `--sketch` and alevin-fry `--unfiltered` the highest. 
 
 Let's do the same thing, but only look at genes above a certain threshold.
 Is alevin-fry still giving us the highest genes/cell across shared cells in single cell and kallisto/alevin-fry-unfiltered-sketch the highest in single nucleus?
@@ -535,8 +540,13 @@ cell_qc_thresh_5 <- dplyr::bind_rows(
 ) %>%
   dplyr::left_join(quant_info,
                    by = c("tool" = "tool", 
-                          "quant_id" = "quant_dir"))
+                          "quant_id" = "quant_dir")) %>%
+  dplyr::filter(quant_id != "SCPCR000119-txome_k31") %>%
+  dplyr::filter(quant_id != "SCPCR000118-spliced_intron_txome_k31-salign") %>%
+  dplyr::filter(quant_id != "SCPCR000119-spliced_intron_txome_k31-salign")
 ```
+
+
 
 ```{r}
 #first remove SCPCR000003
@@ -572,23 +582,19 @@ cell_qc_common_thresh_5 <- cell_only_qc_thresh_5 %>%
 
 
 ```{r}
-# filter for cells that are found in all 13 combinations of tools + index's for nucleus
-# keep in mind that we have one sample (SCPCR000119) that was run on 14 combinations (!) and we need to filter accordingly 
+# filter for cells that are found in 13 combinations of tools + index's for nucleus
 nuclei_counts_thresh_5 <- nucleus_qc_thresh_5 %>%
   dplyr::count(cell_id, sample)
 
-common_nuclei_118_thresh_5 <- nuclei_counts_thresh_5 %>%
+common_nuclei_thresh_5 <- nuclei_counts_thresh_5 %>%
   dplyr::filter(n == 13) %>%
-  dplyr::pull(cell_id)
-
-common_nuclei_119_thresh_5 <- nuclei_counts_thresh_5 %>%
-  dplyr::filter(n==14) %>%
   dplyr::pull(cell_id)
 
 nucleus_qc_common_thresh_5 <- nucleus_qc_thresh_5 %>%
   dplyr::filter(
-    (cell_id %in% common_nuclei_118_thresh_5) | (cell_id %in% common_nuclei_119_thresh_5)
+    (cell_id %in% common_nuclei_thresh_5)
   )
+
 ```
 
 
@@ -603,8 +609,8 @@ nucleus_qc_common_thresh_5 <- nucleus_qc_thresh_5 %>%
   ylab("Genes/cell") + 
   xlab("")
 ```
-Interestingly, when we remove lowly covered genes in the single nuclei samples, the increased genes/cell seen in alevin-fry sketch and sketch-unfiltered is no longer apparent. 
-We now see that kallisto with the spliced_intron index has the highest genes/cell. 
+When we remove lowly covered genes in the single nuclei samples, the increased genes/cell seen in alevin-fry sketch-unfiltered over cellranger is still apparent. 
+We also see kallisto with the pre mRNA index has the highest genes/cell in 119 only, but is not consistent. 
 
 ```{r fig.height = 5, fig.width = 10}
 # single cell samples
@@ -616,6 +622,8 @@ ggplot(cell_qc_common_thresh_5, aes(x = tool, y = detected, fill = tool)) +
   ylab("Genes/cell") + 
   xlab("")
 ```
+Some of the variation goes away when removing the lowly covered genes, but in general all tools give quite similar coverage across shared cells for single cell.
+
 Although the total number of genes detected and the range decreases across all cells, it appears that lowly covered genes do not affect the distribution of genes/cell in the single cell samples but do for the single nuclei samples. 
 This could very well be an effect of the lower capture seen in single nuclei samples. 
 
@@ -635,10 +643,7 @@ nucleus_qc_common_cor <- nucleus_qc_common %>%
   tidyr::pivot_wider(id_cols = c(cell_id, sample),
                      names_from = c("tool", "index_type"),
                      values_from = sum) %>%
-  # remove column with kallisto before dropping NA otherwise we will lose sample 118
-  dplyr::select(-kallisto_txome) %>%
   tidyr::drop_na()
-
 ```
 
 
@@ -655,6 +660,7 @@ cell_qc_common_cor %>%
   )
 ```
 As expected based on the boxplots, the correlations are quite high between the UMIs/cells when looking at shared cells compared to cellranger. 
+Kallisto appears to have the lowest correlations, with Alevin-fry and alevin-fry `--unfiltered-pl` the highest. 
 
 ```{r}
 ggplot(cell_qc_common_cor, aes(x = cellranger, y = alevin_fry)) +
@@ -667,26 +673,26 @@ ggplot(cell_qc_common_cor, aes(x = cellranger, y = alevin_fry)) +
 ```
 
 ```{r}
-# here we have to take into account the index names so let's only look at the spliced_intron_ index comparisons to cellranger pre mRNA index for now
+# here we have to take into account the index names so let's only look at the pre_mRNA index comparisons to cellranger pre mRNA index for now
 nucleus_qc_common_cor %>% 
   dplyr::group_by(sample) %>%
   dplyr::summarize(
-    cr_al_cor = cor(cellranger_cdnapre_mRNA, alevin_spliced_intron_, method = "spearman"),
-    cr_al_fry_cor =cor(cellranger_cdnapre_mRNA, alevin_fry_spliced_intron_, method = "spearman"),
-    cr_al_fry_sketch_cor = cor(cellranger_cdnapre_mRNA, alevin_fry_sketch_spliced_intron_, method = "spearman"),
-    cr_al_fry_unfiltered_cor = cor(cellranger_cdnapre_mRNA, alevin_fry_unfiltered_spliced_, method = "spearman"), 
-    cr_al_fry_unfiltered_sketch_cor = cor(cellranger_cdnapre_mRNA, alevin_fry_unfiltered_sketch_spliced_intron_, method = "spearman"),
-    cr_ka_cor = cor(cellranger_cdnapre_mRNA, kallisto_spliced_intron_, method = "spearman")
+    cr_al_cor = cor(`cellranger_pre-mRNA`, `alevin_pre-mRNA`, method = "spearman"),
+    cr_al_fry_cor =cor(`cellranger_pre-mRNA`, `alevin_fry_pre-mRNA`, method = "spearman"),
+    cr_al_fry_sketch_cor = cor(`cellranger_pre-mRNA`, `alevin_fry_pre-mRNA`, method = "spearman"),
+    cr_al_fry_unfiltered_cor = cor(`cellranger_pre-mRNA`, `alevin_fry_unfiltered_cDNA`, method = "spearman"), 
+    cr_al_fry_unfiltered_sketch_cor = cor(`cellranger_pre-mRNA`, `alevin_fry_unfiltered_sketch_pre-mRNA`, method = "spearman"),
+    cr_ka_cor = cor(`cellranger_pre-mRNA`, `kallisto_pre-mRNA`, method = "spearman")
   )
-nucleus_qc_common_cor
 ```
 Correlations with the single nuclei samples are much less consistent. Sample 118 is in general lower than 119 (potentially a problem with sample quality?). 
-We also see that Kallisto, although it has higher counts, doesn't have as high of correlation as the other methods. 
+We also see that Kallisto, as like with single cell, doesn't have as high of correlation as the other methods in 119, but higher in 118? 
+The best correlation with cellranger in both samples looks like alevin-fry `--unfiltered-pl` `--sketch`. 
 
 Let's look at one with high correlation and one with low correlation. 
 
 ```{r}
-ggplot(nucleus_qc_common_cor, aes(x = cellranger_cdnapre_mRNA, y = alevin_fry_unfiltered_sketch_spliced_intron_)) +
+ggplot(nucleus_qc_common_cor, aes(x = `cellranger_pre-mRNA`, y = `alevin_fry_unfiltered_sketch_pre-mRNA`)) +
   geom_point(size = 0.5, alpha = 0.1) + 
   facet_wrap(~ sample) + 
   scale_x_log10() + 
@@ -694,10 +700,10 @@ ggplot(nucleus_qc_common_cor, aes(x = cellranger_cdnapre_mRNA, y = alevin_fry_un
   labs(x = "Cell Ranger UMI/cell", y = "Alevin Fry Unfiltered SKetch UMI/cell") + 
   theme_classic()
 ```
-So now we can see why these correlations are so off, especially for 118, there are very few shared cell barcodes. 
+So now we can see why these correlations are so off, especially for 118, there are very few shared cell barcodes.  
 
 ```{r}
-ggplot(nucleus_qc_common_cor, aes(x = cellranger_cdnapre_mRNA, y = kallisto_spliced_intron_)) +
+ggplot(nucleus_qc_common_cor, aes(x = `cellranger_pre-mRNA`, y = `kallisto_pre-mRNA`)) +
   geom_point(size = 0.5, alpha = 0.1) + 
   facet_wrap(~ sample) + 
   scale_x_log10() + 

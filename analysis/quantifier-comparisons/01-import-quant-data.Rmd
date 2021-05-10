@@ -145,6 +145,8 @@ quant_info <- c(alevin = alevin_data_dir,
 ```{r}
 # collapse by index type so that everything is either labeled as cDNA or pre-mRNA
 quant_info <- quant_info %>% 
+  # remove 119 run with txome from analysis
+  dplyr::filter(quant_dir != "SCPCR000119-txome_k31") %>%
   dplyr::mutate(index_type = ifelse(
     index_type %in% c("cdnapre_mRNA", "spliced_intron_"), "pre-mRNA", "cDNA"))
 ```
