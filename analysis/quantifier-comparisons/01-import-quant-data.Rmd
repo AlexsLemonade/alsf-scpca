@@ -512,6 +512,7 @@ Make a list of kallisto runs as SCEs
 ```{r}
 kallisto_sces <- base_file %>%
   purrr::map(read_kallisto_counts) %>%
+  purrr::map(~ collapse_intron_counts(.x)) %>%
   purrr::map(~ SingleCellExperiment(list(counts = .x))) 
 
 # add names
