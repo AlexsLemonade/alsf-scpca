@@ -3,12 +3,12 @@ title: "ScPCA Benchmarking: Run Time and Memory Comparison"
 output: html_notebook
 ---
 
-This notebook compares the run time and memory footprint of pre-processing 4 
-scRNA-seq samples across 5 different tools. We used cellranger v6, kallisto, 
-alevin, and alevin-fry with and without --sketch mode. The purpose of this 
-notebook is to gain an understanding on how much time and memory each of the
-processes uses. We are starting with just looking at these 4 scRNA-seq samples,
-and next will add snRNA-seq samples for comparison. 
+This notebook compares the run time and memory footprint of pre-processing 4 scRNA-seq samples across 4 different tools. We used cellranger v6, kallisto, alevin, and alevin-fry. 
+Alevin-fry was used with and without `--sketch` mode and/or `--unfiltered-pl`. 
+The purpose of this notebook is to gain an understanding on how much time and memory each of the tools uses. 
+We are starting with looking at 4 scRNA-seq samples and 2 snRNA-seq samples.
+The snRNA-seq samples have been run with 2 different indices, cDNA and pre-mRNA.
+
 
 ```{r libary import}
 library(tidyverse)
@@ -26,6 +26,8 @@ kallisto_dir <- file.path(logs_dir, "kallisto-quant")
 cellranger_dir <- file.path(logs_dir, "cellranger-quant")
 alevin_fry_dir <- file.path(logs_dir, "alevin-quant", "alevin-fry")
 alevin_fry_sketch_dir <- file.path(logs_dir, "alevin-quant", "alevin-fry-sketch")
+alevin_fry_unfiltered_dir <- file.path(logs_dir, "alevin-quant", "alevin-fry-unfiltered")
+alevin_fry_unfiltered_sketch_dir <- file.path(logs_dir, "alevin-quant", "alevin-fry-unfiltered-sketch")
 ```
 
 ```{r}
@@ -43,7 +45,7 @@ quant_s3_kallisto <- 's3://nextflow-ccdl-results/scpca/kallisto-quant'
 ```{r}
 # get log files from S3
 # include json file from each kallisto run 
-samples <- c('SCPCR000003', 'SCPCR000006', 'SCPCR000126', 'SCPCR000127')
+samples <- c('SCPCR000003', 'SCPCR000006', 'SCPCR000118', 'SCPCR000119', 'SCPCR000126', 'SCPCR000127')
 
 includes <- stringr::str_glue("--include \"*/{samples}\"")
 
@@ -61,48 +63,62 @@ include important information about each process such as run time and memory.
 ## Alevin
 
 ```{r}
-# read in alevin trace files
-alevin_trace <- readr::read_tsv(file.path(alevin_dir,
-                                          "alevin.trace.allsamples.txt"))
-alevin_trace$Tool = "Alevin"
-alevin_trace
+make_trace_df <- function(workdir, file_ext){
+  setwd(workdir)
+  workdir_files <- list.files(workdir)
+  workdir_list <- lapply(workdir_files, function(x) readr::read_tsv(x))
+  names(workdir_list) <- gsub(file_ext, "", workdir_files)
+  workdir_df <- bind_rows(workdir_list)
+}
 ```
+
+
+```{r}
+alevin_trace_df <- make_trace_df(alevin_dir, ".trace.txt")
+alevin_trace_df$Tool <- "Alevin"
+```
+
 ## Alevin Fry 
 
 ```{r}
-alevin_fry_trace <- readr::read_tsv(
-  file.path(alevin_fry_dir, "alevin-fry.trace.allsamples.txt")
-)
-
-alevin_fry_sketch_trace <- readr::read_tsv(
-  file.path(alevin_fry_sketch_dir, "alevin-fry-sketch.trace.allsamples.txt")
-)
-
-alevin_fry_trace$name = gsub("alevin", "alevin-fry", alevin_fry_trace$name)
-alevin_fry_trace$Tool = "Alevin-Fry"
-
-alevin_fry_sketch_trace$name = gsub("alevin", "alevin-fry-sketch", alevin_fry_sketch_trace$name)
-alevin_fry_sketch_trace$Tool = "Alevin-Fry-Sketch"
+alevin_fry_trace_df <- make_trace_df(alevin_fry_dir, ".trace.txt")
+alevin_fry_trace_df$Tool <- "Alevin-Fry"
 ```
 
+
+```{r}
+# alevin fry sketch
+alevin_fry_sketch_trace_df <- make_trace_df(alevin_fry_sketch_dir, ".sketch.trace.txt")
+alevin_fry_sketch_trace_df$Tool = "Alevin-Fry-Sketch"
+```
+
+
+```{r}
+# alevin fry unfiltered
+alevin_fry_unfiltered_trace_df <- make_trace_df(alevin_fry_unfiltered_dir, ".unfiltered.trace.txt")
+alevin_fry_unfiltered_trace_df$Tool = "Alevin-Fry-Unfiltered"
+```
+
+
+```{r}
+# alevin fry unfiltered sketch
+alevin_fry_unfiltered_sketch_trace_df <- make_trace_df(alevin_fry_unfiltered_sketch_dir, ".unfiltered.sketch.trace.txt")
+alevin_fry_unfiltered_sketch_trace_df$Tool = "Alevin-Fry-Unfiltered-Sketch"
+```
 
 
 ## Kallisto
 
 ```{r}
-kallisto_trace <- readr::read_tsv(file.path(kallisto_dir, 
-                                            "kallisto.trace.allsamples.txt"))
-kallisto_trace$Tool = "Kallisto"
-kallisto_trace
+kallisto_trace_df <- make_trace_df(kallisto_dir, ".trace.txt")
+kallisto_trace_df$Tool = "Kallisto"
 ```
 
 ## CellRanger
 
 ```{r}
-cellranger_trace <- readr::read_tsv(file.path(cellranger_dir,
-                                              "cellranger.trace.allsamples.txt"))
-cellranger_trace$Tool = "Cellranger"
-cellranger_trace
+cellranger_trace_df <- make_trace_df(cellranger_dir, ".trace.txt")
+cellranger_trace_df$Tool = "Cellranger"
 ```
 
 
@@ -110,9 +126,10 @@ cellranger_trace
 
 ```{r}
 ## first make a joint dataframe
-all_trace <- bind_rows(list(alevin_trace, alevin_fry_trace, 
-                            alevin_fry_sketch_trace, kallisto_trace, 
-                            cellranger_trace))
+all_trace <- bind_rows(list(alevin_trace_df, alevin_fry_trace_df,
+                            alevin_fry_sketch_trace_df, alevin_fry_unfiltered_trace_df,
+                            alevin_fry_unfiltered_sketch_trace_df, kallisto_trace_df, 
+                            cellranger_trace_df))
 all_trace
 ```
 We need to do some manipulation to this data frame to the peak_rss and 
@@ -161,10 +178,18 @@ runtime so let's add in that information.
 ```{r}
 ## add in number of reads/ sample 
 ## found in individual logfiles from kallisto 
+single_cell_samples <- c('SCPCR000003', 'SCPCR000006', 'SCPCR000126', 'SCPCR000127')
 
 all_trace$Reads = 0
 for (sample in samples) {
-  sample_file <- paste0(sample, "-txome_k31")
+  if(sample %in% single_cell_samples){
+    # only samples that are single cell were run with this index
+    sample_file <- paste0(sample, "-txome_k31")
+  }
+  else {
+    # single nuclei samples have the spliced intron ending for the file name
+    sample_file <- paste0(sample, "-spliced_intron_txome_k31")
+  }
   # read in run_info.json log from each kallisto run 
   log <- fromJSON(file = file.path(kallisto_quants_dir, sample_file, 
                                  "bus", "run_info.json"))
@@ -175,10 +200,42 @@ for (sample in samples) {
 ```
 
 
+Let's also add in a column about sequencing technology 
+```{r}
+# add in library metadata for each sample  
+library_data_dir <- file.path(base_dir, 'sample-info')
+dir.create(library_data_dir, recursive = TRUE, showWarnings = FALSE)
+sample_info_dir_s3 <- 's3://ccdl-scpca-data/sample_info'
+
+# grab library metadata from location in s3
+sync_call <- paste('aws s3 sync', sample_info_dir_s3, library_data_dir,
+                   '--exclude "*"', 
+                   '--include "*scpca-library-metadata.tsv"')
+system(sync_call, ignore.stdout = TRUE)
+```
+
+```{r}
+# read in sample metadata
+library_df <- readr::read_tsv(file.path(library_data_dir, "scpca-library-metadata.tsv"))
+```
+
+```{r}
+# filter data frame with information that might be relevant for looking at these samples
+select_metadata_df <- library_df %>%
+  dplyr::select(scpca_run_id, scpca_sample_id, seq_unit, technology)
+```
+
+```{r}
+# make combined df with technology and seq unit 
+all_trace_comb <- all_trace %>%
+  left_join(select_metadata_df, by = c("sample_id" = "scpca_run_id"))
+```
+
+
 ```{r}
 # create a summary data frame that merges total time and memory for all steps
-summary_stats_df <- all_trace %>% 
-  group_by(Tool, sample_id) %>% 
+summary_stats_df <- all_trace_comb %>% 
+  group_by(Tool, seq_unit, sample_id, index_name) %>% 
   summarise(total_time = sum(total_time), 
             total_rss = sum(peak_rss), 
             Reads = mean(Reads))
@@ -188,22 +245,39 @@ summary_stats_df
 ## Time and Memory with Sample ID on x-axis
 
 ```{r}
-ggplot(summary_stats_df, aes(x = sample_id, y = total_time, color = Tool)) +
+ggplot(summary_stats_df %>%
+         dplyr::filter(seq_unit == "cell"), 
+       aes(x = sample_id, y = total_time, color = Tool)) +
   geom_point(size = 2) + 
   theme_classic() + 
   xlab("") +
-  ylab("Run Time (Minutes)")
+  ylab("Run Time (Minutes)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
+
+```{r}
+ggplot(summary_stats_df %>%
+         dplyr::filter(seq_unit == "nucleus"), 
+       aes(x = sample_id, y = total_time, color = Tool)) +
+  geom_point(size = 2) + 
+  theme_classic() + 
+  xlab("") +
+  ylab("Run Time (Minutes)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
 
 ```{r}
 # another way to visualize it if we want to group all the samples together
 summary_stats_df %>%
   mutate(Tool = fct_reorder(Tool, total_time, .fun = 'median')) %>%
-  ggplot(aes(x = reorder(Tool, total_time), y = total_time, fill = Tool)) + 
+  ggplot(aes(x = reorder(Tool, total_time), y = total_time)) + 
   geom_boxplot() + 
+  geom_jitter(mapping = aes(color = sample_id)) +
   theme_classic() +
   xlab("") +
-  ylab("Run Time (Minutes)")
+  ylab("Run Time (Minutes)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
 
@@ -212,18 +286,47 @@ ggplot(summary_stats_df, aes(x = sample_id, y = total_rss, color = Tool)) +
   geom_point(size = 2) + 
   theme_classic() + 
   xlab("") +
-  ylab("Memory (GB)")
+  ylab("Memory (GB)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
+```{r}
+# Just alevin tools to compare better across those 
+# run time
+alevin_tools = c("Alevin","Alevin-Fry", "Alevin-Fry-Unfiltered", "Alevin-Fry-Unfiltered-Sketch")
+
+ggplot(summary_stats_df %>%
+         dplyr::filter(Tool %in% alevin_tools), 
+       aes(x = sample_id, y = total_time, color = Tool)) +
+  geom_point(size = 2) + 
+  theme_classic() + 
+  xlab("") +
+  ylab("Run Time (Minutes)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r}
+ggplot(summary_stats_df %>%
+         dplyr::filter(Tool %in% alevin_tools), 
+       aes(x = sample_id, y = total_rss, color = Tool)) + 
+  geom_point(size = 2) + 
+  theme_classic() + 
+  xlab("") +
+  ylab("Memory (GB)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
 
 ```{r}
 # another way to visualize it if we want to group all the samples together
 summary_stats_df %>%
   mutate(Tool = fct_reorder(Tool, total_rss, .fun = 'median')) %>%
-  ggplot(aes(x = reorder(Tool, total_rss), y = total_rss, fill = Tool)) +
-  geom_boxplot() + 
+  ggplot(aes(x = reorder(Tool, total_rss), y = total_rss)) +
+  geom_violin() + 
+  geom_jitter(mapping = aes(color = Tool)) +
   theme_classic() +
   xlab("") +
-  ylab("Memory (GB)")
+  ylab("Memory (GB)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
 
 
@@ -248,8 +351,17 @@ and/or memory usage.
 ```{r}
 # run time vs. # of fastq reads
 ggplot(summary_stats_df, aes(x = Reads, y = total_time, color = Tool)) +
-  geom_point(size = 2) + 
-  geom_line() +
+  geom_point(size = 2, mapping = aes(shape = sample_id)) + 
+  theme_classic() + 
+  xlab("Number of Reads") +
+  ylab("Run Time (Minutes)")
+```
+```{r}
+# remove cellranger and look at the rest of the tools 
+ggplot(summary_stats_df %>%
+         dplyr::filter(Tool != "Cellranger"), 
+       aes(x = Reads, y = total_time, color = Tool)) +
+  geom_point(size = 2, mapping = aes(shape = sample_id)) + 
   theme_classic() + 
   xlab("Number of Reads") +
   ylab("Run Time (Minutes)")
@@ -258,12 +370,21 @@ ggplot(summary_stats_df, aes(x = Reads, y = total_time, color = Tool)) +
 
 ```{r}
 ggplot(summary_stats_df, aes(x = Reads, y = total_rss, color = Tool)) + 
-  geom_point(size = 2) + 
-  geom_line() +
+  geom_point(size = 2, mapping = aes(shape = sample_id)) + 
   theme_classic() + 
   xlab("Number of Reads") +
   ylab("Memory (GB)")
 ```
+```{r}
+ggplot(summary_stats_df %>%
+         dplyr::filter(Tool != "Kallisto"),
+       aes(x = Reads, y = total_rss, color = Tool)) + 
+  geom_point(size = 2, mapping = aes(shape = sample_id)) + 
+  theme_classic() + 
+  xlab("Number of Reads") +
+  ylab("Memory (GB)")
+```
+
 
 From this, it looks like there is no effect on the number of reads found in 
 the fastq files to the memory that is required for any of the processes, except
