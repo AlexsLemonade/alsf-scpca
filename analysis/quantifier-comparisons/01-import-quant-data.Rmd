@@ -251,12 +251,8 @@ collapse_intron_counts <- function(counts, intron_metadata) {
 ```{r}
 # collapse intron counts for only counts matrices containing intron regions
 alevin_nucleus_sces <- alevin_sces[grep("spliced_intron", names(alevin_sces))] %>%
-  purrr::map(
-    ~ counts(.x)
-  ) %>%
-  purrr::map(
-    ~ collapse_intron_counts(.x)
-  ) %>%
+  purrr::map(counts) %>%
+  purrr::map(collapse_intron_counts, intron_metadata) %>%
   purrr::map(
     ~ SingleCellExperiment(list(counts = .x))
   )
