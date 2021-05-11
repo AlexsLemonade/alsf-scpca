@@ -258,8 +258,7 @@ alevin_nucleus_sces <- alevin_sces[grep("spliced_intron", names(alevin_sces))] %
   )
 
 # replace the sces in the original list with the collapsed sces
-alevin_sces[which(names(alevin_sces) %in% names(alevin_nucleus_sces))] <- 
-  alevin_nucleus_sces
+alevin_sces[names(alevin_nucleus_sces)] <- alevin_nucleus_sces
 ```
 
 
