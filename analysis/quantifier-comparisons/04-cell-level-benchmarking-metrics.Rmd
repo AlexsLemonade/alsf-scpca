@@ -57,6 +57,10 @@ quant_info <- readr::read_tsv(quant_info_file)
 quant_info[which(quant_info$alevin_alignment == "sketch" & quant_info$alevin_permit_list != "unfiltered"),"tool"] <- "alevin_fry_sketch"
 quant_info[which(quant_info$alevin_alignment == "salign" & quant_info$alevin_permit_list == "unfiltered"), "tool"] <- "alevin_fry_unfiltered"
 quant_info[which(quant_info$alevin_alignment == "sketch" & quant_info$alevin_permit_list == "unfiltered"), "tool"] <- "alevin_fry_unfiltered_sketch"
+
+# save changes to quant file
+quant_info_file_update <- file.path(import_dir, 'quant_info_update.tsv')
+readr::write_tsv(quant_info, file.path(quant_info_file_update))
 ```
 
 
@@ -266,11 +270,12 @@ cell_qc_filter %>%
   theme_classic() + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   ylab("UMI/cell") + 
-  xlab("")
+  xlab("") + 
+  coord_cartesian(ylim = c(0,10000))
 ```
 In general, it looks like SCPCR000118 has lower coverage than 119. 
-Cellranger and Kallisto (with the pre mRNA index) actually seem to be have the highest UMIs/cell. 
-In general, there is quite low coverage so it is hard to make a lot of big conclusions here. 
+Cellranger, Kallisto, and alevin-fry-unfiltered-sketch (with the pre mRNA index) actually seem to be have the highest UMIs/cell. 
+
 
 ```{r fig.height = 5, fig.width=10}
 # single cell samples only 
@@ -299,11 +304,13 @@ cell_qc_filter %>%
   facet_grid(sample ~ index_type) + 
   theme_classic() + 
   ylab("Genes Detected/Cell") +
-  theme(axis.ticks.x = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylim(c(0,6000))
 ```
 Here, we see a bit more variation in genes/cell for the single nucleus samples than we did with the UMI/cell. 
 It looks like kallisto and alevin-fry `--unfiltered-pl` with the `--sketch` mode looks comparable to cellranger. 
-Kallisto is on the higher end, but is consistently capturing information. 
+Kallisto is on the higher end, but is consistently capturing more genes. 
+Alevin is showing a lot of variability in 119, but not 118. 
 
 ```{r fig.height=5, fig.width = 10}
 # single cell samples only 
@@ -399,14 +406,15 @@ ggplot(nucleus_qc_common, aes(x = tool, y = sum, fill = tool)) +
   theme_classic() + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   ylab("UMI/cell") + 
-  xlab("")
+  xlab("") + 
+  ylim(c(0,20000))
 ```
 Interestingly, when we look at shared cells only, we see an increase in coverage across the board. 
 One thing to note, is that there is a drop off in number of shared cells from those found in 11 tools (~4000) to those found in 13 (~120).
 
 Alevin-fry `--sketch` looks similar to cellranger. 
 Alevin-fry `--unfiltered-pl` is also similar to cellranger and closer to kallisto having higher UMI/cell. 
-In general, we see increased coverage using the pre mRNA index. 
+In general, we see increased coverage using the pre mRNA index across all tools.
 
 What about the single cell samples? 
 
@@ -455,6 +463,8 @@ ggplot(cell_only_qc_common, aes(x = tool, y = detected, fill = tool)) +
 ```
 Generally, the coverage is still quite uniform. 
 However, it looks like cellranger has one of the lowest genes/cell means with alevin-fry `--sketch` and alevin-fry `--unfiltered` the highest. 
+
+### Shared Cell QC, Minimum Gene Coverage > 5
 
 Let's do the same thing, but only look at genes above a certain threshold.
 Is alevin-fry still giving us the highest genes/cell across shared cells in single cell and kallisto/alevin-fry-unfiltered-sketch the highest in single nucleus?
@@ -607,7 +617,8 @@ nucleus_qc_common_thresh_5 <- nucleus_qc_thresh_5 %>%
   theme_classic() + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   ylab("Genes/cell") + 
-  xlab("")
+  xlab("") + 
+  ylim(c(0,1500))
 ```
 When we remove lowly covered genes in the single nuclei samples, the increased genes/cell seen in alevin-fry sketch-unfiltered over cellranger is still apparent. 
 We also see kallisto with the pre mRNA index has the highest genes/cell in 119 only, but is not consistent. 
