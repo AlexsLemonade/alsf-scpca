@@ -187,7 +187,6 @@ readr::write_tsv(quant_info, quant_info_file )
 quant_info
 ```
 
-
 ```{r}
 annotation_data_dir <- file.path(base_dir, 'annotation')
 dir.create(annotation_data_dir, recursive = TRUE, showWarnings = FALSE)
@@ -212,26 +211,10 @@ head(intron_metadata)
 
 ## Process quantification files
 
-### Alevin
+To process the alevin, alevin-fry and kallisto quantification files, we need to import the counts matrices, subset the counts matrices for the snRNA-seq samples to make a collapsed counts matrix, and then convert to a single cell experiment. 
 
-Use tximport to make SCEs
-
-```{r}
-alevin_quant_ids <- quant_info %>%
-  dplyr::filter(tool == "alevin") %>%
-  dplyr::pull(quant_dir)
-
-alevin_sces <- alevin_quant_ids  %>%
-  purrr::map(
-    ~ tximport(file.path(alevin_data_dir, .x, "alevin", "quants_mat.gz"),
-               type = "alevin")) %>%
-  purrr::map(
-    ~ SingleCellExperiment(list(counts = .x$counts))) 
-
-# add names
-names(alevin_sces) <- alevin_quant_ids
-```
-
+Since we are going to be doing this quite a few times, we can write a function to do that. 
+I also have two separate functions, one to collapse intron counts, and one to specifically read in kallisto .mtx files that are going to be used within the larger import function that we want to fun first. 
 
 ```{r}
 # for every combination of mrna + intronic region create a collapsed counts matrix that contains the sum of the total counts for that gene (mrna + intron)
@@ -244,22 +227,71 @@ collapse_intron_counts <- function(counts, intron_metadata) {
   # aggregate Matrix counts by gene name 
   aggregate.Matrix(counts, row.names(counts))
 }
+```
 
+```{r}
+read_kallisto_counts <- function(base) {
+  counts <- Matrix::readMM(paste0(base,".mtx"))%>%
+    t() %>% # transpose to gene x cell orientation
+    as("dgCMatrix") # compress sparse matrix
+  dimnames(counts) <- list(readLines(paste0(base,".", "genes.txt")),
+                           readLines(paste0(base,".barcodes.txt")))
+  return(counts)
+}
 ```
 
 
 ```{r}
-# collapse intron counts for only counts matrices containing intron regions
-alevin_nucleus_sces <- alevin_sces[grep("spliced_intron", names(alevin_sces))] %>%
-  purrr::map(counts) %>%
-  purrr::map(collapse_intron_counts, intron_metadata) %>%
-  purrr::map(
-    ~ SingleCellExperiment(list(counts = .x))
-  )
+import_quant_data <- function(quant_ids, tool = tool, data_dir, intron_metadata) {
+  # if tool is kallisto, then read in using the read_kallisto_counts
+  if(tool == "kallisto") {
+    base_file <- file.path(data_dir, quant_ids, "counts", "gene_count")
+    counts_list <- base_file %>%
+      purrr::map(read_kallisto_counts)
+  # otherwise read in directly using tximport
+  # we are only using this for alevin or kallisto based tools, so I did hardcode it for alevin in tximport
+  } else {
+    counts_list <- quant_ids %>%
+      purrr::map(
+        ~ tximport(file.path(data_dir, .x, "alevin", "quants_mat.gz"),
+               type = "alevin")) %>%
+      purrr::map(~ SingleCellExperiment(list(counts = .x$counts))) %>%
+      purrr::map(counts)
+  }
+  # once we have a list of counts matrices we want to take any that were aligned to the spliced_intron index and collapse the counts
+  names(counts_list) <- quant_ids
+  counts_list_nuclei <- counts_list[grep("spliced_intron", names(counts_list))] %>%
+    purrr::map(
+      ~ collapse_intron_counts(.x, intron_metadata)
+      )
 
-# replace the sces in the original list with the collapsed sces
-alevin_sces[names(alevin_nucleus_sces)] <- alevin_nucleus_sces
+  # replace the sces in the original list with the collapsed sces
+  counts_list[names(counts_list_nuclei)] <- counts_list_nuclei
+
+  # convert counts list to sces and return 
+  sces <- counts_list %>%
+    purrr::map(~ SingleCellExperiment(list(counts = .x)))
+  return(sces)
+    
+}
+
 ```
+
+
+### Alevin
+
+```{r}
+# for each alevin configuration we need to get the quant ids that will be input to import_quant_data
+alevin_quant_ids <- quant_info %>%
+  dplyr::filter(tool == "alevin") %>%
+  dplyr::pull(quant_dir)
+
+alevin_sces <- import_quant_data(quant_ids = alevin_quant_ids, 
+                                 tool = "alevin",
+                                 data_dir = alevin_data_dir, 
+                                 intron_metadata = intron_metadata)
+```
+
 
 
 ```{r}
@@ -268,34 +300,12 @@ alevin_fry_quant_ids <- quant_info %>%
   dplyr::filter(tool == "alevin_fry" & alevin_permit_list != "unfiltered" & alevin_alignment == "salign") %>%
   dplyr::pull(quant_dir)
 
-alevin_fry_sces <- alevin_fry_quant_ids  %>%
-  purrr::map(
-    ~ tximport(file.path(alevin_fry_data_dir, .x, "alevin", "quants_mat.gz"),
-               type = "alevin")) %>%
-  purrr::map(
-    ~ SingleCellExperiment(list(counts = .x$counts))) 
-
-# add names
-names(alevin_fry_sces) <- alevin_fry_quant_ids
+alevin_fry_sces <- import_quant_data(quant_ids = alevin_fry_quant_ids, 
+                                 tool = "alevin_fry",
+                                 data_dir = alevin_fry_data_dir, 
+                                 intron_metadata = intron_metadata)
 ```
 
-```{r}
-# collapse intron counts for only counts matrices containing intron regions
-alevin_fry_nucleus_sces <- alevin_fry_sces[grep("spliced_intron", names(alevin_fry_sces))] %>%
-  purrr::map(
-    ~ counts(.x)
-  ) %>%
-  purrr::map(
-    ~ collapse_intron_counts(.x)
-  ) %>%
-  purrr::map(
-    ~ SingleCellExperiment(list(counts = .x))
-  )
-
-# replace the sces in the original list with the collapsed sces
-alevin_fry_sces[which(names(alevin_fry_sces) %in% names(alevin_fry_nucleus_sces))] <- 
-  alevin_fry_nucleus_sces
-```
 
 
 ```{r}
@@ -304,34 +314,12 @@ alevin_fry_sketch_quant_ids <- quant_info %>%
   dplyr::filter(tool == "alevin_fry" & alevin_permit_list != "unfiltered" & alevin_alignment == "sketch") %>%
   dplyr::pull(quant_dir)
 
-alevin_fry_sketch_sces <- alevin_fry_sketch_quant_ids  %>%
-  purrr::map(
-    ~ tximport(file.path(alevin_fry_data_dir, .x, "alevin", "quants_mat.gz"),
-               type = "alevin")) %>%
-  purrr::map(
-    ~ SingleCellExperiment(list(counts = .x$counts))) 
-
-# add names
-names(alevin_fry_sketch_sces) <- alevin_fry_sketch_quant_ids
+alevin_fry_sketch_sces <- import_quant_data(quant_ids = alevin_fry_sketch_quant_ids, 
+                                 tool = "alevin_fry",
+                                 data_dir = alevin_fry_data_dir, 
+                                 intron_metadata = intron_metadata)
 ```
 
-```{r}
-# collapse intron counts for only counts matrices containing intron regions
-alevin_fry_sketch_nucleus_sces <- alevin_fry_sketch_sces[grep("spliced_intron", names(alevin_fry_sketch_sces))] %>%
-  purrr::map(
-    ~ counts(.x)
-  ) %>%
-  purrr::map(
-    ~ collapse_intron_counts(.x)
-  ) %>%
-  purrr::map(
-    ~ SingleCellExperiment(list(counts = .x))
-  )
-
-# replace the sces in the original list with the collapsed sces
-alevin_fry_sketch_sces[which(names(alevin_fry_sketch_sces) %in% names(alevin_fry_sketch_nucleus_sces))] <- 
-  alevin_fry_sketch_nucleus_sces
-```
 
 When we read in the counts data that has been processed with alevin-fry using the --unfiltered flag rather than using --knee-distance, all cells that are identified in the 10X whitelist are output. 
 This means that we are going to have cells that are not considered 'true' cells and we need to filter them out before doing any comparisons across the tools. 
@@ -364,38 +352,16 @@ alevin_fry_unfiltered_quant_ids <- quant_info %>%
   dplyr::filter(tool == "alevin_fry" & alevin_permit_list == "unfiltered" & alevin_alignment == "salign") %>%
   dplyr::pull(quant_dir)
 
-alevin_fry_unfiltered_sces <- alevin_fry_unfiltered_quant_ids  %>%
-  purrr::map(
-    ~ tximport(file.path(alevin_fry_data_dir, .x, "alevin", "quants_mat.gz"),
-               type = "alevin")) %>%
-  purrr::map(
-    ~ SingleCellExperiment(list(counts = .x$counts)))
-
-# add names
-names(alevin_fry_unfiltered_sces) <- alevin_fry_unfiltered_quant_ids
-```
-
-
-```{r}
-alevin_fry_unfiltered_nucleus_sces <- alevin_fry_unfiltered_sces[grep("spliced_intron", names(alevin_fry_unfiltered_sces))] %>%
-  purrr::map(
-    ~ counts(.x)
-  ) %>%
-  purrr::map(
-    ~ collapse_intron_counts(.x)
-  ) %>%
-  purrr::map(
-    ~ SingleCellExperiment(list(counts = .x))
-  )
-
-# replace the sces in the original list with the collapsed sces
-alevin_fry_unfiltered_sces[which(names(alevin_fry_unfiltered_sces) %in% names(alevin_fry_unfiltered_nucleus_sces))] <- 
-  alevin_fry_unfiltered_nucleus_sces
-
+alevin_fry_unfiltered_sces <- import_quant_data(quant_ids = alevin_fry_unfiltered_quant_ids, 
+                                 tool = "alevin_fry",
+                                 data_dir = alevin_fry_data_dir, 
+                                 intron_metadata = intron_metadata)
 
 ## for now remove alevin_fry_unfiltered_nucleus_sces because they are empty runs and giving empty matrices... 
-alevin_fry_unfiltered_sces <- alevin_fry_unfiltered_sces[-which(names(alevin_fry_unfiltered_sces) %in% names(alevin_fry_unfiltered_nucleus_sces))]
+nucleus_ids <- grep("spliced_intron", names(alevin_fry_unfiltered_sces))
+alevin_fry_unfiltered_sces <- alevin_fry_unfiltered_sces[-nucleus_ids]
 ```
+
 
 ```{r}
 # cell filtering 
@@ -415,32 +381,10 @@ alevin_fry_unfiltered_sketch_quant_ids <- quant_info %>%
   dplyr::filter(tool == "alevin_fry" & alevin_permit_list == "unfiltered" & alevin_alignment == "sketch") %>%
   dplyr::pull(quant_dir)
 
-alevin_fry_unfiltered_sketch_sces <- alevin_fry_unfiltered_sketch_quant_ids  %>%
-  purrr::map(
-    ~ tximport(file.path(alevin_fry_data_dir, .x, "alevin", "quants_mat.gz"),
-               type = "alevin")) %>%
-  purrr::map(
-    ~ SingleCellExperiment(list(counts = .x$counts))) 
-
-# add names
-names(alevin_fry_unfiltered_sketch_sces) <- alevin_fry_unfiltered_sketch_quant_ids
-```
-
-```{r}
-alevin_fry_unfiltered_sketch_nucleus_sces <- alevin_fry_unfiltered_sketch_sces[grep("spliced_intron", names(alevin_fry_unfiltered_sketch_sces))] %>%
-  purrr::map(
-    ~ counts(.x)
-  ) %>%
-  purrr::map(
-    ~ collapse_intron_counts(.x)
-  ) %>%
-  purrr::map(
-    ~ SingleCellExperiment(list(counts = .x))
-  )
-
-# replace the sces in the original list with the collapsed sces
-alevin_fry_unfiltered_sketch_sces[which(names(alevin_fry_unfiltered_sketch_sces) %in% names(alevin_fry_unfiltered_sketch_nucleus_sces))] <- 
-  alevin_fry_unfiltered_sketch_nucleus_sces
+alevin_fry_unfiltered_sketch_sces <- import_quant_data(quant_ids = alevin_fry_unfiltered_sketch_quant_ids, 
+                                 tool = "alevin_fry",
+                                 data_dir = alevin_fry_data_dir, 
+                                 intron_metadata = intron_metadata)
 ```
 
 
@@ -451,68 +395,28 @@ alevin_fry_unfiltered_sketch_sces <- alevin_fry_unfiltered_sketch_sces %>%
     ~ filter_counts_mtx(.x)) %>%
   purrr::map(
     ~ SingleCellExperiment(list(counts = .x)))
-
-alevin_fry_unfiltered_sketch_sces
 ```
 
 
 ### Kallisto
 
-Get file basenames (no extension) for import
+Process Kallisto files in a similar way to Alevin --unfiltered by importing the .mtx file as a sparse matrix, collapsing the intron counts, and then performing cell filtering using `DropletUtils::emptyDrops`
 
 ```{r}
 kallisto_quant_ids <- quant_info %>%
   dplyr::filter(tool == "kallisto") %>%
   dplyr::pull(quant_dir)
 
-base_file <- file.path(kallisto_data_dir, kallisto_quant_ids, "counts", "gene_count")
+kallisto_sces <- import_quant_data(quant_ids = kallisto_quant_ids, 
+                                 tool = "kallisto",
+                                 data_dir = kallisto_data_dir, 
+                                 intron_metadata = intron_metadata) %>%
+  purrr::map(
+    ~ filter_counts_mtx(.x)) %>%
+  purrr::map(
+    ~ SingleCellExperiment(list(counts = .x)))
 ```
 
-#### Function for reading Kallisto files
-
-Takes a base file name and reads the the `.mtx` file and associated `.barcodes.txt` and `.genes.txt` files.  
-
-Optionally filters cells/barcodes using `DropletUtils::barcodeRanks()` (set `cellfilter = "knee"`).
-
-This filtering is based on plotting the total UMI count for each barcode against the rank order of those cells by UMI count.
-The point where the UMI count starts to fall rapidly (in log space) relative to the rank change between barcodes is assumed to be a transition point indicating the change from barcodes that capture healthy cells to empty droplets or those only containing only dead cells (see [Lun 2020](https://bioconductor.org/packages/release/bioc/vignettes/DropletUtils/inst/doc/DropletUtils.html#computing-barcode-ranks)).
-By finding the "knee" in this plot and keeping only the barcodes with UMI counts greater than this point, we can enrich for healthy cells.
-Both Alevin and Cell Ranger perform more complicated filtering as part of their default workflows, but the bulk of the included barcodes in those cases will still have UMI counts that fall above the "knee" threshold.
-
-If filtering is not performed, these objects are quite large, as Kallisto seems to do no filtering for empty cells.
-
-
-```{r}
-read_kallisto_counts <- function(base, cellfilter = c("knee", "none")){
-  cellfilter <- match.arg(cellfilter)
-  counts <- Matrix::readMM(paste0(base,".mtx"))%>%
-    t() %>% # transpose to gene x cell orientation
-    as("dgCMatrix") # compress sparse matrix
-  dimnames(counts) <- list(readLines(paste0(base,".", "genes.txt")),
-                           readLines(paste0(base,".barcodes.txt")))
-  if(cellfilter == "knee"){
-    # calculate barcode ranks by UMI count
-    # and find the "knee" threshold in the rank by UMI count plot
-    rank_df <- DropletUtils::barcodeRanks(counts)
-    # filter to cells with UMI counts (rank_df$total) greater than the knee threshold
-    cells <- which(rank_df$total >= metadata(rank_df)$knee)
-    counts <- counts[, cells]
-  }
-  return(counts)
-}
-```
-
-Make a list of kallisto runs as SCEs
-
-```{r}
-kallisto_sces <- base_file %>%
-  purrr::map(read_kallisto_counts) %>%
-  purrr::map(~ collapse_intron_counts(.x)) %>%
-  purrr::map(~ SingleCellExperiment(list(counts = .x))) 
-
-# add names
-names(kallisto_sces) <- kallisto_quant_ids
-```
 
 ### Cellranger
 
