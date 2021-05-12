@@ -1,7 +1,23 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "Pre Processing Per Gene Metrics Benchmarking"
+author: "Ally Hawkins for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
 ---
+
+This notebook is a follow up to analysis done in `04-cell-level-benchmarking-metrics.Rmd` to look at benchmarking metrics at a per gene level. 
+There are 4 single cell RNA seq samples (SCPCR000003, SCPCR000006, SCPCR000126, and SCPCR000127) and 2 single nuclei RNA seq samples (SCPCR000118 and SCPCR000119) that have been used. 
+We are also using four tools, cellranger, alevin, alevin-fry, and kallisto. 
+Additionally, alevin-fry has been run with or without `--sketch` and/or `--unfiltered-pl`.
+The 2 single nuclei RNA-seq samples were run with both a cDNA and pre-mRNA index. 
+
+Here, we are looking at the gene metrics across each tool in comparison to cellranger, as we are interested in finding tools that are comparable to cellranger. 
+We will look at correlation of mean gene expression and percent of cells each gene is detected in between each tool and cellranger. 
+We also will look at the overlap of genes identified with cellranger. 
+The goal of this notebook is to identify any outliers in quantification at the gene level. 
+
 
 ### Load Libraries for import
 
@@ -140,6 +156,8 @@ feature_qc_common <- feature_qc %>%
 
 ## Correlations between mean expression of genes
 
+First, we will start by looking at the correlation of mean expression of genes shared between each tool and cellranger. 
+
 ```{r}
 # spread table for comparisons
 cell_feature_qc_common_cor <- feature_qc_common %>%
@@ -197,6 +215,7 @@ nucleus_feature_qc_common_cor %>%
   )
 ```
 Here, it looks like alevin-fry, alevin-fry-sketch, and alevin-fry-unfiltered-sketch all have fairly high values. 
+Alevin-fry-unfiltered was only run with the cDNA index which is probably why it has such a low correlation. 
 
 ```{r}
 ggplot(nucleus_feature_qc_common_cor, aes(x = `cellranger_pre-mRNA`, y = `alevin_fry_unfiltered_sketch_pre-mRNA`)) +
@@ -206,6 +225,8 @@ ggplot(nucleus_feature_qc_common_cor, aes(x = `cellranger_pre-mRNA`, y = `alevin
   scale_y_log10() + 
   theme_classic()
 ```
+There appears to be a lot more variation in the single nuclei samples than in the single cell samples, even with high correlation.
+
 ## Correlation of Percentage of Cells gene is detected in 
 
 ```{r}
@@ -239,16 +260,28 @@ cell_detected_qc_common_cor %>%
     cr_ka_cor = cor(cellranger, kallisto, method = "spearman")
   )
 ```
+Again, these values are fairly high. It actually looks like kallisto may have the highest correlation here? 
 
 ```{r}
-ggplot(cell_detected_qc_common_cor, aes(x = cellranger, y = alevin_fry)) +
+ggplot(cell_detected_qc_common_cor, aes(x = cellranger, y = kallisto)) +
   geom_point(size = 0.5, alpha = 0.1) + 
   facet_wrap(~ sample) + 
   scale_x_log10() + 
   scale_y_log10() + 
   theme_classic()
 ```
+You can see that in SCPCR000006, where kallisto had the lowest correlation, there is increased variance. 
 
+```{r}
+ggplot(cell_detected_qc_common_cor, aes(x = cellranger, y = alevin)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  theme_classic()
+```
+Alevin doesn't look as correlated as kallisto does here, at least for 126 and 127. 
+We see almost a second group that has higher coverage in cellranger and is off the main diagonal.
 
 ```{r}
 nucleus_detected_qc_common_cor %>% 
@@ -279,8 +312,13 @@ ggplot(nucleus_feature_qc_common_cor, aes(x = `cellranger_pre-mRNA`, y = `alevin
   scale_y_log10() + 
   theme_classic()
 ```
+Here we see differences between alevin and alevin-fry-unfiltered-sketch in terms of correlation. 
+There is quite a bit of variance in the lower covered genes. 
 
 ## Look at features of genes that don't overlap with Cellranger
+
+Now that we have looked at the genes that overlap with those identified in cellranger, what about the genes that don't overlap with cellranger? 
+First, how many of the genes identified are not also found in cellranger, and of those not found, do they account for a large percentage of the gene expression? 
 
 ```{r}
 # pull out cellranger only genes 
@@ -316,8 +354,7 @@ It does look like the snRNA-seq samples have lower overlap, but it looks like it
 Although, in 118, even some of the pre-mRNA runs are quite low especially with alevin-fry-sketch.
 
 
-What about the genes that don't overlap? 
-Are they highly expressed? 
+Are the genes that don't overlap highly expressed?
 
 ```{r fig.height = 10, fig.width = 10}
 # mean gene expression of genes overlapping and non overlapping with cellranger
@@ -347,10 +384,14 @@ This difference seems more sample specific, with the higher difference being fou
 
 All in all, these plots tell us a little about what else is identified in each of the tools, but we would need to dig more into the actual types of genes to see if maybe there was specific enrichment of certain genes based on each tool. 
 
+In conclusion, most of the tools have high correlation with cellranger, especially in looking at the single-cell data. 
+It does appear that consistently alevin-fry has higher correlations with cellranger.
 
+## Session Info
 
-
-
+```{r}
+sessioninfo::session_info()
+```
 
 
 
