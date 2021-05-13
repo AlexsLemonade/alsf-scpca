@@ -1,0 +1,731 @@
+---
+title: "Pre Processing Metrics Benchmarking"
+author: "Ally Hawkins for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+This notebook is a follow up notebook to previous benchmarking done in `02-compare-quants.RMD`. 
+Here, we have used the most recent release of [Salmon](https://github.com/COMBINE-lab/salmon/releases/tag/v1.4.0) and [Cellranger 6.0.0](https://support.10xgenomics.com/single-cell-gene-expression/software/pipelines/latest/release-notes), and included the new [Alevin-Fry](https://alevin-fry.readthedocs.io/en/latest/getting_started.html) method. 
+Alevin-Fry can use either a selective alignment strategy or pseudoalignment strategy (with the `--sketch` flag),so here we are testing both strategies. 
+Alevin-Fry also can use the 10X whitelist for barcode assignment rather than generating the putative whitelist using the `--unfiltered-pl` flag, so we have also included that in our tests.
+
+The resolution currently used for Alevin-Fry is the Full resolution. See the documentation for more information on different options for resolution that could be used. 
+
+The goal of this notebook is to compare the quantification performed by each tool across the samples we have currently run. 
+Thus far, we have 4 10Xv3 single cell RNA-seq samples that have been run on all tools, SCPCR000003, SCPCR000006, SCPCR000126, and SCPCR000127. 
+We also have 2 10Xv3.1 single nucleus RNA-seq samples that have been run on all tools, SCPCR000118 and SCPCR000119.
+All the snRNA-seq samples have been run using either the pre-mRNA index or the mRNA index. 
+One thing to note is that the new spliced index is different from the previously used index's with the single cell RNA seq samples in that it was created by grabbing the genomic regions corresponding to spliced cDNA only from the ensembl gtf, rather than taking the cDNA.fasta directly from ensembl. 
+
+## Setup 
+
+### Load Libraries for import
+
+```{r setup}
+library(tidyverse)
+library(ggplot2)
+library(SingleCellExperiment)
+library(ggforce)
+```
+
+### File and Directory Setup
+
+```{r}
+# where all the data lives after running 01-import-quant-data.Rmd
+import_dir <- file.path('data')
+
+quant_info_file <- file.path(import_dir, 'quant_info.tsv')
+
+alevin_rds <- file.path(import_dir, 'alevin_sces.rds')
+alevin_fry_rds <- file.path(import_dir, 'alevin_fry_sces.rds')
+alevin_fry_sketch_rds <- file.path(import_dir, 'alevin_fry_sketch_sces.rds')
+alevin_fry_unfiltered_rds <- file.path(import_dir, 'alevin_fry_unfiltered_sces.rds')
+alevin_fry_unfiltered_sketch_rds <- file.path(import_dir, 'alevin_fry_unfiltered_sketch_sces.rds')
+kallisto_rds <- file.path(import_dir, 'kallisto_sces.rds')
+cellranger_rds <- file.path(import_dir, 'cellranger_sces.rds')
+```
+
+
+```{r}
+# read in quant info file created in 01-import-quant-data.Rmd
+quant_info <- readr::read_tsv(quant_info_file)
+
+# make sure that the tool is labeled as alevin_fry_sketch/ unfiltered to distinguish from regular alevin_fry for later
+quant_info[which(quant_info$alevin_alignment == "sketch" & quant_info$alevin_permit_list != "unfiltered"),"tool"] <- "alevin_fry_sketch"
+quant_info[which(quant_info$alevin_alignment == "salign" & quant_info$alevin_permit_list == "unfiltered"), "tool"] <- "alevin_fry_unfiltered"
+quant_info[which(quant_info$alevin_alignment == "sketch" & quant_info$alevin_permit_list == "unfiltered"), "tool"] <- "alevin_fry_unfiltered_sketch"
+
+# save changes to quant file
+quant_info_file_update <- file.path(import_dir, 'quant_info_update.tsv')
+readr::write_tsv(quant_info, file.path(quant_info_file_update))
+```
+
+
+```{r}
+# Each RDS file contains a SingleCellExperiment
+alevin_sces <- readr::read_rds(alevin_rds)
+alevin_fry_sces <- readr::read_rds(alevin_fry_rds)
+alevin_fry_sketch_sces <- readr::read_rds(alevin_fry_sketch_rds)
+alevin_fry_unfiltered_sces <- readr::read_rds(alevin_fry_unfiltered_rds)
+alevin_fry_unfiltered_sketch_sces <- readr::read_rds(alevin_fry_unfiltered_sketch_rds)
+kallisto_sces <- readr::read_rds(kallisto_rds)
+cellranger_sces <- readr::read_rds(cellranger_rds)
+```
+
+
+```{r}
+## get all annotation data from S3
+annotation_dir <- file.path(import_dir, "annotation")
+
+## get mitochondrial gene list from s3
+annotation_files_s3 <- 
+  's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100/annotation/'
+
+sync_call <- paste('aws s3 sync', annotation_files_s3, annotation_dir)
+system(sync_call, ignore.stdout = TRUE)
+```
+
+```{r}
+mito_file <- file.path(annotation_dir, "Homo_sapiens.ensembl.100.mitogenes.txt")
+
+mito_genes <- readr::read_tsv(mito_file, col_names = "gene_id")
+mito_genes <- mito_genes %>%
+  pull(gene_id)
+```
+
+
+## Add QC Metrics
+
+```{r}
+addPerCellQC_mito <- function(sce, mito = mito_genes){
+  # add per cell QC with mitochondrial genes separately for later comparisons
+  scater::addPerCellQC(
+    sce, 
+    subsets = list(mito = mito[mito %in% rownames(sce)])
+  )
+}
+```
+
+```{r}
+alevin_sces <- alevin_sces %>% 
+  purrr::map(addPerCellQC_mito)
+
+alevin_fry_sces <- alevin_fry_sces %>%
+  purrr::map(addPerCellQC_mito)
+
+alevin_fry_sketch_sces <- alevin_fry_sketch_sces %>%
+  purrr::map(addPerCellQC_mito)
+
+alevin_fry_unfiltered_sces <- alevin_fry_unfiltered_sces %>%
+  purrr::map(addPerCellQC_mito)
+
+alevin_fry_unfiltered_sketch_sces <- alevin_fry_unfiltered_sketch_sces %>%
+  purrr::map(addPerCellQC_mito)
+
+kallisto_sces <- kallisto_sces %>% 
+  purrr::map(addPerCellQC_mito)
+
+cellranger_sces <- cellranger_sces %>% 
+  purrr::map(addPerCellQC_mito)
+
+```
+
+
+```{r}
+## merge all QC output into one data frame to work with for plotting comparisons
+celldata_to_df <- function(sce){
+  # extract the column (cell) summary data from a SCE, 
+  # convert to data frame and move cell id to a column
+  as.data.frame(colData(sce)) %>%
+  tibble::rownames_to_column(var = "cell_id") %>%
+    # add a column to get # of cells detected in that sample
+    mutate(cells_detected = ncol(sce))
+}
+
+alevin_cell_qc <- alevin_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+
+alevin_fry_cell_qc <- alevin_fry_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+
+alevin_fry_sketch_cell_qc <- alevin_fry_sketch_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+
+alevin_fry_unfiltered_cell_qc <- alevin_fry_unfiltered_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+
+alevin_fry_unfiltered_sketch_cell_qc <- alevin_fry_unfiltered_sketch_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+
+kallisto_cell_qc <- kallisto_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+
+cellranger_cell_qc <- cellranger_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+
+# combine all the data frames into one
+cell_qc <- dplyr::bind_rows(
+  alevin = alevin_cell_qc,
+  alevin_fry = alevin_fry_cell_qc,
+  alevin_fry_sketch = alevin_fry_sketch_cell_qc,
+  alevin_fry_unfiltered = alevin_fry_unfiltered_cell_qc,
+  alevin_fry_unfiltered_sketch = alevin_fry_unfiltered_sketch_cell_qc,
+  kallisto = kallisto_cell_qc,
+  cellranger = cellranger_cell_qc,
+  .id = "tool"
+) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir")) %>%
+  # remove extraneous run from 119 with txome index since we have the run with the spliced index
+  dplyr::filter(quant_id != "SCPCR000119-txome_k31") %>%
+  # remove duplicate runs of alevin-fry --knee on 118, 119
+  dplyr::filter(quant_id !="SCPCR000118-spliced_intron_txome_k31-salign") %>%
+  dplyr::filter(quant_id != "SCPCR000119-spliced_intron_txome_k31-salign")
+                  
+```
+
+
+## Comparison of QC Metrics across all tools
+
+### Per Cell QC
+
+Let's first start by taking a look at some general information across all of our tools and how consistent each of these metrics is for all four of the samples. Here are the metrics we want to look at: 
+
+  * Total number of cells detected
+  * Mitochondrial content/ cell
+  * Number of UMIs/cell
+  * Number of Genes/cell 
+
+
+```{r}
+## make new data frame with mean of cells detected and standard dev
+cells_detected_stats <- cell_qc %>%
+  group_by(sample, tool) %>%
+  summarise(cells_detected = mean(cells_detected))
+cells_detected_stats
+
+## first look at cells detected
+ggplot(cells_detected_stats, aes(x = tool, y = cells_detected)) +
+  geom_jitter(mapping = aes(color = sample)) +
+  geom_violin() +
+  theme_classic() +
+  ylab("Total Cells Detected") + 
+  xlab("") + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+Based on this, it looks like alevin-fry using the `--knee-distance` does not handle single-nuclei samples well. 
+In contrast, the alevin-fry `--unfiltered-pl` and kallisto samples were filtered using `DropletUtils::emptyDrops` and they have much lower numbers for the same single-nuclei samples. 
+
+Let's take a look at the mitochondrial content per cell across the tools and see if we see variation there. 
+
+
+```{r fig.height = 10, fig.width = 10}
+ggplot(cell_qc, aes(x = tool, y = subsets_mito_percent, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) + 
+  theme_classic() + 
+  ylab("% Mito /Cell") + 
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+It looks like SCPCR000003 is a very poor sample across all tools and has a lot of dead cells. 
+It might be a good idea to remove that from our comparisons and not consider this for benchmarking. 
+Additionally, it looks like we can see that SCPCR000118 (snRNAseq) also has some variation, but the other samples tend to be fairly consistent. 
+
+
+```{r}
+# remove SCPCR000003 from cell_qc for the rest of the plotting 
+cell_qc_filter <- cell_qc %>%
+  dplyr::filter(sample != "SCPCR000003")
+```
+
+Now let's look at the number of UMI's detected/cell that we've removed our outlier sample. 
+
+```{r fig.height = 10, fig.width = 10}
+# number of UMI's/sample
+ggplot(cell_qc_filter, aes(x = tool, y = sum, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("")
+```
+At first glance, SCPCR000118 and SCPCR000119 (the single nucleus RNA-seq samples) have very low values of UMI/cell. 
+Is this because these samples are poor quality? 
+Or is it a problem with the index? 
+However, the samples don't look any better with cellranger so it could be a sample issue or a common feature of snRNA-seq samples. 
+
+Let's separate our plots to look at single cell vs. single nucleus RNA-seq.
+
+```{r fig.height=5, fig.width=10}
+# first look at single nucleus samples only 
+cell_qc_filter %>%
+  filter(seq_unit == "nucleus") %>% 
+  ggplot(aes(x = tool, y = sum, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  coord_cartesian(ylim = c(0,10000))
+```
+In general, it looks like SCPCR000118 has lower coverage than 119. 
+Cellranger, Kallisto, and alevin-fry-unfiltered-sketch (with the pre mRNA index) actually seem to be have similar UMIs/cell in both samples, looking at the pre-mRNA index. 
+
+
+```{r fig.height = 5, fig.width=10}
+# single cell samples only 
+cell_qc_filter %>%
+  filter(seq_unit == "cell") %>% 
+  ggplot(aes(x = tool, y = sum, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("")
+```
+In general, these all look quite similar to each other. Alevin seems to be the outlier here and varies across samples. 
+Kallisto is also on the slightly higher end than cellranger.
+
+I think keeping the single cell and single nuclei samples separate is helpful for visualization so I'm going to keep them separate from here on out. 
+
+Now let's look at genes/cell? 
+
+```{r fig.height=5, fig.width=10}
+cell_qc_filter %>%
+  filter(seq_unit == "nucleus") %>%
+  ggplot(aes(x = tool, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) + 
+  theme_classic() + 
+  ylab("Genes Detected/Cell") +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1)) +
+  ylim(c(0,6000))
+```
+Here, we see a bit more variation in genes/cell for the single nucleus samples than we did with the UMI/cell. 
+It looks like kallisto and alevin-fry `--unfiltered-pl` with the `--sketch` mode looks comparable to cellranger. 
+Alevin-fry-unfiltered-pl is on the higher end, and is consistently capturing more genes (not necessarily a good thing?). 
+Alevin is showing a lot of variability in 119, but not 118. 
+
+```{r fig.height=5, fig.width = 10}
+# single cell samples only 
+cell_qc_filter %>%
+  filter(seq_unit == "cell") %>% 
+  ggplot(aes(x = tool, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes/cell") + 
+  xlab("")
+```
+Here we are seeing similar trends in genes/cell as we did with UMI/cell for the single cell samples. 
+We do see that alevin tends to report high genes/cell in all but 1 of the scRNA-seq samples. 
+That same sample was the one that alevin also showed high mito content for, so perhaps that is why 006 is not as high for alevin.
+Cellranger is on the low end for all single cell samples, with alevin-fry `--unfiltered-pl` being mostly comparable. 
+
+### Shared Cell QC, No Minimum Gene Coverage
+
+What if we just look at cells that are found in all of the tools? 
+
+```{r}
+cell_only_qc_filter <- cell_qc_filter %>%
+  filter(seq_unit == "cell")
+nucleus_qc_filter <- cell_qc_filter %>%
+  filter(seq_unit == "nucleus")
+```
+
+
+```{r}
+# filter for cells that are found in all 7 combinations of tools + index's
+cell_counts <- cell_only_qc_filter %>%  
+  dplyr::count(cell_id, sample)
+
+common_cells <- cell_counts %>%
+  dplyr::filter(n == 7) %>%
+  dplyr::pull(cell_id)
+
+cell_only_qc_common <- cell_only_qc_filter %>%
+  dplyr::filter(
+    (cell_id %in% common_cells) 
+  )
+```
+
+
+```{r}
+# filter for cells that are found in 13 combinations of tools + index's for nucleus
+nuclei_counts <- nucleus_qc_filter %>%
+  dplyr::count(cell_id, sample)
+
+common_nuclei <- nuclei_counts %>%
+  dplyr::filter(n == 13) %>%
+  dplyr::pull(cell_id)
+
+nucleus_qc_common <- nucleus_qc_filter %>%
+  dplyr::filter(
+    (cell_id %in% common_nuclei)
+  )
+```
+
+
+
+Now what happens to our mito content, UMI/cell, and genes/cell? 
+
+```{r fig.height = 5, fig.width =10}
+# mito comparison across shared cells only of all runs
+# nucleus samples first 
+ggplot(nucleus_qc_common, aes(x = tool, y = subsets_mito_percent, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) + 
+  theme_classic() + 
+  ylab("% Mito /Cell") + 
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+
+# single cell
+ggplot(cell_only_qc_common, aes(x = tool, y = subsets_mito_percent, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) + 
+  theme_classic() + 
+  ylab("% Mito /Cell") + 
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+```
+In looking at this plot, the mito content of SCPCR000118 is very high in the alevin tools, but not the other tools. 
+The other samples show mostly consistent results across each sample and each tool. 
+
+```{r fig.height=5, fig.width=10}
+# number of UMI's/sample in shared cells only 
+# first look at single nucleus samples only 
+ggplot(nucleus_qc_common, aes(x = tool, y = sum, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  ylim(c(0,20000))
+```
+Interestingly, when we look at shared cells only, we see an increase in coverage across the board. 
+One thing to note, is that there is a drop off in number of shared cells from those found in 11 tools (~4000) to those found in 13 (~120).
+
+Alevin-fry `--sketch` looks similar to cellranger. 
+Alevin-fry `--unfiltered-pl` is also similar to cellranger and closer to kallisto having higher UMI/cell (in 119). 
+In general, we see increased coverage using the pre mRNA index across all tools.
+
+What about the single cell samples? 
+
+```{r fig.height=5, fig.width=10}
+# number of UMI's/sample in shared cells only 
+# scRNA seq samples
+ggplot(cell_only_qc_common, aes(x = tool, y = sum, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("")
+
+```
+So it looks like there is generally uniform coverage across all the samples in all tools.  
+
+Is that same pattern consistent in genes/cell in shared cells only? 
+
+```{r fig.height = 5, fig.width=10}
+# genes/cell in shared cells only
+# single nucleus samples only 
+ggplot(nucleus_qc_common, aes(x = tool, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes/cell") + 
+  xlab("")
+
+```
+Overall, the single nuclei samples have a lot more variation. 
+Alevin-fry `--sketch` still seem to be the most similar to cellranger (with the pre mRNA index).
+Alevin-fry `--unfiltered-pl` and `--sketch` is higher than cellranger in both samples. 
+
+```{r fig.height = 5, fig.width = 10}
+# single cell samples only 
+ggplot(cell_only_qc_common, aes(x = tool, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes/cell") + 
+  xlab("")
+
+```
+Generally, the coverage is still quite uniform. 
+However, it looks like cellranger has one of the lowest genes/cell means with alevin-fry `--sketch` and alevin-fry `--unfiltered` the highest. 
+
+### Shared Cell QC, Minimum Gene Coverage > 5
+
+Let's do the same thing, but only look at genes above a certain threshold.
+Is alevin-fry still giving us the highest genes/cell across shared cells in single cell and kallisto/alevin-fry-unfiltered-sketch the highest in single nucleus?
+
+```{r}
+perCellQCMetrics_threshold <- function(sce, mito = mito_genes, threshold){
+  # add per cell QC with mitochondrial genes separately for later comparisons
+  scater::perCellQCMetrics(
+    sce,
+    threshold = threshold
+  )
+}
+```
+
+
+```{r}
+alevin_QC_metrics <- alevin_sces %>% 
+  purrr::map(perCellQCMetrics_threshold, threshold = 5)
+
+alevin_fry_QC_metrics <- alevin_fry_sces %>%
+  purrr::map(perCellQCMetrics_threshold, threshold = 5)
+
+alevin_fry_sketch_QC_metrics <- alevin_fry_sketch_sces %>%
+  purrr::map(perCellQCMetrics_threshold, threshold = 5)
+
+alevin_fry_unfiltered_QC_metrics <- alevin_fry_unfiltered_sces %>%
+  purrr::map(perCellQCMetrics_threshold, threshold = 5)
+
+alevin_fry_unfiltered_sketch_QC_metrics <- alevin_fry_unfiltered_sketch_sces %>%
+  purrr::map(perCellQCMetrics_threshold, threshold = 5)
+
+kallisto_QC_metrics <- kallisto_sces %>% 
+  purrr::map(perCellQCMetrics_threshold, threshold = 5)
+
+cellranger_QC_metrics <- cellranger_sces %>% 
+  purrr::map(perCellQCMetrics_threshold, threshold = 5)
+
+```
+
+
+```{r}
+## merge all QC output into one data frame to work with for plotting comparisons
+QC_metrics_to_df <- function(QC_metrics){
+  # move cell id to a column
+  as.data.frame(QC_metrics) %>%
+  tibble::rownames_to_column(var = "cell_id") %>%
+    # add a column to get # of cells detected in that sample
+    mutate(cells_detected = ncol(QC_metrics))
+}
+
+
+alevin_cell_qc_thresh_5 <- alevin_QC_metrics %>%
+  purrr::map_df(QC_metrics_to_df, .id = "quant_id")
+
+alevin_fry_cell_qc_thresh_5 <- alevin_fry_QC_metrics %>%
+  purrr::map_df(QC_metrics_to_df, .id = "quant_id")
+
+alevin_fry_sketch_cell_qc_thresh_5 <- alevin_fry_sketch_QC_metrics %>%
+  purrr::map_df(QC_metrics_to_df, .id = "quant_id")
+
+alevin_fry_unfiltered_cell_qc_thresh_5 <- alevin_fry_unfiltered_QC_metrics %>%
+  purrr::map_df(QC_metrics_to_df, .id = "quant_id")
+
+alevin_fry_unfiltered_sketch_cell_qc_thresh_5 <- alevin_fry_unfiltered_sketch_QC_metrics %>%
+  purrr::map_df(QC_metrics_to_df, .id = "quant_id")
+
+kallisto_cell_qc_thresh_5 <- kallisto_QC_metrics %>%
+  purrr::map_df(QC_metrics_to_df, .id = "quant_id")
+
+cellranger_cell_qc_thresh_5 <- cellranger_QC_metrics %>%
+  purrr::map_df(QC_metrics_to_df, .id = "quant_id")
+
+# combine all the data frames into one
+cell_qc_thresh_5 <- dplyr::bind_rows(
+  alevin = alevin_cell_qc_thresh_5,
+  alevin_fry = alevin_fry_cell_qc_thresh_5,
+  alevin_fry_sketch = alevin_fry_sketch_cell_qc_thresh_5,
+  alevin_fry_unfiltered = alevin_fry_unfiltered_cell_qc_thresh_5, 
+  alevin_fry_unfiltered_sketch = alevin_fry_unfiltered_sketch_cell_qc_thresh_5,
+  kallisto = kallisto_cell_qc_thresh_5,
+  cellranger = cellranger_cell_qc_thresh_5,
+  .id = "tool"
+) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir")) %>%
+  dplyr::filter(quant_id != "SCPCR000119-txome_k31") %>%
+  dplyr::filter(quant_id != "SCPCR000118-spliced_intron_txome_k31-salign") %>%
+  dplyr::filter(quant_id != "SCPCR000119-spliced_intron_txome_k31-salign")
+```
+
+
+
+```{r}
+#first remove SCPCR000003
+cell_qc_thresh_5 <- cell_qc_thresh_5 %>%
+  dplyr::filter(sample != "SCPCR000003")
+```
+
+
+```{r}
+cell_only_qc_thresh_5 <- cell_qc_thresh_5 %>%
+  filter(seq_unit == "cell")
+nucleus_qc_thresh_5 <- cell_qc_thresh_5 %>%
+  filter(seq_unit == "nucleus")
+```
+
+
+```{r}
+# filter for cells that are found in all 7 combinations of tools + index's
+cell_counts_thresh_5 <- cell_only_qc_thresh_5 %>%  
+  dplyr::count(cell_id, sample)
+
+common_cells_thresh_5 <- cell_counts_thresh_5 %>%
+  dplyr::filter(n == 7) %>%
+  dplyr::pull(cell_id)
+
+cell_qc_common_thresh_5 <- cell_only_qc_thresh_5 %>%
+  dplyr::filter(
+    (cell_id %in% common_cells_thresh_5) 
+  )
+
+```
+
+
+
+```{r}
+# filter for cells that are found in 13 combinations of tools + index's for nucleus
+nuclei_counts_thresh_5 <- nucleus_qc_thresh_5 %>%
+  dplyr::count(cell_id, sample)
+
+common_nuclei_thresh_5 <- nuclei_counts_thresh_5 %>%
+  dplyr::filter(n == 13) %>%
+  dplyr::pull(cell_id)
+
+nucleus_qc_common_thresh_5 <- nucleus_qc_thresh_5 %>%
+  dplyr::filter(
+    (cell_id %in% common_nuclei_thresh_5)
+  )
+
+```
+
+
+```{r fig.height=5, fig.width=10}
+# do we see a change in the number of genes/cell across tools if we remove low covered genes? 
+# single nucleus samples
+ ggplot(nucleus_qc_common_thresh_5, aes(x = tool, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes/cell") + 
+  xlab("") + 
+  ylim(c(0,1500))
+```
+When we remove lowly covered genes in the single nuclei samples, the increased genes/cell seen in alevin-fry sketch-unfiltered over cellranger is still apparent. 
+We also see kallisto with the pre mRNA index has the highest genes/cell in 119 only, but is not consistent. 
+
+```{r fig.height = 5, fig.width = 10}
+# single cell samples
+ggplot(cell_qc_common_thresh_5, aes(x = tool, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes/cell") + 
+  xlab("")
+```
+Some of the variation goes away when removing the lowly covered genes, but in general all tools give quite similar coverage across shared cells for single cell.
+
+Although the total number of genes detected and the range decreases across all cells, it appears that lowly covered genes do not affect the distribution of genes/cell in the single cell samples but do for the single nuclei samples. 
+This could very well be an effect of the lower capture seen in single nuclei samples. 
+
+Now that we've looked at the stats for the shared cells, let's look and see how many cells are shared across which tools.  
+
+```{r}
+# spread table for comparisons
+cell_qc_common_cor <- cell_only_qc_common %>%
+  # spread the mean expression stats to one column per caller
+  tidyr::pivot_wider(id_cols = c(cell_id, sample),
+                     names_from = tool,
+                     values_from = sum) %>%
+  # drop rows with NA values to ease correlation calculations
+  tidyr::drop_na()
+
+nucleus_qc_common_cor <- nucleus_qc_common %>%
+  tidyr::pivot_wider(id_cols = c(cell_id, sample),
+                     names_from = c("tool", "index_type"),
+                     values_from = sum) %>%
+  tidyr::drop_na()
+```
+
+
+```{r}
+cell_qc_common_cor %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    cr_al_cor = cor(cellranger, alevin, method = "spearman"),
+    cr_al_fry_cor =cor(cellranger, alevin_fry, method = "spearman"),
+    cr_al_fry_sketch_cor = cor(cellranger, alevin_fry_sketch, method = "spearman"),
+    cr_al_fry_unfiltered_cor = cor(cellranger, alevin_fry_unfiltered, method = "spearman"), 
+    cr_al_fry_unfiltered_sketch_cor = cor(cellranger, alevin_fry_unfiltered_sketch, method = "spearman"),
+    cr_ka_cor = cor(cellranger, kallisto, method = "spearman")
+  )
+```
+As expected based on the boxplots, the correlations are quite high between the UMIs/cells when looking at shared cells compared to cellranger. 
+Kallisto appears to have the lowest correlations, with Alevin-fry and alevin-fry `--unfiltered-pl` the highest. 
+
+```{r}
+ggplot(cell_qc_common_cor, aes(x = cellranger, y = alevin_fry)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger UMI/cell", y = "Alevin Fry UMI/cell") + 
+  theme_classic()
+```
+
+```{r}
+# here we have to take into account the index names so let's only look at the pre_mRNA index comparisons to cellranger pre mRNA index for now
+nucleus_qc_common_cor %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    cr_al_cor = cor(`cellranger_pre-mRNA`, `alevin_pre-mRNA`, method = "spearman"),
+    cr_al_fry_cor =cor(`cellranger_pre-mRNA`, `alevin_fry_pre-mRNA`, method = "spearman"),
+    cr_al_fry_sketch_cor = cor(`cellranger_pre-mRNA`, `alevin_fry_pre-mRNA`, method = "spearman"),
+    cr_al_fry_unfiltered_cor = cor(`cellranger_pre-mRNA`, `alevin_fry_unfiltered_cDNA`, method = "spearman"), 
+    cr_al_fry_unfiltered_sketch_cor = cor(`cellranger_pre-mRNA`, `alevin_fry_unfiltered_sketch_pre-mRNA`, method = "spearman"),
+    cr_ka_cor = cor(`cellranger_pre-mRNA`, `kallisto_pre-mRNA`, method = "spearman")
+  )
+```
+Correlations with the single nuclei samples are much less consistent. Sample 118 is in general lower than 119 (potentially a problem with sample quality?). 
+We also see that Kallisto, as like with single cell, doesn't have as high of correlation as the other methods in 119, but higher in 118? 
+The best correlation with cellranger in both samples looks like alevin-fry `--unfiltered-pl` `--sketch`. 
+
+Let's look at one with high correlation and one with low correlation. 
+
+```{r}
+ggplot(nucleus_qc_common_cor, aes(x = `cellranger_pre-mRNA`, y = `alevin_fry_unfiltered_sketch_pre-mRNA`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger UMI/cell", y = "Alevin Fry Unfiltered SKetch UMI/cell") + 
+  theme_classic()
+```
+So now we can see why these correlations are so off, especially for 118, there are very few shared cell barcodes.  
+
+```{r}
+ggplot(nucleus_qc_common_cor, aes(x = `cellranger_pre-mRNA`, y = `kallisto_pre-mRNA`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger UMI/cell", y = "Kallisto UMI/cell") + 
+  theme_classic()
+```
+Here you can see that for 119, Kallisto has generally much higher UMI/cell, but higher variance than Alevin-Fry-Unfiltered-Sketch. 
+
+## SessionInfo
+```{r}
+sessionInfo()
+```
