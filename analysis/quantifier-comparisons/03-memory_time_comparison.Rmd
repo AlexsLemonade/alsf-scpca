@@ -64,14 +64,11 @@ Let's make a function to read in the trace files for each of the tools.
 Each tool and configuration has it's own working directory with three trace.txt files: one containing the run for scRNA samples, one for the snRNA samples with the mRNA index, and one for the snRNA samples with the pre-mRNA index. 
 ```{r}
 make_trace_df <- function(workdir, file_ext = ".trace.txt"){
-  setwd(workdir)
   workdir_files <- list.files(workdir)
-  workdir_list <- lapply(workdir_files, function(x) readr::read_tsv(x))
-  # remove extension from trace file names
-  names(workdir_list) <- gsub(file_ext, "", workdir_files)
-  # create list of data frames for all trace files present in directory 
-  workdir_df <- bind_rows(workdir_list)
-}
+  names(worddir_files) <- gsub(file_ext, "", workdir_files)
+  workdir_df <- purrr:map_dfr(workdir_files, 
+                              ~ readr::read_tsv(file.path(workdir, .x), col_types = cols()),
+                              .id = "file_base")
 ```
 
 ## Alevin 
@@ -443,4 +440,3 @@ Some conclusions from these graphs include:
 ```{r}
 sessionInfo()
 ```
-
