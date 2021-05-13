@@ -1,0 +1,398 @@
+---
+title: "Pre Processing Per Gene Metrics Benchmarking"
+author: "Ally Hawkins for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+This notebook is a follow up to analysis done in `04-cell-level-benchmarking-metrics.Rmd` to look at benchmarking metrics at a per gene level. 
+There are 4 single cell RNA seq samples (SCPCR000003, SCPCR000006, SCPCR000126, and SCPCR000127) and 2 single nuclei RNA seq samples (SCPCR000118 and SCPCR000119) that have been used. 
+We are also using four tools, cellranger, alevin, alevin-fry, and kallisto. 
+Additionally, alevin-fry has been run with or without `--sketch` and/or `--unfiltered-pl`.
+The 2 single nuclei RNA-seq samples were run with both a cDNA and pre-mRNA index. 
+
+Here, we are looking at the gene metrics across each tool in comparison to cellranger, as we are interested in finding tools that are comparable to cellranger. 
+We will look at correlation of mean gene expression and percent of cells each gene is detected in between each tool and cellranger. 
+We also will look at the overlap of genes identified with cellranger. 
+The goal of this notebook is to identify any outliers in quantification at the gene level. 
+
+
+### Load Libraries for import
+
+```{r setup}
+library(tidyverse)
+library(ggplot2)
+library(SingleCellExperiment)
+library(ggforce)
+```
+
+### File and Directory Setup
+
+```{r}
+# where all the data lives after running 01-import-quant-data.Rmd
+import_dir <- file.path('data')
+
+quant_info_file <- file.path(import_dir, 'quant_info_update.tsv')
+
+alevin_rds <- file.path(import_dir, 'alevin_sces.rds')
+alevin_fry_rds <- file.path(import_dir, 'alevin_fry_sces.rds')
+alevin_fry_sketch_rds <- file.path(import_dir, 'alevin_fry_sketch_sces.rds')
+alevin_fry_unfiltered_rds <- file.path(import_dir, 'alevin_fry_unfiltered_sces.rds')
+alevin_fry_unfiltered_sketch_rds <- file.path(import_dir, 'alevin_fry_unfiltered_sketch_sces.rds')
+kallisto_rds <- file.path(import_dir, 'kallisto_sces.rds')
+cellranger_rds <- file.path(import_dir, 'cellranger_sces.rds')
+```
+
+```{r}
+quant_info <- readr::read_tsv(quant_info_file)
+```
+
+
+```{r}
+# Each RDS file contains a SingleCellExperiment
+alevin_sces <- readr::read_rds(alevin_rds)
+alevin_fry_sces <- readr::read_rds(alevin_fry_rds)
+alevin_fry_sketch_sces <- readr::read_rds(alevin_fry_sketch_rds)
+alevin_fry_unfiltered_sces <- readr::read_rds(alevin_fry_unfiltered_rds)
+alevin_fry_unfiltered_sketch_sces <- readr::read_rds(alevin_fry_unfiltered_sketch_rds)
+kallisto_sces <- readr::read_rds(kallisto_rds)
+cellranger_sces <- readr::read_rds(cellranger_rds)
+```
+
+### Per Gene QC
+
+```{r}
+# filter and add Feature QC
+alevin_sces <- alevin_sces %>%
+  purrr::map(scater::addPerFeatureQC)
+
+alevin_fry_sces <- alevin_fry_sces %>%
+  purrr::map(scater::addPerFeatureQC)
+
+alevin_fry_sketch_sces <- alevin_fry_sketch_sces %>%
+  purrr::map(scater::addPerFeatureQC)
+
+alevin_fry_unfiltered_sces <- alevin_fry_unfiltered_sces %>%
+  purrr::map(scater::addPerFeatureQC)
+
+alevin_fry_unfiltered_sketch_sces <- alevin_fry_unfiltered_sketch_sces %>%
+  purrr::map(scater::addPerFeatureQC)
+
+kallisto_sces <- kallisto_sces %>%
+  purrr::map(scater::addPerFeatureQC)
+
+cellranger_sces <- cellranger_sces %>%
+  purrr::map(scater::addPerFeatureQC)
+```
+
+```{r}
+genedata_to_df <- function(sce){
+  # extract the feature (gene) summary data from a SCE, 
+  # convert to data frame and move gene id to a column
+  as.data.frame(rowData(sce)) %>%
+  tibble::rownames_to_column(var = "gene_id")
+}
+
+alevin_feature_qc <- alevin_sces %>%
+  purrr::map_df(genedata_to_df, .id = "quant_id")
+
+alevin_fry_feature_qc <- alevin_fry_sces %>%
+  purrr::map_df(genedata_to_df, .id = "quant_id")
+
+alevin_fry_sketch_feature_qc <- alevin_fry_sketch_sces %>%
+  purrr::map_df(genedata_to_df, .id = "quant_id")
+
+alevin_fry_unfiltered_feature_qc <- alevin_fry_unfiltered_sces %>%
+  purrr::map_df(genedata_to_df, .id = "quant_id")
+
+alevin_fry_unfiltered_sketch_feature_qc <- alevin_fry_unfiltered_sketch_sces %>%
+  purrr::map_df(genedata_to_df, .id = "quant_id")
+
+kallisto_feature_qc <- kallisto_sces %>%
+  purrr::map_df(genedata_to_df, .id = "quant_id")
+
+cellranger_feature_qc <- cellranger_sces %>%
+  purrr::map_df(genedata_to_df, .id = "quant_id")
+
+
+feature_qc <- dplyr::bind_rows(
+  alevin = alevin_feature_qc,
+  alevin_fry = alevin_fry_feature_qc, 
+  alevin_fry_sketch = alevin_fry_sketch_feature_qc,
+  alevin_fry_unfiltered = alevin_fry_unfiltered_feature_qc, 
+  alevin_fry_unfiltered_sketch = alevin_fry_unfiltered_sketch_feature_qc,
+  kallisto = kallisto_feature_qc, 
+  cellranger = cellranger_feature_qc,
+  .id = "tool"
+) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir")) %>%
+  dplyr::filter(sample != "SCPCR000003") %>%
+  # remove extraneous run from 119 with txome index since we have the run with the spliced index
+  dplyr::filter(quant_id != "SCPCR000119-txome_k31") %>%
+  # remove duplicate runs of alevin-fry --knee on 118, 119
+  dplyr::filter(quant_id !="SCPCR000118-spliced_intron_txome_k31-salign") %>%
+  dplyr::filter(quant_id != "SCPCR000119-spliced_intron_txome_k31-salign")
+```
+
+```{r}
+gene_counts <- feature_qc %>% 
+  # remove genes that have a low frequency of being detected
+  dplyr::filter(detected >= 5.0) %>%
+  dplyr::count(gene_id, sample)
+
+common_genes <- gene_counts %>%
+  dplyr::filter(n == 7) %>%
+  dplyr::pull(gene_id)
+
+feature_qc_common <- feature_qc %>%
+  dplyr::filter(
+    (gene_id %in% common_genes) 
+  )
+```
+
+## Correlations between mean expression of genes
+
+First, we will start by looking at the correlation of mean expression of genes shared between each tool and cellranger. 
+
+```{r}
+# spread table for comparisons
+cell_feature_qc_common_cor <- feature_qc_common %>%
+  dplyr::filter(seq_unit == "cell") %>%
+  # spread the mean expression stats to one column per caller
+  tidyr::pivot_wider(id_cols = c(gene_id, sample),
+                     names_from = tool,
+                     values_from = mean) %>%
+  # drop rows with NA values to ease correlation calculations
+  tidyr::drop_na()
+
+nucleus_feature_qc_common_cor <- feature_qc_common %>%
+  dplyr::filter(seq_unit == "nucleus") %>%
+  tidyr::pivot_wider(id_cols = c(gene_id, sample),
+                     names_from = c("tool", "index_type"),
+                     values_from = mean) %>%
+  tidyr::drop_na()
+```
+
+```{r}
+cell_feature_qc_common_cor %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    cr_al_cor = cor(cellranger, alevin, method = "spearman"),
+    cr_al_fry_cor =cor(cellranger, alevin_fry, method = "spearman"),
+    cr_al_fry_sketch_cor = cor(cellranger, alevin_fry_sketch, method = "spearman"),
+    cr_al_fry_unfiltered_cor = cor(cellranger, alevin_fry_unfiltered, method = "spearman"), 
+    cr_al_fry_unfiltered_sketch_cor = cor(cellranger, alevin_fry_unfiltered_sketch, method = "spearman"),
+    cr_ka_cor = cor(cellranger, kallisto, method = "spearman")
+  )
+```
+These correlation values are lower than the correlation of UMI's/cell, but still quite high and fairly similar across all tools.
+
+```{r}
+ggplot(cell_feature_qc_common_cor, aes(x = cellranger, y = alevin_fry)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  theme_classic()
+```
+You do see more variation here than we saw in the UMI/cell correlation plots. 
+
+```{r}
+# here we have to take into account the index names so let's only look at the pre_mRNA index comparisons to cellranger pre mRNA index for now
+nucleus_feature_qc_common_cor %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    cr_al_cor = cor(`cellranger_pre-mRNA`, `alevin_pre-mRNA`, method = "spearman"),
+    cr_al_fry_cor =cor(`cellranger_pre-mRNA`, `alevin_fry_pre-mRNA`, method = "spearman"),
+    cr_al_fry_sketch_cor = cor(`cellranger_pre-mRNA`, `alevin_fry_pre-mRNA`, method = "spearman"),
+    cr_al_fry_unfiltered_cor = cor(`cellranger_pre-mRNA`, `alevin_fry_unfiltered_cDNA`, method = "spearman"), 
+    cr_al_fry_unfiltered_sketch_cor = cor(`cellranger_pre-mRNA`, `alevin_fry_unfiltered_sketch_pre-mRNA`, method = "spearman"),
+    cr_ka_cor = cor(`cellranger_pre-mRNA`, `kallisto_pre-mRNA`, method = "spearman")
+  )
+```
+Here, it looks like alevin-fry, alevin-fry-sketch, and alevin-fry-unfiltered-sketch all have fairly high values. 
+Alevin-fry-unfiltered was only run with the cDNA index which is probably why it has such a low correlation. 
+
+```{r}
+ggplot(nucleus_feature_qc_common_cor, aes(x = `cellranger_pre-mRNA`, y = `alevin_fry_unfiltered_sketch_pre-mRNA`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  theme_classic()
+```
+There appears to be a lot more variation in the single nuclei samples than in the single cell samples, even with high correlation.
+
+## Correlation of Percentage of Cells gene is detected in 
+
+```{r}
+cell_detected_qc_common_cor <- feature_qc_common %>%
+  dplyr::filter(seq_unit == "cell") %>%
+  # spread the mean expression stats to one column per caller
+  tidyr::pivot_wider(id_cols = c(gene_id, sample),
+                     names_from = tool,
+                     values_from = detected) %>%
+  # drop rows with NA values to ease correlation calculations
+  tidyr::drop_na()
+
+nucleus_detected_qc_common_cor <- feature_qc_common %>%
+  dplyr::filter(seq_unit == "nucleus") %>%
+  tidyr::pivot_wider(id_cols = c(gene_id, sample),
+                     names_from = c("tool", "index_type"),
+                     values_from = detected) %>%
+  tidyr::drop_na()
+```
+
+
+```{r}
+cell_detected_qc_common_cor %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    cr_al_cor = cor(cellranger, alevin, method = "spearman"),
+    cr_al_fry_cor =cor(cellranger, alevin_fry, method = "spearman"),
+    cr_al_fry_sketch_cor = cor(cellranger, alevin_fry_sketch, method = "spearman"),
+    cr_al_fry_unfiltered_cor = cor(cellranger, alevin_fry_unfiltered, method = "spearman"), 
+    cr_al_fry_unfiltered_sketch_cor = cor(cellranger, alevin_fry_unfiltered_sketch, method = "spearman"),
+    cr_ka_cor = cor(cellranger, kallisto, method = "spearman")
+  )
+```
+Again, these values are fairly high. It actually looks like kallisto may have the highest correlation here? 
+
+```{r}
+ggplot(cell_detected_qc_common_cor, aes(x = cellranger, y = kallisto)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  theme_classic()
+```
+You can see that in SCPCR000006, where kallisto had the lowest correlation, there is increased variance. 
+
+```{r}
+ggplot(cell_detected_qc_common_cor, aes(x = cellranger, y = alevin)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  theme_classic()
+```
+Alevin doesn't look as correlated as kallisto does here, at least for 126 and 127. 
+We see almost a second group that has higher coverage in cellranger and is off the main diagonal.
+
+```{r}
+nucleus_detected_qc_common_cor %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    cr_al_cor = cor(`cellranger_pre-mRNA`, `alevin_pre-mRNA`, method = "spearman"),
+    cr_al_fry_cor =cor(`cellranger_pre-mRNA`, `alevin_fry_pre-mRNA`, method = "spearman"),
+    cr_al_fry_sketch_cor = cor(`cellranger_pre-mRNA`, `alevin_fry_pre-mRNA`, method = "spearman"),
+    cr_al_fry_unfiltered_cor = cor(`cellranger_pre-mRNA`, `alevin_fry_unfiltered_cDNA`, method = "spearman"), 
+    cr_al_fry_unfiltered_sketch_cor = cor(`cellranger_pre-mRNA`, `alevin_fry_unfiltered_sketch_pre-mRNA`, method = "spearman"),
+    cr_ka_cor = cor(`cellranger_pre-mRNA`, `kallisto_pre-mRNA`, method = "spearman")
+  )
+```
+```{r}
+ggplot(nucleus_feature_qc_common_cor, aes(x = `cellranger_pre-mRNA`, y = `alevin_fry_unfiltered_sketch_pre-mRNA`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  theme_classic()
+```
+
+```{r}
+ggplot(nucleus_feature_qc_common_cor, aes(x = `cellranger_pre-mRNA`, y = `alevin_pre-mRNA`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  theme_classic()
+```
+Here we see differences between alevin and alevin-fry-unfiltered-sketch in terms of correlation. 
+There is quite a bit of variance in the lower covered genes. 
+
+## Look at features of genes that don't overlap with Cellranger
+
+Now that we have looked at the genes that overlap with those identified in cellranger, what about the genes that don't overlap with cellranger? 
+First, how many of the genes identified are not also found in cellranger, and of those not found, do they account for a large percentage of the gene expression? 
+
+```{r}
+# pull out cellranger only genes 
+cellranger_genes <- feature_qc %>%
+  dplyr::filter(detected >= 5.0) %>%
+  dplyr::filter(tool == "cellranger") %>%
+  dplyr::select(tool, sample, index_type, gene_id) %>%
+  dplyr::rename("detected_cellranger" = "tool")
+
+# of genes each run has in common with cellranger 
+gene_overlap_cellranger <- feature_qc %>%
+  dplyr::filter(detected >= 5.0) %>%
+  left_join(cellranger_genes) %>% 
+  dplyr::mutate(detected_cellranger = tidyr::replace_na(detected_cellranger, "no"))
+
+overlap_counts <- gene_overlap_cellranger %>%
+  dplyr::count(detected_cellranger, sample, tool, index_type) %>% 
+  pivot_wider(id_cols = c("sample", "tool", "index_type"), names_from = detected_cellranger, 
+              values_from = n) %>%
+  dplyr::mutate(percentage_overlap = (cellranger/(no + cellranger))*100) %>%
+  tidyr::drop_na()
+```
+
+```{r}
+ggplot(overlap_counts, aes(x = sample, y = percentage_overlap)) +
+  geom_boxplot() + 
+  geom_jitter(mapping = aes(color = tool, shape = index_type)) + 
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+In general most tools and samples have around 80% overlap of the genes with the corresponding cellranger run. 
+It does look like the snRNA-seq samples have lower overlap, but it looks like its being brought down by the runs done using the cDNA and not pre-mRNA index. 
+Although, in 118, even some of the pre-mRNA runs are quite low especially with alevin-fry-sketch.
+
+
+Are the genes that don't overlap highly expressed?
+
+```{r fig.height = 10, fig.width = 10}
+# mean gene expression of genes overlapping and non overlapping with cellranger
+ggplot(gene_overlap_cellranger %>%
+         dplyr::filter(tool != "cellranger"), aes(x = sample, y = mean, color = detected_cellranger)) +
+  geom_boxplot() + 
+  facet_grid(tool~index_type) + 
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ylim(c(0,50))
+```
+Here we don't see a lot of major differences across the tools between expression of genes that do and don't overlap with cellranger, which is good. 
+In general, there seems to be mostly higher expressed genes that are overlapping. 
+
+Let's look at genes that are overlapping and what percentage of cells they are detected in vs. non overlapping genes.
+```{r fig.height=10, fig.width=10}
+# % of cells genes are detected in split by overlapping and non-overlapping with cellranger
+ggplot(gene_overlap_cellranger %>%
+         dplyr::filter(tool != "cellranger"), aes(x = sample, y = detected, color = detected_cellranger)) +
+  geom_boxplot() + 
+  facet_grid(tool~index_type) + 
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+Here we see a little bit more of a uniform shift towards those genes that are overlapping with cellranger tend to be found in more cells than genes not overlapping with cellranger. 
+This difference seems more sample specific, with the higher difference being found in the single cell samples and the lower differences being found in single nuclei samples, rather than tool specific. 
+
+All in all, these plots tell us a little about what else is identified in each of the tools, but we would need to dig more into the actual types of genes to see if maybe there was specific enrichment of certain genes based on each tool. 
+
+In conclusion, most of the tools have high correlation with cellranger, especially in looking at the single-cell data. 
+It does appear that consistently alevin-fry has higher correlations with cellranger.
+
+## Session Info
+
+```{r}
+sessioninfo::session_info()
+```
+
+
+
+
