@@ -63,62 +63,71 @@ include important information about each process such as run time and memory.
 Let's make a function to read in the trace files for each of the tools. 
 Each tool and configuration has it's own working directory with three trace.txt files: one containing the run for scRNA samples, one for the snRNA samples with the mRNA index, and one for the snRNA samples with the pre-mRNA index. 
 ```{r}
-make_trace_df <- function(workdir, file_ext = ".trace.txt"){
+make_trace_df <- function(workdir, file_ext = ".trace.txt", tool){
   workdir_files <- list.files(workdir)
-  names(worddir_files) <- gsub(file_ext, "", workdir_files)
-  workdir_df <- purrr:map_dfr(workdir_files, 
+  names(workdir_files) <- gsub(file_ext, "", workdir_files)
+  workdir_df <- purrr::map_dfr(workdir_files, 
                               ~ readr::read_tsv(file.path(workdir, .x), col_types = cols()),
-                              .id = "file_base")
+                              .id = "file_base") %>%
+    dplyr::mutate(Tool = tool)
+}
 ```
 
 ## Alevin 
 
 ```{r}
-alevin_trace_df <- make_trace_df(alevin_dir, ".trace.txt")
-alevin_trace_df$Tool <- "Alevin"
+alevin_trace_df <- make_trace_df(alevin_dir, 
+                                 ".trace.txt", 
+                                 tool = "Alevin")
 ```
 
 ## Alevin Fry 
 
 ```{r}
-alevin_fry_trace_df <- make_trace_df(alevin_fry_dir, ".trace.txt")
-alevin_fry_trace_df$Tool <- "Alevin-Fry"
+alevin_fry_trace_df <- make_trace_df(alevin_fry_dir, 
+                                     ".trace.txt", 
+                                     tool = "Alevin-Fry")
 ```
 
 
 ```{r}
 # alevin fry sketch
-alevin_fry_sketch_trace_df <- make_trace_df(alevin_fry_sketch_dir, ".sketch.trace.txt")
-alevin_fry_sketch_trace_df$Tool = "Alevin-Fry-Sketch"
+alevin_fry_sketch_trace_df <- make_trace_df(alevin_fry_sketch_dir, 
+                                            ".sketch.trace.txt", 
+                                            tool = "Alevin-Fry-Sketch")
 ```
 
 
 ```{r}
 # alevin fry unfiltered
-alevin_fry_unfiltered_trace_df <- make_trace_df(alevin_fry_unfiltered_dir, ".unfiltered.trace.txt")
-alevin_fry_unfiltered_trace_df$Tool = "Alevin-Fry-Unfiltered"
+alevin_fry_unfiltered_trace_df <- make_trace_df(alevin_fry_unfiltered_dir, 
+                                                ".unfiltered.trace.txt", 
+                                                tool = "Alevin-Fry-Unfiltered")
 ```
 
 
 ```{r}
 # alevin fry unfiltered sketch
-alevin_fry_unfiltered_sketch_trace_df <- make_trace_df(alevin_fry_unfiltered_sketch_dir, ".unfiltered.sketch.trace.txt")
-alevin_fry_unfiltered_sketch_trace_df$Tool = "Alevin-Fry-Unfiltered-Sketch"
+alevin_fry_unfiltered_sketch_trace_df <- make_trace_df(alevin_fry_unfiltered_sketch_dir, 
+                                                       ".unfiltered.sketch.trace.txt", 
+                                                       tool = "Alevin-Fry-Unfiltered-Sketch")
 ```
 
 
 ## Kallisto
 
 ```{r}
-kallisto_trace_df <- make_trace_df(kallisto_dir, ".trace.txt")
-kallisto_trace_df$Tool = "Kallisto"
+kallisto_trace_df <- make_trace_df(kallisto_dir, 
+                                   ".trace.txt", 
+                                   tool = "Kallisto")
 ```
 
 ## CellRanger
 
 ```{r}
-cellranger_trace_df <- make_trace_df(cellranger_dir, ".trace.txt")
-cellranger_trace_df$Tool = "Cellranger"
+cellranger_trace_df <- make_trace_df(cellranger_dir, 
+                                     ".trace.txt", 
+                                     tool = "Cellranger")
 ```
 
 
