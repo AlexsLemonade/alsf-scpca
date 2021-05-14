@@ -3,12 +3,12 @@ title: "ScPCA Benchmarking: Run Time and Memory Comparison"
 output: html_notebook
 ---
 
-This notebook compares the run time and memory footprint of pre-processing 4 
-scRNA-seq samples across 5 different tools. We used cellranger v6, kallisto, 
-alevin, and alevin-fry with and without --sketch mode. The purpose of this 
-notebook is to gain an understanding on how much time and memory each of the
-processes uses. We are starting with just looking at these 4 scRNA-seq samples,
-and next will add snRNA-seq samples for comparison. 
+This notebook compares the run time and memory footprint of pre-processing 4 scRNA-seq samples across 4 different tools. We used cellranger v6, kallisto, alevin, and alevin-fry. 
+Alevin-fry was used with and without `--sketch` mode and/or `--unfiltered-pl`. 
+The purpose of this notebook is to gain an understanding on how much time and memory each of the tools uses. 
+We are starting with looking at 4 scRNA-seq samples and 2 snRNA-seq samples.
+The snRNA-seq samples have been run with 2 different indices, cDNA and pre-mRNA.
+
 
 ```{r libary import}
 library(tidyverse)
@@ -26,6 +26,8 @@ kallisto_dir <- file.path(logs_dir, "kallisto-quant")
 cellranger_dir <- file.path(logs_dir, "cellranger-quant")
 alevin_fry_dir <- file.path(logs_dir, "alevin-quant", "alevin-fry")
 alevin_fry_sketch_dir <- file.path(logs_dir, "alevin-quant", "alevin-fry-sketch")
+alevin_fry_unfiltered_dir <- file.path(logs_dir, "alevin-quant", "alevin-fry-unfiltered")
+alevin_fry_unfiltered_sketch_dir <- file.path(logs_dir, "alevin-quant", "alevin-fry-unfiltered-sketch")
 ```
 
 ```{r}
@@ -43,7 +45,7 @@ quant_s3_kallisto <- 's3://nextflow-ccdl-results/scpca/kallisto-quant'
 ```{r}
 # get log files from S3
 # include json file from each kallisto run 
-samples <- c('SCPCR000003', 'SCPCR000006', 'SCPCR000126', 'SCPCR000127')
+samples <- c('SCPCR000003', 'SCPCR000006', 'SCPCR000118', 'SCPCR000119', 'SCPCR000126', 'SCPCR000127')
 
 includes <- stringr::str_glue("--include \"*/{samples}\"")
 
@@ -58,51 +60,74 @@ For each run, we asked nextflow to ouput a trace.txt txt file using the
 -with-trace flag. These [trace files](https://www.nextflow.io/docs/latest/tracing.html) 
 include important information about each process such as run time and memory. 
 
-## Alevin
+Let's make a function to read in the trace files for each of the tools. 
+Each tool and configuration has it's own working directory with three trace.txt files: one containing the run for scRNA samples, one for the snRNA samples with the mRNA index, and one for the snRNA samples with the pre-mRNA index. 
+```{r}
+make_trace_df <- function(workdir, file_ext = ".trace.txt", tool){
+  workdir_files <- list.files(workdir)
+  names(workdir_files) <- gsub(file_ext, "", workdir_files)
+  workdir_df <- purrr::map_dfr(workdir_files, 
+                              ~ readr::read_tsv(file.path(workdir, .x), col_types = cols()),
+                              .id = "file_base") %>%
+    dplyr::mutate(Tool = tool)
+}
+```
+
+## Alevin 
 
 ```{r}
-# read in alevin trace files
-alevin_trace <- readr::read_tsv(file.path(alevin_dir,
-                                          "alevin.trace.allsamples.txt"))
-alevin_trace$Tool = "Alevin"
-alevin_trace
+alevin_trace_df <- make_trace_df(alevin_dir, 
+                                 ".trace.txt", 
+                                 tool = "Alevin")
 ```
+
 ## Alevin Fry 
 
 ```{r}
-alevin_fry_trace <- readr::read_tsv(
-  file.path(alevin_fry_dir, "alevin-fry.trace.allsamples.txt")
-)
-
-alevin_fry_sketch_trace <- readr::read_tsv(
-  file.path(alevin_fry_sketch_dir, "alevin-fry-sketch.trace.allsamples.txt")
-)
-
-alevin_fry_trace$name = gsub("alevin", "alevin-fry", alevin_fry_trace$name)
-alevin_fry_trace$Tool = "Alevin-Fry"
-
-alevin_fry_sketch_trace$name = gsub("alevin", "alevin-fry-sketch", alevin_fry_sketch_trace$name)
-alevin_fry_sketch_trace$Tool = "Alevin-Fry-Sketch"
+alevin_fry_trace_df <- make_trace_df(alevin_fry_dir, 
+                                     ".trace.txt", 
+                                     tool = "Alevin-Fry")
 ```
 
+
+```{r}
+# alevin fry sketch
+alevin_fry_sketch_trace_df <- make_trace_df(alevin_fry_sketch_dir, 
+                                            ".sketch.trace.txt", 
+                                            tool = "Alevin-Fry-Sketch")
+```
+
+
+```{r}
+# alevin fry unfiltered
+alevin_fry_unfiltered_trace_df <- make_trace_df(alevin_fry_unfiltered_dir, 
+                                                ".unfiltered.trace.txt", 
+                                                tool = "Alevin-Fry-Unfiltered")
+```
+
+
+```{r}
+# alevin fry unfiltered sketch
+alevin_fry_unfiltered_sketch_trace_df <- make_trace_df(alevin_fry_unfiltered_sketch_dir, 
+                                                       ".unfiltered.sketch.trace.txt", 
+                                                       tool = "Alevin-Fry-Unfiltered-Sketch")
+```
 
 
 ## Kallisto
 
 ```{r}
-kallisto_trace <- readr::read_tsv(file.path(kallisto_dir, 
-                                            "kallisto.trace.allsamples.txt"))
-kallisto_trace$Tool = "Kallisto"
-kallisto_trace
+kallisto_trace_df <- make_trace_df(kallisto_dir, 
+                                   ".trace.txt", 
+                                   tool = "Kallisto")
 ```
 
 ## CellRanger
 
 ```{r}
-cellranger_trace <- readr::read_tsv(file.path(cellranger_dir,
-                                              "cellranger.trace.allsamples.txt"))
-cellranger_trace$Tool = "Cellranger"
-cellranger_trace
+cellranger_trace_df <- make_trace_df(cellranger_dir, 
+                                     ".trace.txt", 
+                                     tool = "Cellranger")
 ```
 
 
@@ -110,14 +135,13 @@ cellranger_trace
 
 ```{r}
 ## first make a joint dataframe
-all_trace <- bind_rows(list(alevin_trace, alevin_fry_trace, 
-                            alevin_fry_sketch_trace, kallisto_trace, 
-                            cellranger_trace))
+all_trace <- bind_rows(list(alevin_trace_df, alevin_fry_trace_df,
+                            alevin_fry_sketch_trace_df, alevin_fry_unfiltered_trace_df,
+                            alevin_fry_unfiltered_sketch_trace_df, kallisto_trace_df, 
+                            cellranger_trace_df))
 all_trace
 ```
-We need to do some manipulation to this data frame to the peak_rss and 
-realtime columns so they are all in the right units and of class(numeric)
-for plotting.
+We need to do some manipulation to this data frame to the peak_rss and realtime columns so they are all in the right units and of class(numeric) for plotting.
 
 ```{r}
 ## now separate the columns by process and sample_id to make cleaner for plotting
@@ -155,16 +179,23 @@ all_trace <- all_trace %>%
   mutate(total_time = hours*60 + minutes + seconds/60)
 all_trace
 ```
-We will also want to compare the number of reads in each sample to the memory/
-runtime so let's add in that information. 
+We will also want to compare the number of reads in each sample to the memory/runtime so let's add in that information. 
 
 ```{r}
 ## add in number of reads/ sample 
 ## found in individual logfiles from kallisto 
+single_cell_samples <- c('SCPCR000003', 'SCPCR000006', 'SCPCR000126', 'SCPCR000127')
 
 all_trace$Reads = 0
 for (sample in samples) {
-  sample_file <- paste0(sample, "-txome_k31")
+  if(sample %in% single_cell_samples){
+    # only samples that are single cell were run with this index
+    sample_file <- paste0(sample, "-txome_k31")
+  }
+  else {
+    # single nuclei samples have the spliced intron ending for the file name
+    sample_file <- paste0(sample, "-spliced_intron_txome_k31")
+  }
   # read in run_info.json log from each kallisto run 
   log <- fromJSON(file = file.path(kallisto_quants_dir, sample_file, 
                                  "bus", "run_info.json"))
@@ -175,10 +206,43 @@ for (sample in samples) {
 ```
 
 
+Let's also add in a column about sequencing unit so we can separate out those samples later on. 
+To do that, we need the `scpca-library-metadata.tsv` file from s3.  
+```{r}
+# add in library metadata for each sample  
+library_data_dir <- file.path(base_dir, 'sample-info')
+dir.create(library_data_dir, recursive = TRUE, showWarnings = FALSE)
+sample_info_dir_s3 <- 's3://ccdl-scpca-data/sample_info'
+
+# grab library metadata from location in s3
+sync_call <- paste('aws s3 sync', sample_info_dir_s3, library_data_dir,
+                   '--exclude "*"', 
+                   '--include "*scpca-library-metadata.tsv"')
+system(sync_call, ignore.stdout = TRUE)
+```
+
+```{r}
+# read in sample metadata
+library_df <- readr::read_tsv(file.path(library_data_dir, "scpca-library-metadata.tsv"))
+```
+
+```{r}
+# filter data frame with information that might be relevant for looking at these samples
+select_metadata_df <- library_df %>%
+  dplyr::select(scpca_run_id, scpca_sample_id, seq_unit, technology)
+```
+
+```{r}
+# make combined df with technology and seq unit 
+all_trace_comb <- all_trace %>%
+  left_join(select_metadata_df, by = c("sample_id" = "scpca_run_id"))
+```
+
+
 ```{r}
 # create a summary data frame that merges total time and memory for all steps
-summary_stats_df <- all_trace %>% 
-  group_by(Tool, sample_id) %>% 
+summary_stats_df <- all_trace_comb %>% 
+  group_by(Tool, seq_unit, sample_id, index_name) %>% 
   summarise(total_time = sum(total_time), 
             total_rss = sum(peak_rss), 
             Reads = mean(Reads))
@@ -187,101 +251,201 @@ summary_stats_df
 
 ## Time and Memory with Sample ID on x-axis
 
+Let's first look at the runtime for only the single cell samples and then single nuclei samples separately. 
+I know from running them, that the snRNA-seq samples took much longer to run so I want to look at each tool with each type of sample separately.
+
 ```{r}
-ggplot(summary_stats_df, aes(x = sample_id, y = total_time, color = Tool)) +
+ggplot(summary_stats_df %>%
+         dplyr::filter(seq_unit == "cell"), 
+       aes(x = sample_id, y = total_time, color = Tool)) +
   geom_point(size = 2) + 
   theme_classic() + 
   xlab("") +
-  ylab("Run Time (Minutes)")
+  ylab("Run Time (Minutes)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
+
+```{r}
+ggplot(summary_stats_df %>%
+         dplyr::filter(seq_unit == "nucleus"), 
+       aes(x = sample_id, y = total_time, color = Tool)) +
+  geom_point(size = 2) + 
+  theme_classic() + 
+  xlab("") +
+  ylab("Run Time (Minutes)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+Now, let's look at all the samples together across all the tools and do we see any differences across the tools? 
 
 ```{r}
 # another way to visualize it if we want to group all the samples together
 summary_stats_df %>%
+  # order the plot by the median runtime
   mutate(Tool = fct_reorder(Tool, total_time, .fun = 'median')) %>%
-  ggplot(aes(x = reorder(Tool, total_time), y = total_time, fill = Tool)) + 
-  geom_boxplot() + 
+  ggplot(aes(x = reorder(Tool, total_time), y = total_time)) + 
+  geom_jitter(mapping = aes(color = sample_id, shape = seq_unit)) +
   theme_classic() +
   xlab("") +
-  ylab("Run Time (Minutes)")
+  ylab("Run Time (Minutes)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
+From the runtime plots, it's clear that cellranger has an increase in runtime with single-nuclei samples, while other tools don't seem to be affected by the single-nuclei samples. 
 
+The variation in cellranger is making the y-axis in this plot really high. 
+Let's see if we can get more granular when looking at the other tools, by removing cellranger.  
 
 ```{r}
-ggplot(summary_stats_df, aes(x = sample_id, y = total_rss, color = Tool)) + 
+summary_stats_df %>%
+  dplyr::filter(Tool != "Cellranger") %>%
+  # order the plot by the median runtime
+  mutate(Tool = fct_reorder(Tool, total_time, .fun = 'median')) %>%
+  ggplot(aes(x = reorder(Tool, total_time), y = total_time)) + 
+  geom_jitter(mapping = aes(color = sample_id, shape = seq_unit)) +
+  theme_classic() +
+  xlab("") +
+  ylab("Run Time (Minutes)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+Now we can start to see the differences in the other tools. 
+We also see that alevin-fry-unfiltered-sketch, kallisto and alevin-fry-sketch are fairly similar. 
+Although, it does appear that there is a slight preference for higher run time in kallisto with 2 of the single-nuclei samples. 
+That same runtime increase for single-nuclei samples is seen in Alevin-fry-unfiltered and alevin-fry, but not in sketch mode. 
+These samples were run with two different indices, so which 2 snRNA-seq samples are those? 
+Let's break this up based on the index type. 
+
+```{r}
+# rename index names so they are in one of two groups, pre_mRNA or cDNA
+summary_stats_df <- summary_stats_df %>%
+  mutate(index_name = ifelse(index_name %in% c("spliced_intron_txome_k31", "spliced_intron_txome_k31_full_sa"),
+                             "pre_mRNA", "cDNA"))
+
+
+summary_stats_df %>%
+  dplyr::filter(Tool != "Cellranger") %>%
+  # order the plot by the median runtime
+  mutate(Tool = fct_reorder(Tool, total_time, .fun = 'median')) %>%
+  ggplot(aes(x = reorder(Tool, total_time), y = total_time)) + 
+  geom_jitter(mapping = aes(color = sample_id, shape = index_name)) +
+  theme_classic() +
+  facet_grid(~seq_unit) +
+  xlab("") +
+  ylab("Run Time (Minutes)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+Now, we are breaking this up by cell and nucleus. 
+We can see that if we look at the nucleus samples, that kallisto, Alevin-fry-unfiltered and alevin-fry show a clear separation between single-nuclei samples run with cDNA and pre-mRNA. 
+This is important because based on the counts data, the pre_mRNA index is beneficial to quantification and thus these tools will have an increased run time for these samples. 
+
+Now, let's look at memory usage. 
+
+```{r}
+ggplot(summary_stats_df, aes(x = sample_id, y = total_rss, color = Tool, shape = index_name)) + 
   geom_point(size = 2) + 
   theme_classic() + 
   xlab("") +
-  ylab("Memory (GB)")
+  ylab("Memory (GB)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
+Right away, we can see the large increase in memory that Kallisto uses for single-nuclei samples run with the pre-mRNA index. 
+We can also see that Alevin and Cellranger are generally high in terms of memory usage while Alevin-Fry remains the lowest. 
 
 ```{r}
 # another way to visualize it if we want to group all the samples together
 summary_stats_df %>%
   mutate(Tool = fct_reorder(Tool, total_rss, .fun = 'median')) %>%
-  ggplot(aes(x = reorder(Tool, total_rss), y = total_rss, fill = Tool)) +
-  geom_boxplot() + 
+  ggplot(aes(x = reorder(Tool, total_rss), y = total_rss)) +
+  geom_violin() + 
+  geom_jitter(mapping = aes(color = Tool, shape = seq_unit)) +
   theme_classic() +
   xlab("") +
-  ylab("Memory (GB)")
+  ylab("Memory (GB)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 ```
+When we look at this plot, you can now see again the huge jump in Kallisto, but it appears that alot of the tools have a difference in memory usage in single-nuclei samples vs. single-cell samples, where the single-nuclei samples require much more memory to process.
 
+Let's zoom in on just the alevin tools. 
 
-After looking at the runtime and memory used independently of any other 
-observations, we can see that Kallisto is consistently the fastest, although 
-alevin-fry in --sketch mode is also quite fast. This is probably because it is
-supposed to mimic kallisto. Cellranger is consistently the slowest by almost 
-3x more than the next fastest, Alevin/Alevin-fry without --sketch mode which 
-are both somewhere in the middle.
+```{r}
+# Just alevin tools to compare better across those 
+# run time
+alevin_tools = c("Alevin","Alevin-Fry", "Alevin-Fry-Unfiltered", "Alevin-Fry-Unfiltered-Sketch")
 
-In terms of memory, Alevin-fry with/without --sketch uses the least amount
-of memory using < 5 total GB of memory on all 4 samples. Kallisto is also 
-consistently using ~ 11 GB of memory for all 4 samples. Alevin and cellranger
-are higher than this, with Alevin requiring the most amount of memory closer
-to ~ 20 GB of memory per sample. 
+ggplot(summary_stats_df %>%
+         dplyr::filter(Tool %in% alevin_tools), 
+       aes(x = sample_id, y = total_rss, color = Tool, shape = index_name)) +
+  geom_point(size = 2) + 
+  theme_classic() + 
+  xlab("") +
+  ylab("Memory (GB)") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+Within the alevin tools, you can see that the snRNA-seq samples with the pre mRNA index definitely use more memory in general. 
+However, alevin vs. alevin-fry generally uses much more memory. 
 
-Next, let's see if the number of reads in each fastq file impacts the runtime
-and/or memory usage. 
+Next, let's see if the number of reads in each fastq file impacts the runtime and/or memory usage. 
 
 ## Time and Memory vs. # of Reads 
 
 ```{r}
 # run time vs. # of fastq reads
 ggplot(summary_stats_df, aes(x = Reads, y = total_time, color = Tool)) +
-  geom_point(size = 2) + 
-  geom_line() +
+  geom_point(size = 2, mapping = aes(shape = seq_unit)) + 
   theme_classic() + 
   xlab("Number of Reads") +
   ylab("Run Time (Minutes)")
 ```
+Looking at this, there is a clear increase in runtime with number of reads in cellranger, although it looks like there is a higher impact on the single-nuclei reads. 
+If you look at the two single-cell samples with high read count that were run on cellranger vs. the two single-nuclei samples with similar read count there is a drastic increase in runtime. 
+
+Let's remove cellranger so we can zoom in and see if that same increase is present in any of the other tools? 
+
+```{r}
+# remove cellranger and look at the rest of the tools 
+ggplot(summary_stats_df %>%
+         dplyr::filter(Tool != "Cellranger"), 
+       aes(x = Reads, y = total_time, color = Tool)) +
+  geom_point(size = 2, mapping = aes(shape = seq_unit)) + 
+  theme_classic() + 
+  xlab("Number of Reads") +
+  ylab("Run Time (Minutes)")
+```
+Now we can see that same increase is also present in alevin-fry-unfiltered and alevin-fry but not in `--sketch` mode. 
+We also see that kallisto might have a slight increase in time dependent on read number in single-cell too and a further increase with single-nuclei.
 
 
 ```{r}
 ggplot(summary_stats_df, aes(x = Reads, y = total_rss, color = Tool)) + 
-  geom_point(size = 2) + 
-  geom_line() +
+  geom_point(size = 2, mapping = aes(shape = seq_unit)) + 
   theme_classic() + 
   xlab("Number of Reads") +
   ylab("Memory (GB)")
 ```
+Again, we see that increase in kallisto with single nuclei samples, but this seems independent of number of reads. 
+It looks like cellranger also has that increase in single nuclei samples, again this seems independent of number of reads. 
+None of the other tools appear to have memory changes based on the number of reads.
+```{r}
+# remove kallisto to zoom in on the other tools
+ggplot(summary_stats_df %>%
+         dplyr::filter(Tool != "Kallisto"),
+       aes(x = Reads, y = total_rss, color = Tool)) + 
+  geom_point(size = 2, mapping = aes(shape = seq_unit)) + 
+  theme_classic() + 
+  xlab("Number of Reads") +
+  ylab("Memory (GB)")
+```
+There doesn't appear to be an effect on the memory usage based on the number of reads in the fastqs.
 
-From this, it looks like there is no effect on the number of reads found in 
-the fastq files to the memory that is required for any of the processes, except
-maybe with alevin-fry both with/without --sketch. It appears that the memory
-usage almost doubles from ~2-3 GB to closer to ~5-6 GB. Even though memory
-usage doesn't appear to be that affected, run time does appear to be affected
-by the number of reads in the sample if running on cellranger. As the number
-of reads increase, there is a sharp increase in the run time for cellranger, 
-where as that is not the case for the other tools.
+Some conclusions from these graphs include: 
 
-It is clear that cellranger has both the biggest footprint in time and memory 
-usage. However, the question remains how the count matrices compare across the 
-tools, and whether the quantification performed by alevin and kallisto is 
-comparable to cellranger even with a lower footprint. 
+  1. Cellranger has the highest run time, which is further increased with snRNA-seq samples
+  2. Kallisto, although a short run time in comparison to other tools, has a large increase in memory usage for snRNA-seq samples 
+  3. In general, snRNA-seq samples use more memory than scRNA-seq
+  4. snRNA-seq samples have increased runtime in all but Alevin, Alevin-fry-unfiltered-sketch and alevin-fry-sketch
+  5. Alevin uses much more memory than all combinations of Alevin-fry tools
+  6. Cellranger scRNA-seq uses less memory than Alevin, but snRNA-seq uses more memory than Alevin
 
 ## Session Info
 
 ```{r}
 sessionInfo()
 ```
-

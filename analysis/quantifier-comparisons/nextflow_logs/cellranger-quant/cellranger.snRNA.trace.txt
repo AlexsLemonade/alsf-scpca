@@ -1,0 +1,3 @@
+task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
+2	f7/e07e00	c2c9bcf4-ef4c-4398-80de-f578d2b6d893	cellranger (SCPCR000119-cdna)	COMPLETED	0	2021-05-03 16:21:17.245	6h 35m 5s	6h 12m 37s	378.1%	13.9 GB	18.1 GB	428.2 GB	107.3 GB
+1	52/07e8c3	bbde05c3-f1f6-43ae-9304-e5633ad88ad6	cellranger (SCPCR000118-cdna)	COMPLETED	0	2021-05-03 16:21:17.099	8h 23m 21s	8h 29s	380.7%	14.1 GB	18.2 GB	513 GB	118.3 GB

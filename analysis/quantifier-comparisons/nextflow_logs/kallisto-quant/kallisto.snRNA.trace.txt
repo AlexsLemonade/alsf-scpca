@@ -1,0 +1,7 @@
+task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
+2	17/66eabf	44554fef-9eaf-4df3-a283-f5f94e8ac21c	kallisto_bus (SCPCR000119-spliced_txome_k31)	COMPLETED	0	2021-04-21 17:42:16.949	12m 37s	9m 51s	542.5%	6.8 GB	7.3 GB	18.8 GB	938.7 MB
+3	17/9026fc	66851543-4b88-4c63-9025-005ccfed71bf	bustools_correct (SCPCR000118-spliced_txome_k31)	COMPLETED	0	2021-04-21 17:54:55.315	1m 9s	36s	92.2%	4.3 GB	4.3 GB	2.3 GB	2 GB
+1	e9/e78a3f	460435ca-3725-40dd-980b-3b3b791549c4	kallisto_bus (SCPCR000118-spliced_txome_k31)	COMPLETED	0	2021-04-21 17:42:17.137	14m 27s	11m 46s	518.8%	6.8 GB	7.3 GB	19.9 GB	936.9 MB
+4	d9/6f33a3	cbc79d1d-fe2c-4d94-9168-248c4eb3a2b7	bustools_count (SCPCR000118-spliced_txome_k31)	COMPLETED	0	2021-04-21 17:56:05.128	58.8s	17s	100.1%	371.1 MB	433 MB	719 MB	182.9 MB
+5	ce/a7043e	7400116b-a842-42ba-9042-87f1a6e5072a	bustools_correct (SCPCR000119-spliced_txome_k31)	COMPLETED	0	2021-04-21 17:56:45.180	1m 9s	27s	102.9%	4.3 GB	4.3 GB	2.3 GB	2 GB
+6	3a/038edb	b6cddf7e-31e0-4c5b-8e61-e45148f684c2	bustools_count (SCPCR000119-spliced_txome_k31)	COMPLETED	0	2021-04-21 17:57:54.853	49.1s	13s	100.1%	353.8 MB	419.2 MB	669.6 MB	145.1 MB

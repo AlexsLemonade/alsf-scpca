@@ -1,0 +1,9 @@
+task_id	hash	native_id	name	status	exit	submit	duration	realtime	%cpu	peak_rss	peak_vmem	rchar	wchar
+1	ad/0d5877	6cd044f4-7aca-4959-a9cf-51902617989c	alevin (SCPCR000118-spliced_txome_k31)	COMPLETED	0	2021-05-04 14:10:30.110	31m 17s	28m 10s	746.4%	1.9 GB	2.6 GB	17.7 GB	345.6 MB
+3	27/7d1573	c5093b27-44bd-4f8d-b449-65bb7dcdb828	generate_permit (SCPCR000118-spliced_txome_k31)	COMPLETED	0	2021-05-04 14:41:48.776	48.7s	3.1s	100.0%	279.1 MB	555.4 MB	240.9 MB	2.9 MB
+2	1c/e976b3	0e29595e-0e8b-4efc-b7e1-92f9f52d365e	alevin (SCPCR000119-spliced_txome_k31)	COMPLETED	0	2021-05-04 14:10:30.241	33m 27s	29m 45s	732.4%	1.9 GB	2.6 GB	16.6 GB	603.4 MB
+5	41/257a48	e0b203cb-9ecf-4ba3-a8af-8c3ed46522d8	generate_permit (SCPCR000119-spliced_txome_k31)	COMPLETED	0	2021-05-04 14:43:58.404	49.1s	4.8s	100.2%	279.3 MB	563.4 MB	487.9 MB	5.4 MB
+4	87/b7dbf0	a883e925-2273-4da0-847b-20a0848241fd	collate_fry (SCPCR000118-spliced_txome_k31)	COMPLETED	0	2021-05-04 14:42:38.622	2m 59s	3.6s	300.5%	139.8 MB	905.4 MB	556.2 MB	209.1 MB
+6	53/f4154b	7e3c4597-9d3c-478a-8e12-002f6884d42b	collate_fry (SCPCR000119-spliced_txome_k31)	COMPLETED	0	2021-05-04 14:44:48.378	49.7s	3.9s	288.7%	248.3 MB	1021.4 MB	1.1 GB	535.3 MB
+8	4d/9d5aa6	2c5754c1-ecd6-457e-baf4-16f61b4886f1	quant_fry (SCPCR000119-spliced_txome_k31)	COMPLETED	0	2021-05-04 14:45:39.171	1m 28s	55.2s	787.9%	140.9 MB	1 GB	277.4 MB	22.6 MB
+7	87/d17dca	8849fbbf-335b-4623-b678-4bc2cac9131c	quant_fry (SCPCR000118-spliced_txome_k31)	COMPLETED	0	2021-05-04 14:45:38.393	1m 49s	53s	778.3%	111.5 MB	1 GB	114.3 MB	12.2 MB
