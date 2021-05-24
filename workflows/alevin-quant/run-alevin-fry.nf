@@ -4,44 +4,40 @@ nextflow.enable.dsl=2
 // run parameters
 params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103'
 params.index_dir = 'salmon_index'
-params.index_name = 'spliced_txome_k31'
 params.annotation_dir = 'annotation'
-params.t2g = 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv'
-params.mitolist = 'Homo_sapiens.GRCh38.103.mitogenes.txt'
+params.index_type = 'cdna' // default index type is cdna
 params.sketch = false // use sketch mode for mapping with flag `--sketch`
 params.resolution = 'full' //default resolution is full, can also use cr-like, cr-like-em, parsimony, and trivial
 
-//index_names = ['cell': 'spliced_txome_k31',
-//               'nucleus': 'spliced_intron_txome_k31']
+index_names_map = ['cdna': 'spliced_txome_k31',
+                   'splici': 'spliced_intron_txome_k31']
 
-//t2g = ['cell': 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv',
-//       'nucleus': 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene.tsv']
+t2g_map = ['cdna': 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv',
+       'splici': 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene.tsv']
 
 params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
 // 10X barcode files
 barcodes = ['10Xv2': '737K-august-2016.txt',
             '10Xv3': '3M-february-2018.txt',
             '10Xv3.1': '3M-february-2018.txt']
-params.unfiltered = false // use unfiltered list mode to include 10X barcode list with flat `--unfiltered`
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 // run_ids are comma separated list to be parsed into a list of run ids,
 // or "All" to process all samples in the metadata file
 params.run_ids = "SCPCR000001,SCPCR000002"
-
-params.outdir = 's3://nextflow-ccdl-results/scpca/alevin-fry-quant'
+ 
+params.outdir = 's3://nextflow-ccdl-results/scpca/alevin-fry-unfiltered-quant'
 
 // build full paths
-params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
-params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${params.t2g}"
-params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist}"
+params.index_path = "${params.ref_dir}/${params.index_dir}/${index_names_map[params.index_type]}"
+params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${t2g_map[params.index_type]}"
 
 // supported single cell technologies
 tech_list = ['10Xv2', '10Xv3', '10Xv3.1'] 
 
 // generates RAD file using alevin
 process alevin{
-  container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
+  container 'quay.io/biocontainers/salmon:1.4.0--h84f40af_1'
   label 'cpus_8'
   tag "${id}-${index}"
   publishDir "${params.outdir}"
@@ -53,7 +49,7 @@ process alevin{
     path run_dir
   script:
     // label the run directory by id, index, and mapping mode
-    run_dir = "${id}-${index}-${params.sketch ? 'sketch' : 'salign'}-${params.unfiltered ? 'unfiltered' : 'knee'}"
+    run_dir = "${id}-${index}-${params.sketch ? 'sketch' : 'salign'}-${params.resolution}"
     // choose flag by technology
     tech_flag = ['10Xv2': '--chromium',
                  '10Xv3': '--chromiumV3',
@@ -94,7 +90,7 @@ process generate_permit{
       -i ${run_dir} \
       --expected-ori fw \
       -o ${run_dir} \
-      ${params.unfiltered ? "-u ${barcode_file}" : '--knee-distance'}
+      -u ${barcode_file}
     """
 }
 
@@ -133,7 +129,8 @@ process quant_fry{
      --tg-map ${tx2gene} \
      --output-dir ${run_dir} \
      -r ${params.resolution} \
-     -t ${task.cpus}
+     -t ${task.cpus} \
+     ${params.resolution == 'cr-like' ? '--use-mtx' : ''}
     """
 }
 // run quant command with default full resolution strategy 
