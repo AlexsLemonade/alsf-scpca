@@ -11,6 +11,12 @@ params.mitolist = 'Homo_sapiens.GRCh38.103.mitogenes.txt'
 params.sketch = false // use sketch mode for mapping with flag `--sketch`
 params.resolution = 'full' //default resolution is full, can also use cr-like, cr-like-em, parsimony, and trivial
 
+//index_names = ['cell': 'spliced_txome_k31',
+//               'nucleus': 'spliced_intron_txome_k31']
+
+//t2g = ['cell': 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv',
+//       'nucleus': 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene.tsv']
+
 params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
 // 10X barcode files
 barcodes = ['10Xv2': '737K-august-2016.txt',
