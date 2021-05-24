@@ -11,7 +11,6 @@ params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.t
 // or "All" to process all samples in the metadata file
 params.run_ids = "SCPCR000001,SCPCR000002"
 params.outdir = 's3://nextflow-ccdl-results/scpca/cellranger-quant'
-params.premrna = false // use the flag --premrna to align to pre mRNA index
 
 // technology options
 tech_list = ["10Xv2", "10Xv3", "10Xv3.1"]
@@ -20,7 +19,7 @@ tech_list = ["10Xv2", "10Xv3", "10Xv3.1"]
 params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 
 process cellranger{
-  container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.0.0'
+  container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.0.1'
   publishDir "${params.outdir}", mode: 'copy'
   tag "${id}-${index}" // add tag for tracking sample names in trace file  
   label 'cpus_8'
@@ -70,11 +69,11 @@ workflow{
     .filter{it.technology in tech_list} // only 10X data
     // use only the rows in the sample list
     .filter{run_all || (it.scpca_run_id in run_ids)}
-    // create tuple of [sample_id, sample_names, fastq dir]
+    // create tuple of [sample_id, sample_names, fastq dir, true/false for --include-introns]
     .map{row -> tuple(row.scpca_run_id,
                       getCRsamples(row.files),
                       file("s3://${row.s3_prefix}"),
-                      params.premrna
+                      row.seq_unit == 'nucleus'
                       )}
   // run cellranger
   cellranger(ch_reads, params.index_path)
