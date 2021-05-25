@@ -178,8 +178,8 @@ spliced_intron_txome <- Biostrings::readDNAStringSet(spliced_intron_fasta)
 
 ```{r}
 # get transcript ID's
-splici_fa_txs <- stringr::word(names(splici_txome),1)
-spliced_intron_fa_txs <- stringr::word(names(spliced_intron_txome),1)
+splici_fa_txs <- names(splici_txome)
+spliced_intron_fa_txs <- names(spliced_intron_txome)
 ```
 
 ```{r}
@@ -194,10 +194,9 @@ glue::glue("
   The splici transcriptome and spliced_intron transcriptome have: {length(shared_splici_fa_tx)} shared transcript IDs.
   ")
 ```
+This tells us that the spliced_intron.fasta contains duplicated sequences that map to multiple transcript ID's. 
+This could likely be causing a problem for tools that throw out multi-mapping reads. 
 
-
-This tells me that the spliced_intron.fasta contains duplicated sequences that map to multiple transcript ID's. 
-How 
 
 ## Session info
 
