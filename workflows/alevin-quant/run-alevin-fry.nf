@@ -5,15 +5,15 @@ nextflow.enable.dsl=2
 params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103'
 params.index_dir = 'salmon_index'
 params.annotation_dir = 'annotation'
-params.index_type = 'cdna' // default index type is cdna
+params.index_type = 'cell' // default index type is cdna
 params.sketch = false // use sketch mode for mapping with flag `--sketch`
 params.resolution = 'full' //default resolution is full, can also use cr-like, cr-like-em, parsimony, and trivial
 
-index_names_map = ['cdna': 'spliced_txome_k31',
-                   'splici': 'spliced_intron_txome_k31']
+index_names_map = ['cell': 'spliced_txome_k31',
+                   'nucleus': 'spliced_intron_txome_k31']
 
-t2g_map = ['cdna': 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv',
-       'splici': 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene.tsv']
+t2g_map = ['cell': 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv',
+       'nucleus': 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene.tsv']
 
 params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
 // 10X barcode files
@@ -37,7 +37,7 @@ tech_list = ['10Xv2', '10Xv3', '10Xv3.1']
 
 // generates RAD file using alevin
 process alevin{
-  container 'quay.io/biocontainers/salmon:1.4.0--h84f40af_1'
+  container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
   label 'cpus_8'
   tag "${id}-${index}"
   publishDir "${params.outdir}"
