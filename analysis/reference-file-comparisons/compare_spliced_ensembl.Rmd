@@ -66,7 +66,6 @@ ensembl_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.txome.fa.gz")
 
 spliced_txome <- Biostrings::readDNAStringSet(spliced_fasta)
 ensembl_txome <- Biostrings::readDNAStringSet(ensembl_fasta)
-
 ```
 
 How long is each?
@@ -162,6 +161,42 @@ missing_tx_info %>%
 It certainly seems to be.
 
 Should we add the non-primary assembly to our references, or are we okay with these differences?
+
+
+## Splici vs. Spliced_Intron Fasta
+In generating the splici index, there is a step to obtain unique sequences only before writing the sequences to the fasta. 
+This results in the size of the splici.fa being much smaller than the spliced_intron.fa, suggesting that they are different and that the spliced_intron.fa contains duplicated sequences.
+
+```{r}
+# look at splici vs. spliced_intron fasta
+splici_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.103.splici.fa.gz")
+spliced_intron_fasta <- file.path(ref_dir, "fasta", "Homo_sapiens.GRCh38.103.spliced_intron.txome.fa.gz")
+
+splici_txome <- Biostrings::readDNAStringSet(splici_fasta)
+spliced_intron_txome <- Biostrings::readDNAStringSet(spliced_intron_fasta)
+```
+
+```{r}
+# get transcript ID's
+splici_fa_txs <- names(splici_txome)
+spliced_intron_fa_txs <- names(spliced_intron_txome)
+```
+
+```{r}
+# how many of the spliced_intron transcript ID's are unique? 
+unique_spliced_intron <- unique(spliced_intron_fa_txs)
+
+# what's the intersect between the spliced_intron and splici transcript ID's? 
+shared_splici_fa_tx <- intersect(splici_fa_txs, spliced_intron_fa_txs)
+
+glue::glue("
+  The splici transcriptome has: {length(unique_spliced_intron)} unique transcript IDs.
+  The splici transcriptome and spliced_intron transcriptome have: {length(shared_splici_fa_tx)} shared transcript IDs.
+  ")
+```
+This tells us that the spliced_intron.fasta contains duplicated sequences that map to multiple transcript ID's. 
+This could likely be causing a problem for tools that throw out multi-mapping reads. 
+
 
 ## Session info
 
