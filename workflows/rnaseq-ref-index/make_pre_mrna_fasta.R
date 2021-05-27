@@ -11,7 +11,7 @@
 # create a corresponding fasta, gtf, and transcript2gene mapping file 
 # for use with index generation for scRNA-seq 
 
-# This script is also used to generate a splici.txome.fa and splici.tx2gene_3col.tsv. 
+# This script is also used to generate the 3 column spliced_intron.tx2gene_3col.tsv needed for alevin-fry.
 
 # finally, a list of mitochondrial genes is output for QC
 
@@ -67,11 +67,8 @@ txome_tx2gene_file <- paste0(file_base, ".spliced.tx2gene.tsv")
 spliced_intron_fasta_file <- paste0(file_base, ".spliced_intron.txome.fa.gz")
 spliced_intron_gtf_file <- paste0(file_base, ".spliced_intron.txome.gtf")
 spliced_intron_tx2gene_file <- paste0(file_base, ".spliced_intron.tx2gene.tsv")
+spliced_intron_tx2gene_3col_file <- paste0(file_base, ".spliced_intron.tx2gene_3col.tsv")
 spliced_intron_metadata_file <- paste0(file_base, ".spliced_intron.metadata.tsv")
-
-## splici files 
-splici_fasta_file <- paste0(file_base, ".splici.txome.fa.gz")
-splici_tx2gene_3col_file <- paste0(file_base, "splici.tx2gene_3col.tsv")
 
 mito_file <- paste0(file_base, ".mitogenes.txt")
 
@@ -87,9 +84,8 @@ spliced_intron_tx2gene <- file.path(opt$annotation_output,
 spliced_intron_metadata <- file.path(opt$annotation_output, 
                                      spliced_intron_metadata_file)
 
-splici_fasta <- file.path(opt$fasta_output, splici_fasta_file)
-splici_tx2gene_3col <- file.path(opt$annotation_output, 
-                                 splici_tx2gene_3col_file)
+spliced_intron_tx2gene_3col <- file.path(opt$annotation_output, 
+                                 spliced_intron_tx2gene_3col_file)
 
 mito_out <- file.path(opt$annotation_output, mito_file)
 
@@ -122,30 +118,6 @@ names(genome) <- stringr::word(names(genome), 1)
 seqlevels(grl) <- seqlevels(genome)
 seqlengths(grl) <- seqlengths(genome)
 
-
-# extract spliced and intron sequences genomic regions defined above
-seqs <- GenomicFeatures::extractTranscriptSeqs(
-  x = genome, 
-  transcripts = grl
-)
-
-# write spliced and intron sequences to fasta file
-Biostrings::writeXStringSet(
-  seqs, filepath = spliced_intron_fasta, compress = TRUE
-)
-
-# write the associated annotations to gtf 
-eisaR::exportToGtf(
-  grl, 
-  filepath = spliced_intron_gtf
-)
-
-# create text file mapping transcript and intron identifiers to corresponding gene identifiers
-# make 2 column Tx2Gene for all spliced and intron sequences
-full_tx2gene <- eisaR::getTx2Gene(
-  grl, filepath = spliced_intron_tx2gene
-)
-
 # trim grl used for splici
 splici_grl <- trim(grl)
 
@@ -164,23 +136,37 @@ Biostrings::writeXStringSet(
   splici_seqs, filepath = splici_fasta, compress = TRUE
 )
 
-# make 3 column Tx2 gene needed for alevin-fry USA mode
+# write the associated annotations to gtf 
+eisaR::exportToGtf(
+  splici_grl, 
+  filepath = spliced_intron_gtf
+)
+
+# create text file mapping transcript and intron identifiers to corresponding gene identifiers
+# make 2 column Tx2Gene for all spliced and intron sequences
+full_tx2gene <- eisaR::getTx2Gene(
+  grl, filepath = spliced_intron_tx2gene
+)
+
+# make Tx2 gene needed for alevin-fry USA mode
 splici_tx2gene_df <- eisaR::getTx2Gene(splici_grl)
 
-splici_tx2gene_df[, "status"] = sapply(
-  strsplit(splici_tx2gene_df$transcript_id, "-"), function(x) 
-    if(length(x) == 2){"U"} else {"S"}
-)
+# write out 2 column Tx2 gene mapping
+readr::write_tsv(splici_tx2gene_df, spliced_intron_tx2gene, col_names = FALSE)
 
-splici_tx2gene_df[, "gene_id"] = sapply(
-  strsplit(splici_tx2gene_df$gene_id, "-"), function(x) x[1]
-)
+# make 3 column Tx2 gene needed for alevin-fry USA mode
+splici_tx2gene_df_3col <- splici_tx2gene_df  %>%
+  # add status column
+  # if transcript_id contains an added -I, then it is usnpliced
+  mutate(status = ifelse(str_count(transcript_id, '-') > 0, 'U', 'S'),
+         # remove extra -I on gene ID
+         gene_id = str_extract(gene_id, "[^-]+"))
 
 # write 3 column tx2gene
-readr::write_tsv(splici_tx2gene_df, splici_tx2gene_3col, col_names = FALSE)
+readr::write_tsv(splici_tx2gene_df_3col, spliced_intron_tx2gene_3col, col_names = FALSE)
 
 ## need to write out to metadata for spliced_intron data
-readr::write_tsv(metadata(grl)$corrgene, spliced_intron_metadata)
+readr::write_tsv(metadata(grl[names(splici_seqs)])$corrgene, spliced_intron_metadata)
 
 # get list of all spliced transcript ID's
 spliced_genes = metadata(grl)$featurelist$spliced
