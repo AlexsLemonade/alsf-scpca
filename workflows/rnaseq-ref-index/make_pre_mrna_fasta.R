@@ -152,10 +152,10 @@ readr::write_tsv(splici_tx2gene_df, spliced_intron_tx2gene, col_names = FALSE)
 # make 3 column Tx2 gene needed for alevin-fry USA mode
 splici_tx2gene_df_3col <- splici_tx2gene_df  %>%
   # add status column
-  # if transcript_id contains an added -I, then it is usnpliced
-  mutate(status = ifelse(str_count(transcript_id, '-') > 0, 'U', 'S'),
-         # remove extra -I on gene ID
-         gene_id = str_extract(gene_id, "[^-]+"))
+  # remove extra -I* on gene ID
+  mutate(gene_id = stringr::word(gene_id,1,sep = '-'),
+         #if transcript_id contains an added -I*, then it is usnpliced
+         status = ifelse(stringr::str_detect(transcript_id, '-'), 'U', 'S'))
 
 # write 3 column tx2gene
 readr::write_tsv(splici_tx2gene_df_3col, spliced_intron_tx2gene_3col, col_names = FALSE)
