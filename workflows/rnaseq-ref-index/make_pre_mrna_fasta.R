@@ -144,11 +144,6 @@ eisaR::exportToGtf(
 
 # create text file mapping transcript and intron identifiers to corresponding gene identifiers
 # make 2 column Tx2Gene for all spliced and intron sequences
-full_tx2gene <- eisaR::getTx2Gene(
-  grl, filepath = spliced_intron_tx2gene
-)
-
-# make Tx2 gene needed for alevin-fry USA mode
 splici_tx2gene_df <- eisaR::getTx2Gene(splici_grl)
 
 # write out 2 column Tx2 gene mapping
