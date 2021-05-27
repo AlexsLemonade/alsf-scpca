@@ -133,7 +133,7 @@ splici_grl <- splici_grl[names(splici_seqs)]
 
 # write splici to fasta 
 Biostrings::writeXStringSet(
-  splici_seqs, filepath = splici_fasta, compress = TRUE
+  splici_seqs, filepath = spliced_intron_fasta, compress = TRUE
 )
 
 # write the associated annotations to gtf 
