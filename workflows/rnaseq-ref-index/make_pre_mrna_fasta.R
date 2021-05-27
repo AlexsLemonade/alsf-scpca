@@ -155,7 +155,7 @@ splici_tx2gene_df_3col <- splici_tx2gene_df  %>%
   # remove extra -I* on gene ID
   mutate(gene_id = stringr::word(gene_id,1,sep = '-'),
          #if transcript_id contains an added -I*, then it is usnpliced
-         status = ifelse(stringr::str_detect(transcript_id, '-'), 'U', 'S'))
+         status = ifelse(stringr::str_detect(transcript_id, '-I'), 'U', 'S'))
 
 # write 3 column tx2gene
 readr::write_tsv(splici_tx2gene_df_3col, spliced_intron_tx2gene_3col, col_names = FALSE)
