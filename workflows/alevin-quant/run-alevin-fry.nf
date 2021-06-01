@@ -23,6 +23,8 @@ barcodes = ['10Xv2': '737K-august-2016.txt',
             '10Xv3': '3M-february-2018.txt',
             '10Xv3.1': '3M-february-2018.txt']
 
+params.filter = 'unfiltered' // default filtering strategy is to use unfiltered, other options include --knee-distance
+
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 // run_ids are comma separated list to be parsed into a list of run ids,
 // or "All" to process all samples in the metadata file
@@ -53,7 +55,7 @@ process alevin{
     path run_dir
   script:
     // label the run directory by id, index, and mapping mode
-    run_dir = "${id}-${index}-${params.sketch ? 'sketch' : 'salign'}-${params.resolution}"
+    run_dir = "${id}-${index}-${params.sketch ? 'sketch' : 'salign'}-${params.resolution}-${params.filter == 'knee' ? 'knee' : ''"}
     // choose flag by technology
     tech_flag = ['10Xv2': '--chromium',
                  '10Xv3': '--chromiumV3',
@@ -94,7 +96,7 @@ process generate_permit{
       -i ${run_dir} \
       --expected-ori fw \
       -o ${run_dir} \
-      -u ${barcode_file}
+      ${params.filter == 'knee' ? '--knee-distance' :  "-u ${barcode_file}"}
     """
 }
 
