@@ -55,7 +55,7 @@ process alevin{
     path run_dir
   script:
     // label the run directory by id, index, and mapping mode
-    run_dir = "${id}-${index}-${params.sketch ? 'sketch' : 'salign'}-${params.resolution}-${params.filter == 'knee' ? 'knee' : ''"}
+    run_dir = "${id}-${index}-${params.sketch ? 'sketch' : 'salign'}-${params.resolution}-${params.filter == 'knee' ? 'knee' : ''"}"
     // choose flag by technology
     tech_flag = ['10Xv2': '--chromium',
                  '10Xv3': '--chromiumV3',
