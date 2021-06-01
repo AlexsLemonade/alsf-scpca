@@ -10,10 +10,12 @@ params.sketch = false // use sketch mode for mapping with flag `--sketch`
 params.resolution = 'full' //default resolution is full, can also use cr-like, cr-like-em, parsimony, and trivial
 
 index_names_map = ['cell': 'spliced_txome_k31',
-                   'nucleus': 'spliced_intron_txome_k31']
+                   'splici': 'spliced_intron_txome_k31']
 
 t2g_map = ['cell': 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv',
-       'nucleus': 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene.tsv']
+       'splici': 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene.tsv']
+
+params.t2g_3col = 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene_3col.tsv'
 
 params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
 // 10X barcode files
@@ -31,6 +33,8 @@ params.outdir = 's3://nextflow-ccdl-results/scpca/alevin-fry-unfiltered-quant'
 // build full paths
 params.index_path = "${params.ref_dir}/${params.index_dir}/${index_names_map[params.index_type]}"
 params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${t2g_map[params.index_type]}"
+params.t2g_3col_path = 
+"${params.ref_dir}/${params.annotation_dir}/${params.resolution == 'cr-like' && params.index_type == 'splici' ? params.t2g_3col : t2g_map[params.index_type]}"
 
 // supported single cell technologies
 tech_list = ['10Xv2', '10Xv3', '10Xv3.1'] 
@@ -160,5 +164,5 @@ workflow{
   // collate RAD files 
   collate_fry(generate_permit.out)
   // create gene x cell matrix
-  quant_fry(collate_fry.out, params.t2g_path)
+  quant_fry(collate_fry.out, params.t2g_3col_path)
 }
