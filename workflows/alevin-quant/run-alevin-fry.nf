@@ -32,7 +32,7 @@ barcodes = ['10Xv2': '737K-august-2016.txt',
             '10Xv3.1': '3M-february-2018.txt']
 
 // supported single cell technologies
-tech_list = ['10Xv2', '10Xv3', '10Xv3.1'] 
+tech_list = barcodes.keySet()
 
 // generates RAD file using alevin
 process alevin{
