@@ -34,6 +34,20 @@ barcodes = ['10Xv2': '737K-august-2016.txt',
 // supported single cell technologies
 tech_list = barcodes.keySet()
 
+// file paths
+index_path = "${params.ref_dir}/${params.index_dir}/${index_names_map[params.index_type]}"
+index_prefix = "${params.ref_dir}/${params.annotation_dir}"
+t2g_path = "${index_prefix}/${t2g_map[params.index_type]}"
+  
+// if using splici and cr-like use the 3 column t2g file for alevin-fry quant
+if(params.resolution == 'cr-like' && params.index_type == 'splici'){
+    t2g_quant_path = "${index_prefix}/${params.t2g_3col}"
+    use_mtx = true
+} else{
+    t2g_quant_path = t2g_path
+    use_mtx = false
+}
+
 // generates RAD file using alevin
 process alevin{
   container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
@@ -123,6 +137,7 @@ process quant_fry{
   input: 
     path run_dir
     path tx2gene
+    val use_mtx
   output: 
     path run_dir
   script:
@@ -133,7 +148,7 @@ process quant_fry{
      --output-dir ${run_dir} \
      -r ${params.resolution} \
      -t ${task.cpus} \
-     ${params.resolution == 'cr-like' ? '--use-mtx' : ''}
+     ${use_mtx ? '--use-mtx' : ''}
     """
 }
 // run quant command with default full resolution strategy 
@@ -156,18 +171,6 @@ workflow{
 
   barcodes_ch = samples_ch
     .map{row -> file("${params.barcode_dir}/${barcodes[row.technology]}")}
-  
-  // file paths
-  index_path = "${params.ref_dir}/${params.index_dir}/${index_names_map[params.index_type]}"
-  index_prefix = "${params.ref_dir}/${params.annotation_dir}"
-  t2g_path = "${index_prefix}/${t2g_map[params.index_type]}"
-  
-  // if using splici and cr-like use the 3 column t2g file for alevin-fry quant
-  if(params.resolution == 'cr-like' && params.index_type == 'splici'){
-      t2g_quant_path = "${index_prefix}/${params.t2g_3col}"
-  } else{
-      t2g_quant_path = t2g_path
-  }
 
   // run Alevin
   alevin(reads_ch, index_path, t2g_path)
@@ -176,5 +179,5 @@ workflow{
   // collate RAD files 
   collate_fry(generate_permit.out)
   // create gene x cell matrix
-  quant_fry(collate_fry.out, t2g_quant_path)
+  quant_fry(collate_fry.out, t2g_quant_path, use_mtx)
 }
