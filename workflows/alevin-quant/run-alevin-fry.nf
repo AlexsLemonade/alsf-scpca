@@ -5,38 +5,31 @@ nextflow.enable.dsl=2
 params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103'
 params.index_dir = 'salmon_index'
 params.annotation_dir = 'annotation'
-params.index_type = 'cell' // default index type is cdna
+params.index_type = 'cdna' // default index type is cdna, can also use splici
 params.sketch = false // use sketch mode for mapping with flag `--sketch`
 params.resolution = 'full' //default resolution is full, can also use cr-like, cr-like-em, parsimony, and trivial
+params.t2g_3col = 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene_3col.tsv'
+params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
+params.filter = 'unfiltered' // default filtering strategy is to use unfiltered, other options include knee (--knee-distance)
+params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
+params.outdir = "s3://nextflow-ccdl-results/scpca/alevin-fry-${params.filter}-quant"
 
-index_names_map = ['cell': 'spliced_txome_k31',
+// run_ids are comma separated list to be parsed into a list of run ids,
+// or "All" to process all samples in the metadata file
+params.run_ids = "SCPCR000001,SCPCR000002"
+
+// index files 
+index_names_map = ['cdna': 'spliced_txome_k31',
                    'splici': 'spliced_intron_txome_k31']
 
-t2g_map = ['cell': 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv',
-       'splici': 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene.tsv']
+// tx2gene files
+t2g_map = ['cdna': 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv',
+           'splici': 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene.tsv']
 
-params.t2g_3col = 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene_3col.tsv'
-
-params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
 // 10X barcode files
 barcodes = ['10Xv2': '737K-august-2016.txt',
             '10Xv3': '3M-february-2018.txt',
             '10Xv3.1': '3M-february-2018.txt']
-
-params.filter = 'unfiltered' // default filtering strategy is to use unfiltered, other options include --knee-distance
-
-params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
-// run_ids are comma separated list to be parsed into a list of run ids,
-// or "All" to process all samples in the metadata file
-params.run_ids = "SCPCR000001,SCPCR000002"
- 
-params.outdir = 's3://nextflow-ccdl-results/scpca/alevin-fry-unfiltered-quant'
-
-// build full paths
-params.index_path = "${params.ref_dir}/${params.index_dir}/${index_names_map[params.index_type]}"
-params.t2g_path = "${params.ref_dir}/${params.annotation_dir}/${t2g_map[params.index_type]}"
-params.t2g_3col_path = 
-"${params.ref_dir}/${params.annotation_dir}/${params.resolution == 'cr-like' && params.index_type == 'splici' ? params.t2g_3col : t2g_map[params.index_type]}"
 
 // supported single cell technologies
 tech_list = ['10Xv2', '10Xv3', '10Xv3.1'] 
@@ -55,7 +48,10 @@ process alevin{
     path run_dir
   script:
     // label the run directory by id, index, and mapping mode
-    run_dir = "${id}-${index}-${params.sketch ? 'sketch' : 'salign'}-${params.resolution}-${params.filter == 'knee' ? 'knee' : ''"}"
+    run_dir = "${id}-${index}-${params.sketch ? 'sketch' : 'salign'}-${params.resolution}"
+        if( params.filter != 'unfiltered'){
+          run_dir += "-${params.filter}"
+        }
     // choose flag by technology
     tech_flag = ['10Xv2': '--chromium',
                  '10Xv3': '--chromiumV3',
@@ -90,13 +86,14 @@ process generate_permit{
   output:
     path run_dir
   script: 
-    
+    filter_map = ['unfiltered' : "-u ${barcode_file}",
+                  'knee' : '--knee-distance']
     """
     alevin-fry generate-permit-list \
       -i ${run_dir} \
       --expected-ori fw \
       -o ${run_dir} \
-      ${params.filter == 'knee' ? '--knee-distance' :  "-u ${barcode_file}"}
+      ${filter_map[params.filter]}
     """
 }
 
@@ -159,12 +156,25 @@ workflow{
 
   barcodes_ch = samples_ch
     .map{row -> file("${params.barcode_dir}/${barcodes[row.technology]}")}
+  
+  // file paths
+  index_path = "${params.ref_dir}/${params.index_dir}/${index_names_map[params.index_type]}"
+  index_prefix = "${params.ref_dir}/${params.annotation_dir}"
+  t2g_path = "${index_prefix}/${t2g_map[params.index_type]}"
+  
+  // if using splici and cr-like use the 3 column t2g file for alevin-fry quant
+  if(params.resolution == 'cr-like' && params.index_type == 'splici'){
+      t2g_quant_path = "${index_prefix}/${params.t2g_3col}"
+  } else{
+      t2g_quant_path = t2g_path
+  }
+
   // run Alevin
-  alevin(reads_ch, params.index_path, params.t2g_path)
+  alevin(reads_ch, index_path, t2g_path)
   // generate permit list from alignment 
   generate_permit(alevin.out, barcodes_ch)
   // collate RAD files 
   collate_fry(generate_permit.out)
   // create gene x cell matrix
-  quant_fry(collate_fry.out, params.t2g_3col_path)
+  quant_fry(collate_fry.out, t2g_quant_path)
 }
