@@ -1,0 +1,50 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+library(magrittr)
+library(SingleCellExperiment)
+library(DropletUtils)
+library(tximport)
+library(Matrix.utils)
+```
+
+```{r}
+function_path <- file.path("..", "..", "scpcaBenchmarkTools", "R")
+source(file.path(function_path, "import_quant_data.R"))
+source(file.path(function_path, "read_kallisto_counts.R"))
+source(file.path(function_path, "collapse_intron_counts.R"))
+source(file.path(function_path, "aws_copy_samples.R"))
+```
+
+## Copy from AWS 
+
+```{r}
+base_dir <- here::here()
+data_dir <- file.path(base_dir, 'benchmarking-data', 'quants')
+
+quant_s3 <- 's3://nextflow-ccdl-results/scpca'
+
+samples <- c('SCPCR000006')
+
+aws_copy_samples(local_dir = data_dir,
+                 s3_dir = quant_s3,
+                 samples = samples,
+                 tools = c('alevin-fry-unfiltered', 'cellranger'))
+
+```
+
+## Make SingleCellExperiment objects 
+
+```{r}
+c(alevin_fry_unfiltered = local_tool_dir) %>%
+        purrr::map(list.dirs, recursive = FALSE, full.names = FALSE) #%>%
+        tibble::enframe(name = "tool", value = "quant_dir") #%>%
+        tidyr::unnest(quant_dir)
+
+data.frame(tool = "alevin_fry_unfiltered", quant_dir = list.dirs(local_tool_dir, recursive = FALSE, full.names = FALSE))
+```
+
