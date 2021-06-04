@@ -1,14 +1,15 @@
-FROM ubuntu:20.04
+FROM centos:centos8
 LABEL maintainer="ccdl@alexslemonade.org"
 
-RUN apt-get update && apt-get install -y build-essential libzip-dev
+RUN yum makecache && yum install -y unzip
 
 # Install bcl2fastq
 WORKDIR /tmp
-COPY bcl2fastq2-v2.20.0.422-Source.tar.gz bcl2fastq2.tar.gz
-COPY install-bcl2fastq.sh install-bcl2fastq.sh
-RUN bash install-bcl2fastq.sh
-
+COPY bcl2fastq2-v2-20-0-linux-x86-64.zip bcl2fastq2-v2-20-0-linux-x86-64.zip
+RUN unzip bcl2fastq2-v2-20-0-linux-x86-64.zip
+RUN rpm -i bcl2fastq2-v2.20.0.422-Linux-x86_64.rpm \
+&& rm bcl2fastq2-v2.20.0.422-Linux-x86_64.rpm && \
+ rm bcl2fastq2-v2-20-0-linux-x86-64.zip
 # Install cellranger
 WORKDIR /opt
 COPY cellranger-6.0.1.tar.gz cellranger-6.0.1.tar.gz
