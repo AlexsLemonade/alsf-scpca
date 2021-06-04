@@ -52,6 +52,7 @@ workflows/rnaseq-ref-index/fasta/
 workflows/*/data/
 
 # Ignore software downloads
+*.rpm
 images/cellranger/cellranger*.tar.gz
 images/cellranger/bcl2fastq*.tar.gz
 
