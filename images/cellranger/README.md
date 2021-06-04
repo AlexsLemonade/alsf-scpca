@@ -6,9 +6,8 @@ This folder contains a Dockerfile for the cellranger analysis.
 In order to build this image, the cellranger software and bcl2fastq source code components must be downloaded separately to comply with licensing, and should be placed in this folder (`images/cellranger`).
 - The current version of cellranger is `cellranger-6.0.1.tar.gz` and can be downloaded from [10X Genomics Website](https://support.10xgenomics.com/single-cell-gene-expression/software/downloads/6.0) after agreeing to their license terms.
 - The current version of bcl2fastq is 2.20.0 and can be downloaded from [Illumina](https://support.illumina.com/sequencing/sequencing_software/bcl2fastq-conversion-software.html) after logging into an Illumina account.
-  - As we are using an Ubuntu image, you will need to download the "Linux tarball" version of the software.
-  - Note that the file Illumina provides to download is a `.tar.zip` file that should contain the `bcl2fastq2-v2.20.0.422-Source.tar.gz` file specified in the `Dockerfile`. 
-  - Use `tar xzf bcl2fastq2-v2-20-0-tar.zip` to unpack the redundant packaging.
+  - As we are using an Centos image, you will need to download the "Linux rpm" version of the software.
+  - Note that the file Illumina provides to download is a `.zip` file that should contain the `bcl2fastq2-v2.20.0.422-Linux-x86_64.rpm` file specified in the `Dockerfile`. 
 
 Following download of cellranger and bcl2fastq, you can build the image running the following command from this `images/cellranger` working directory:
 
@@ -49,4 +48,3 @@ docker tag scpca-cellranger:6.0.1 589864003899.dkr.ecr.us-east-1.amazonaws.com/s
 docker push 589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.0.1
 docker push 589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:latest
 ```
-
