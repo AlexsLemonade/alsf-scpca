@@ -1,7 +1,5 @@
-FROM centos:centos7
+FROM centos:7
 LABEL maintainer="ccdl@alexslemonade.org"
-
-RUN yum makecache && yum install -y unzip
 
 # Install bcl2fastq
 WORKDIR /tmp
