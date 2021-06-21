@@ -13,22 +13,34 @@ library(Matrix.utils)
 ```
 
 ```{r}
-function_path <- file.path("..", "..", "scpcaBenchmarkTools", "R")
-source(file.path(function_path, "import_quant_data.R"))
-source(file.path(function_path, "read_kallisto_counts.R"))
-source(file.path(function_path, "collapse_intron_counts.R"))
+# load any functions we will need that aren't part of scpcaTools
+function_path <- file.path(".." ,"benchmarking-functions", "R")
 source(file.path(function_path, "aws_copy_samples.R"))
+source(file.path(function_path, "quant_info_table.R"))
 ```
+
+```{r}
+base_dir <- getwd()
+data_dir <- file.path(base_dir, 'data', 'quants')
+
+output_dir <- file.path(base_dir, "results")
+if(!dir.exists(output_dir)){
+  dir.create(output_dir, recursive = TRUE)
+}
+
+alevin_fry_sce_file <- file.path(output_dir, "alevin_fry_sces.rds")
+```
+
 
 ## Copy from AWS 
 
 ```{r}
-base_dir <- here::here()
-data_dir <- file.path(base_dir, 'benchmarking-data', 'quants')
 
 quant_s3 <- 's3://nextflow-ccdl-results/scpca'
 
-samples <- c('SCPCR000006')
+samples <- c('SCPCR000006', 'SCPCR000118', 'SCPCR000119', 
+             'SCPCR000126', 'SCPCR000127', 'SCPCR000220',
+             'SCPCR000221')
 
 aws_copy_samples(local_dir = data_dir,
                  s3_dir = quant_s3,
@@ -40,11 +52,82 @@ aws_copy_samples(local_dir = data_dir,
 ## Make SingleCellExperiment objects 
 
 ```{r}
-c(alevin_fry_unfiltered = local_tool_dir) %>%
-        purrr::map(list.dirs, recursive = FALSE, full.names = FALSE) #%>%
-        tibble::enframe(name = "tool", value = "quant_dir") #%>%
-        tidyr::unnest(quant_dir)
-
-data.frame(tool = "alevin_fry_unfiltered", quant_dir = list.dirs(local_tool_dir, recursive = FALSE, full.names = FALSE))
+# generate quant info table
+quant_info <- quant_info_table(data_dir = file.path("~", "data", "quants"),
+                 tools = c('alevin-fry-unfiltered', 'cellranger'),
+                 samples = samples)
 ```
+
+```{r}
+# get library data to add cell or nucleus information for each sample
+library_data_dir <- file.path(base_dir, 'sample-info')
+dir.create(library_data_dir, recursive = TRUE, showWarnings = FALSE)
+sample_info_dir_s3 <- 's3://ccdl-scpca-data/sample_info'
+
+# grab library metadata from location in s3
+sync_call <- paste('aws s3 sync', sample_info_dir_s3, library_data_dir,
+                   '--exclude "*"', 
+                   '--include "*scpca-library-metadata.tsv"')
+system(sync_call, ignore.stdout = TRUE)
+
+```
+
+```{r}
+# read in sample metadata
+library_df <- readr::read_tsv(file.path(library_data_dir, "scpca-library-metadata.tsv"))
+select_metadata_df <- library_df %>%
+  dplyr::select(scpca_run_id, seq_unit)
+
+quant_info <- quant_info %>% 
+  dplyr::left_join(select_metadata_df, by = c("sample" = "scpca_run_id")) %>%
+  dplyr::mutate(which_counts = dplyr::case_when(seq_unit == "cell" ~ "cDNA",
+                                                seq_unit == "nucleus" ~ "intron"))
+```
+
+```{r}
+# scpcaTools needs quant_dir, tool, usa_mode (TRUE/FALSE), intron_mode (TRUE/FALSE), which_counts, intron_metadata_path 
+
+# get intron_metadata_path first
+annotation_data_dir <- file.path(base_dir, 'annotation')
+dir.create(annotation_data_dir, recursive = TRUE, showWarnings = FALSE)
+annotation_data_dir_s3 <- 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103/annotation'
+
+# grab spliced_intron metadata table
+sync_call <- paste('aws s3 sync', annotation_data_dir_s3, annotation_data_dir,
+                   '--exclude "*"', 
+                   '--include "*Homo_sapiens.GRCh38.103.spliced_intron.metadata.tsv"')
+system(sync_call, ignore.stdout = TRUE)
+
+intron_metadata_path <- file.path(annotation_data_dir, "Homo_sapiens.GRCh38.103.spliced_intron.metadata.tsv")
+
+```
+
+```{r, message=FALSE}
+# add intron_metadata_path to quant_info
+quant_info$intron_metadata_path <- intron_metadata_path
+
+# remove incomplete alevin-fry run 
+quant_info <- quant_info %>%
+  dplyr::filter(quant_dir != "SCPCR000127-spliced_txome_k31-salign-cr-like")
+
+# get alevin_fry_sces
+alevin_fry_info <- quant_info %>%
+  dplyr::filter(tool == "alevin-fry")
+alevin_fry_sces <- mapply(scpcaTools::import_quant_data, alevin_fry_info$data_dir,
+       alevin_fry_info$tool, alevin_fry_info$intron_mode, alevin_fry_info$usa_mode,
+       alevin_fry_info$which_counts, alevin_fry_info$intron_metadata_path)
+readr::write_rds(alevin_fry_sces, alevin_fry_sce_file)
+```
+
+
+```{r}
+# get cellranger sces 
+cellranger_info <- quant_info %>%
+  dplyr::filter(tool == "cellranger")
+
+cellranger_fry_sces <- mapply(scpcaTools::import_quant_data, cellranger_info$data_dir,
+       cellranger_info$tool, cellranger_info$intron_mode, cellranger_info$usa_mode,
+       cellranger_info$which_counts, cellranger_info$intron_metadata_path)
+```
+
 
