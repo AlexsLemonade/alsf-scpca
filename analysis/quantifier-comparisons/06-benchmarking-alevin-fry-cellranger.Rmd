@@ -10,6 +10,7 @@ library(SingleCellExperiment)
 library(DropletUtils)
 library(tximport)
 library(Matrix.utils)
+library(scater)
 ```
 
 ```{r}
@@ -17,18 +18,17 @@ library(Matrix.utils)
 function_path <- file.path(".." ,"benchmarking-functions", "R")
 source(file.path(function_path, "aws_copy_samples.R"))
 source(file.path(function_path, "quant_info_table.R"))
+source(file.path(function_path, "add_sce_QC.R"))
 ```
 
 ```{r}
-base_dir <- getwd()
+base_dir <- here::here()
 data_dir <- file.path(base_dir, 'data', 'quants')
 
 output_dir <- file.path(base_dir, "results")
 if(!dir.exists(output_dir)){
   dir.create(output_dir, recursive = TRUE)
 }
-
-alevin_fry_sce_file <- file.path(output_dir, "alevin_fry_sces.rds")
 ```
 
 
@@ -46,17 +46,8 @@ aws_copy_samples(local_dir = data_dir,
                  s3_dir = quant_s3,
                  samples = samples,
                  tools = c('alevin-fry-unfiltered', 'cellranger'))
-
 ```
 
-## Make SingleCellExperiment objects 
-
-```{r}
-# generate quant info table
-quant_info <- quant_info_table(data_dir = file.path("~", "data", "quants"),
-                 tools = c('alevin-fry-unfiltered', 'cellranger'),
-                 samples = samples)
-```
 
 ```{r}
 # get library data to add cell or nucleus information for each sample
@@ -70,7 +61,26 @@ sync_call <- paste('aws s3 sync', sample_info_dir_s3, library_data_dir,
                    '--include "*scpca-library-metadata.tsv"')
 system(sync_call, ignore.stdout = TRUE)
 
+## get mitochondrial gene list from s3
+annotation_files_s3 <- 
+  's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103/annotation/'
+
+sync_call <- paste('aws s3 sync', annotation_files_s3, library_data_dir,
+                   '--exclude "*"', 
+                   '--include "*103.mitogenes.txt"')
+system(sync_call, ignore.stdout = TRUE)
 ```
+
+
+## Make SingleCellExperiment objects 
+
+```{r}
+# generate quant info table
+quant_info <- quant_info_table(data_dir = data_dir,
+                 tools = c('alevin-fry-unfiltered', 'cellranger'),
+                 samples = samples)
+```
+
 
 ```{r}
 # read in sample metadata
@@ -80,43 +90,97 @@ select_metadata_df <- library_df %>%
 
 quant_info <- quant_info %>% 
   dplyr::left_join(select_metadata_df, by = c("sample" = "scpca_run_id")) %>%
-  dplyr::mutate(which_counts = dplyr::case_when(seq_unit == "cell" ~ "cDNA",
-                                                seq_unit == "nucleus" ~ "intron"))
+  dplyr::mutate(which_counts = dplyr::case_when(seq_unit == "cell" ~ "spliced",
+                                                seq_unit == "nucleus" ~ "unspliced"))
 ```
+
 
 ```{r}
-# scpcaTools needs quant_dir, tool, usa_mode (TRUE/FALSE), intron_mode (TRUE/FALSE), which_counts, intron_metadata_path 
+mito_file <- file.path(library_data_dir, "Homo_sapiens.GRCh38.103.mitogenes.txt")
 
-# get intron_metadata_path first
-annotation_data_dir <- file.path(base_dir, 'annotation')
-dir.create(annotation_data_dir, recursive = TRUE, showWarnings = FALSE)
-annotation_data_dir_s3 <- 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103/annotation'
-
-# grab spliced_intron metadata table
-sync_call <- paste('aws s3 sync', annotation_data_dir_s3, annotation_data_dir,
-                   '--exclude "*"', 
-                   '--include "*Homo_sapiens.GRCh38.103.spliced_intron.metadata.tsv"')
-system(sync_call, ignore.stdout = TRUE)
-
-intron_metadata_path <- file.path(annotation_data_dir, "Homo_sapiens.GRCh38.103.spliced_intron.metadata.tsv")
-
+mito_genes <- readr::read_tsv(mito_file, col_names = "gene_id")
+mito_genes <- mito_genes %>%
+  dplyr::pull(gene_id)
 ```
 
+Because the list of `SingleCellExperiments` would be quite large for Alevin-fry, I'm going to go ahead and make separate lists now for each of the conditions that was used. 
+
+For benchmarking we have tested the following conditions:
+
+- spliced (cDNA) txome, salign, cr-like
+- spliced (cDNA) txome, sketch, cr-like
+- unspliced (splici) txome, salign, full
+- unspliced (splici) txome, sketch, full
+- unspliced (splici) txome, salign, cr-like
+- unspliced (splici) txome, sketch, cr-like
+
+```{r}
+# make separate tables based on conditions above 
+cdna_salign_full <- quant_info %>%
+  dplyr::filter(tool == "alevin_fry" &
+                index_type == "cDNA" &
+                alevin_alignment == "sketch" &
+                alevin_resolution == "full")
+
+alevin_info <- quant_info %>%
+  dplyr::filter(tool == "alevin-fry") %>%
+  dplyr::mutate(group_name = paste(index_type, alevin_alignment, alevin_resolution, sep = "_")) %>%
+  dplyr::arrange(group_name) 
+
+alevin_split_info <- alevin_info %>%
+  dplyr::group_split(group_name)
+
+names(alevin_split_info) <- alevin_info %>%
+  dplyr::pull(group_name) %>%
+  unique()
+
+list2env(alevin_split_info, .GlobalEnv)
+```
+
+
 ```{r, message=FALSE}
-# add intron_metadata_path to quant_info
-quant_info$intron_metadata_path <- intron_metadata_path
+make_sce_list <- function(info_df, filename, mito){
+  sce_list <- mapply(scpcaTools::import_quant_data,
+         info_df$data_dir,
+         info_df$tool,
+         info_df$which_counts,
+         info_df$intron_mode,
+         info_df$usa_mode,
+         info_df$filter) 
+    sce_list <- sce_list %>%
+      purrr::map(
+      ~ scater::addPerCellQC(.x,
+                       subsets = list(mito_genes = mito_genes[mito_genes %in% rownames(.x)]))
+      ) %>%
+      purrr::map(
+        ~ scater::addPerFeatureQC(.x)
+      )
+  readr::write_rds(sce_list, filename)
+  return(sce_list)
+}
+```
 
-# remove incomplete alevin-fry run 
-quant_info <- quant_info %>%
-  dplyr::filter(quant_dir != "SCPCR000127-spliced_txome_k31-salign-cr-like")
 
+```{r, message=FALSE}
 # get alevin_fry_sces
-alevin_fry_info <- quant_info %>%
-  dplyr::filter(tool == "alevin-fry")
-alevin_fry_sces <- mapply(scpcaTools::import_quant_data, alevin_fry_info$data_dir,
-       alevin_fry_info$tool, alevin_fry_info$intron_mode, alevin_fry_info$usa_mode,
-       alevin_fry_info$which_counts, alevin_fry_info$intron_metadata_path)
-readr::write_rds(alevin_fry_sces, alevin_fry_sce_file)
+cDNA_salign_cr_sces <- make_sce_list(cDNA_salign_cr,
+                                     filename = file.path(output_dir, 
+                                                          "alevin_fry_cDNA_salign_cr_sces.rds"))
+cDNA_sketch_cr_sces <- make_sce_list(cDNA_sketch_cr, 
+                                     filename = file.path(output_dir, 
+                                                          "alevin_fry_cDNA_sketch_cr_sces.rds"))
+splici_salign_full_sces <- make_sce_list(splici_salign_full, 
+                                         filename = file.path(output_dir, 
+                                                          "alevin_fry_splici_full_cr_sces.rds"))
+splici_sketch_full_sces <- make_sce_list(splici_sketch_full,
+                                         filename = file.path(output_dir, 
+                                                          "alevin_fry_splici_sketch_full_sces.rds"))
+splici_salign_cr_sces <- make_sce_list(splici_salign_cr, 
+                                       filename = file.path(output_dir, 
+                                                          "alevin_fry_splici_salign_cr_sces.rds"))
+splici_sketch_cr_sces <- make_sce_list(splici_sketch_cr, 
+                                       filename = file.path(output_dir, 
+                                                          "alevin_fry_splici_sketch_cr_sces.rds"))
 ```
 
 
@@ -125,9 +189,12 @@ readr::write_rds(alevin_fry_sces, alevin_fry_sce_file)
 cellranger_info <- quant_info %>%
   dplyr::filter(tool == "cellranger")
 
-cellranger_fry_sces <- mapply(scpcaTools::import_quant_data, cellranger_info$data_dir,
-       cellranger_info$tool, cellranger_info$intron_mode, cellranger_info$usa_mode,
-       cellranger_info$which_counts, cellranger_info$intron_metadata_path)
+cellranger_fry_sces <- make_sce_list(cellranger_info, 
+                                     filename = file.path(output_dir,
+                                                          "cellranger_sces.rds"))
 ```
 
+```{r}
+
+```
 
