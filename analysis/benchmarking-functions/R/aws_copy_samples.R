@@ -3,7 +3,6 @@ aws_copy_samples <- function(local_dir, s3_dir, samples, tools) {
   ## need to add in check for tools 
   
   includes <- stringr::str_glue("--include \"{samples}*\"")
-  print(includes)
   
   for (tool in tools) {
     local_tool_dir = file.path(local_dir, tool)
