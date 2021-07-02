@@ -16,9 +16,7 @@ library(scater)
 ```{r}
 # load any functions we will need that aren't part of scpcaTools
 function_path <- file.path(".." ,"benchmarking-functions", "R")
-source(file.path(function_path, "aws_copy_samples.R"))
-source(file.path(function_path, "quant_info_table.R"))
-source(file.path(function_path, "add_sce_QC.R"))
+miceadds::source.all(function_path)
 ```
 
 ```{r}
@@ -35,13 +33,15 @@ if(!dir.exists(output_dir)){
 ## Copy from AWS 
 
 ```{r}
-
 quant_s3 <- 's3://nextflow-ccdl-results/scpca'
 
 samples <- c('SCPCR000006', 'SCPCR000118', 'SCPCR000119', 
              'SCPCR000126', 'SCPCR000127', 'SCPCR000220',
              'SCPCR000221')
+```
 
+
+```{r}
 aws_copy_samples(local_dir = data_dir,
                  s3_dir = quant_s3,
                  samples = samples,
@@ -138,49 +138,33 @@ list2env(alevin_split_info, .GlobalEnv)
 ```
 
 
-```{r, message=FALSE}
-make_sce_list <- function(info_df, filename, mito){
-  sce_list <- mapply(scpcaTools::import_quant_data,
-         info_df$data_dir,
-         info_df$tool,
-         info_df$which_counts,
-         info_df$intron_mode,
-         info_df$usa_mode,
-         info_df$filter) 
-    sce_list <- sce_list %>%
-      purrr::map(
-      ~ scater::addPerCellQC(.x,
-                       subsets = list(mito_genes = mito_genes[mito_genes %in% rownames(.x)]))
-      ) %>%
-      purrr::map(
-        ~ scater::addPerFeatureQC(.x)
-      )
-  readr::write_rds(sce_list, filename)
-  return(sce_list)
-}
-```
-
 
 ```{r, message=FALSE}
 # get alevin_fry_sces
 cDNA_salign_cr_sces <- make_sce_list(cDNA_salign_cr,
                                      filename = file.path(output_dir, 
-                                                          "alevin_fry_cDNA_salign_cr_sces.rds"))
+                                                          "alevin_fry_cDNA_salign_cr_sces.rds"), 
+                                     mito = mito_genes)
 cDNA_sketch_cr_sces <- make_sce_list(cDNA_sketch_cr, 
                                      filename = file.path(output_dir, 
-                                                          "alevin_fry_cDNA_sketch_cr_sces.rds"))
+                                                          "alevin_fry_cDNA_sketch_cr_sces.rds"), 
+                                     mito = mito_genes)
 splici_salign_full_sces <- make_sce_list(splici_salign_full, 
                                          filename = file.path(output_dir, 
-                                                          "alevin_fry_splici_full_cr_sces.rds"))
+                                                          "alevin_fry_splici_full_cr_sces.rds"), 
+                                         mito = mito_genes)
 splici_sketch_full_sces <- make_sce_list(splici_sketch_full,
                                          filename = file.path(output_dir, 
-                                                          "alevin_fry_splici_sketch_full_sces.rds"))
+                                                          "alevin_fry_splici_sketch_full_sces.rds"),
+                                         mito = mito_genes)
 splici_salign_cr_sces <- make_sce_list(splici_salign_cr, 
                                        filename = file.path(output_dir, 
-                                                          "alevin_fry_splici_salign_cr_sces.rds"))
+                                                          "alevin_fry_splici_salign_cr_sces.rds"), 
+                                       mito = mito_genes)
 splici_sketch_cr_sces <- make_sce_list(splici_sketch_cr, 
                                        filename = file.path(output_dir, 
-                                                          "alevin_fry_splici_sketch_cr_sces.rds"))
+                                                          "alevin_fry_splici_sketch_cr_sces.rds"), 
+                                       mito = mito_genes)
 ```
 
 
@@ -189,12 +173,43 @@ splici_sketch_cr_sces <- make_sce_list(splici_sketch_cr,
 cellranger_info <- quant_info %>%
   dplyr::filter(tool == "cellranger")
 
-cellranger_fry_sces <- make_sce_list(cellranger_info, 
+cellranger_sces <- make_sce_list(cellranger_info, 
                                      filename = file.path(output_dir,
                                                           "cellranger_sces.rds"))
 ```
 
 ```{r}
+## merge all QC output into one data frame to work with for plotting comparisons
+cDNA_salign_cr_qc <- cDNA_salign_cr_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+cDNA_sketch_cr_qc <- cDNA_sketch_cr_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+splici_salign_full_qc <- splici_salign_full_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+splici_sketch_full_qc <- splici_sketch_full_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+splici_salign_cr_qc <- splici_salign_cr_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+splici_sketch_cr_qc <- splici_sketch_cr_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+cellranger_qc <- cellranger_sces %>%
+  purrr::map_df(celldata_to_df, .id = "quant_id")
+```
 
+```{r}
+# replace left hand side with tool that is found in quant_info
+cell_qc <- dplyr::bind_rows(
+  'alevin-fry' = cDNA_salign_cr_qc,
+  'alevin-fry' = cDNA_sketch_cr_qc,
+  splici_salign_full = splici_salign_full_qc,
+  splici_sketch_full = splici_sketch_full_qc,
+  splici_salign_cr = splici_salign_cr_qc,
+  splici_sketch_cr = splici_sketch_cr_qc,
+  cellranger = cellranger_qc,
+  .id = "tool"
+) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir"))
 ```
 
