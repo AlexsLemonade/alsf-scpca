@@ -222,7 +222,8 @@ if("alevin-fry-unfiltered" %in% opt$tools & length(non_fry_tools) > 0){
   rowdata_qc <- rowdata_non_fry_df
 }
 
-# save coldata and rowdata qc
+# save quant_info, coldata and rowdata qc
+readr::write_tsv(quant_info, file.path(opt$output_dir, "quant_info.tsv"))
 readr::write_tsv(coldata_qc, file.path(opt$output_dir, "coldata_qc.tsv"))
 readr::write_tsv(rowdata_qc, file.path(opt$output_dir, "rowdata_qc.tsv"))
 
