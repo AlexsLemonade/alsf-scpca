@@ -338,6 +338,20 @@ I'm not entirely sure how to interpret that at this point.
 
 It does look like alevin-fry is detecting more cells than cellranger, so perhaps there is something we could be doing at the filtering stage that could help improve this? 
 
+Let's take a quick look at the number of cells detected by tool just to be sure that this hypothesis is correct. 
+```{r fig.width=7}
+cell_numbers <- coldata_info_df %>% 
+  dplyr::group_by(quant_id, tool, sample) %>% 
+  #dplyr::filter(sample != "SCPCR000118") %>%
+  dplyr::tally()
+
+ggplot(cell_numbers, aes(x = sample, y = n, color = tool)) + 
+  geom_point() +
+  theme_classic()
+```
+As expected, for all samples (except SCPCR000006), cellranger is detecting less cells than in alevin-fry. 
+I'm also not sure what has happened with SCPCR000118, but we saw this previously and it also shows strange patterns in mitochondrial content and very low coverage across the board.
+
 
 ## Per Cell QC Metrics in Shared Cells, Minimum Gene Coverage 
 
