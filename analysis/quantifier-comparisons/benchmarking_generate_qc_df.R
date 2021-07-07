@@ -97,8 +97,8 @@ quant_info <- quant_info %>%
 mito_file <- file.path(library_data_dir, "Homo_sapiens.GRCh38.103.mitogenes.txt")
 mito_genes <- readr::read_tsv(mito_file, col_names = "gene_id")
 mito_genes <- mito_genes %>%
-  dplyr::pull(gene_id)
-
+  dplyr::pull(gene_id) %>%
+  unique()
 
 # get sces for each tool
 
