@@ -125,7 +125,11 @@ resource "aws_iam_policy" "nf_read_S3" {
         "s3:GetObjectVersion",
         "s3:ListMultipartUploadParts"
       ],
-      "Resource": "arn:aws:s3:::*/*"
+      "Resource": [
+        "arn:aws:s3:::ccdl-scpca-data/*",
+        "arn:aws:s3:::nextflow-ccdl-data/*",
+        "arn:aws:s3:::nextflow-ccdl-results/*"
+      ]
     },
     {
       "Effect": "Allow",
@@ -158,7 +162,9 @@ resource "aws_iam_policy" "nf_read_S3" {
         "s3:GetAccessPointPolicy"
       ],
       "Resource": [
-        "arn:aws:s3:::*",
+        "arn:aws:s3:::ccdl-scpca-data",
+        "arn:aws:s3:::nextflow-ccdl-data",
+        "arn:aws:s3:::nextflow-ccdl-results",
         "arn:aws:s3:*:*:accesspoint/*",
         "arn:aws:s3:*:*:job/*"
       ]
