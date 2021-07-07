@@ -56,3 +56,6 @@ images/cellranger/cellranger*.tar.gz
 
 # Ignore nextflow logs
 workflows/nextflow_logs/
+
+# Ignore results
+/results
