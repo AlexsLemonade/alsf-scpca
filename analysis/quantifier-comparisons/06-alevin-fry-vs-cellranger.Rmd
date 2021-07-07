@@ -1,0 +1,328 @@
+---
+title: "Alevin-Fry vs. Cellranger Comparison"
+author: "Ally Hawkins for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+
+```{r}
+library(magrittr)
+library(ggplot2)
+```
+
+
+```{r}
+source(file.path("..", "benchmarking-functions", "R", "perCellQCMetrics_threshold.R"))
+```
+
+
+```{r}
+base_dir <- here::here()
+file_dir <- file.path(base_dir, "results")
+
+# sce files 
+cDNA_salign_full_file <- file.path(file_dir, "cDNA_salign_full_sces.rds")
+cDNA_sketch_full_file <- file.path(file_dir, "cDNA_sketch_full_sces.rds")
+cDNA_salign_cr_file <- file.path(file_dir, "cDNA_salign_cr_sces.rds")
+cDNA_sketch_cr_file <- file.path(file_dir, "cDNA_sketch_cr_sces.rds")
+splici_salign_full_file <- file.path(file_dir, "splici_salign_full_sces.rds")
+splici_sketch_full_file <- file.path(file_dir, "splici_sketch_full_sces.rds")
+splici_salign_cr_file <- file.path(file_dir, "splici_salign_cr_sces.rds")
+splici_sketch_cr_file <- file.path(file_dir, "splici_sketch_cr_sces.rds")
+cellranger_file <- file.path(file_dir, "cellranger_sces.rds")
+
+# qc files 
+
+quant_info_file <- file.path(file_dir, "quant_info.tsv")
+coldata_df_file <- file.path(file_dir, "coldata_qc.tsv")
+rowdata_df_file <- file.path(file_dir, "rowdata_qc.tsv")
+
+# mito gene list 
+mito_file <- file.path(base_dir, "sample-info", "Homo_sapiens.GRCh38.103.mitogenes.txt")
+```
+
+
+```{r}
+# read in sces
+cDNA_salign_full <- readr::read_rds(cDNA_salign_full_file)
+cDNA_sketch_full <- readr::read_rds(cDNA_sketch_full_file)
+cDNA_salign_cr <- readr::read_rds(cDNA_salign_cr_file)
+cDNA_sketch_cr <- readr::read_rds(cDNA_sketch_cr_file)
+splici_salign_full <- readr::read_rds(splici_salign_full_file)
+splici_sketch_full <- readr::read_rds(splici_sketch_full_file)
+splici_salign_cr <- readr::read_rds(splici_salign_cr_file)
+splici_sketch_cr <- readr::read_rds(splici_sketch_cr_file)
+cellranger <- readr::read_rds(cellranger_file)
+
+sce_list <- list(
+  cDNA_salign_full,
+  cDNA_sketch_full,
+  cDNA_salign_cr,
+  cDNA_sketch_cr,
+  splici_salign_full,
+  splici_sketch_full,
+  splici_salign_cr,
+  splici_sketch_cr,
+  cellranger
+)
+
+names(sce_list) <- c(
+  'cDNA_salign_full',
+  'cDNA_sketch_full',
+  'cDNA_salign_cr',
+  'cDNA_sketch_cr',
+  'splici_salign_full',
+  'splici_sketch_full',
+  'splici_salign_cr',
+  'splici_sketch_cr',
+  'cellranger'
+)
+```
+
+
+```{r}
+quant_info <- readr::read_tsv(quant_info_file)
+coldata_df <- readr::read_tsv(coldata_df_file)
+rowdata_df <- readr::read_tsv(rowdata_df_file)
+```
+
+```{r}
+# get list of mito genes 
+mito_genes <- readr::read_tsv(mito_file, col_names = "gene_id")
+mito_genes <- mito_genes %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+```
+
+```{r}
+addPerCellQC_mito <- function(sce, mito_genes){
+  # add per cell QC with mitochondrial genes separately for later comparisons
+  scater::addPerCellQC(
+    sce, 
+    subsets = list(mito = mito_genes)
+  )
+}
+```
+
+```{r}
+test <- cDNA_salign_full %>%
+  purrr::map(addPerCellQC_mito, mito_genes = mito_genes)
+
+counts <- SingleCellExperiment::counts(cDNA_salign_full[[1]])
+mito_rows <- rownames(counts) %in% mito_genes
+mito_counts <- Matrix::colSums(counts[mito_rows, ])
+total_counts <- Matrix::colSums(counts)
+mito_fraction = mito_counts/total_counts
+summary(mito_fraction)
+
+SummarizedExperiment::colData(test[[1]])
+```
+
+
+```{r}
+## fix error for 220 and 221 run with cellranger that should have index_type as splici 
+quant_info[which(quant_info$quant_dir == "SCPCR000220-cdna-pre_mRNA"),"index_type"] <- "splici"
+quant_info[which(quant_info$quant_dir == "SCPCR000221-cdna-pre_mRNA"),"index_type"] <- "splici"
+
+coldata_info_df <- coldata_df %>%
+  dplyr::mutate(tool = dplyr::case_when(tool == "alevin-fry-unfiltered" ~ "alevin-fry",
+                                        tool == "cellranger" ~ "cellranger")) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir"))
+```
+
+
+```{r}
+ggplot(coldata_info_df, aes(x = tool, y = subsets_mito_percent, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) + 
+  theme_classic() + 
+  ylab("% Mito /Cell") + 
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+cell_coldata_qc <- coldata_info_df %>%
+  dplyr::filter(seq_unit == "cell")
+
+nucleus_coldata_qc <- coldata_info_df %>%
+  dplyr::filter(seq_unit == "nucleus") %>%
+  dplyr::filter(index_type == "splici")
+```
+
+```{r fig.height=3, fig.width=5}
+ggplot(nucleus_coldata_qc, aes(x = alevin_resolution, y = sum, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,30000))
+```
+
+```{r}
+ggplot(cell_coldata_qc, aes(x = alevin_resolution, y = sum, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  ylim(c(0,50000))
+```
+
+```{r}
+ggplot(nucleus_coldata_qc, aes(x = alevin_resolution, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,15000))
+```
+
+```{r}
+ggplot(cell_coldata_qc, aes(x = alevin_resolution, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  ylim(c(0,10000))
+```
+
+## Shared Cells only, No Minimum Gene Coverage
+
+```{r}
+cell_counts <- cell_coldata_qc %>%  
+  dplyr::count(cell_id, sample)
+
+common_cells <- cell_counts %>%
+  dplyr::filter(n == 9) %>%
+  dplyr::pull(cell_id)
+
+cell_qc_common <- cell_coldata_qc %>%
+  dplyr::filter(
+    (cell_id %in% common_cells) 
+  )
+```
+
+```{r}
+nuclei_counts <- nucleus_coldata_qc %>%
+  dplyr::count(cell_id, sample)
+
+common_nuclei <- nuclei_counts %>%
+  dplyr::filter(n == 5) %>%
+  dplyr::pull(cell_id)
+
+nucleus_qc_common <- nucleus_coldata_qc %>%
+  dplyr::filter(
+    (cell_id %in% common_nuclei)
+  )
+```
+
+```{r fig.height = 5, fig.width =10}
+# mito comparison across shared cells only of all runs
+# nucleus samples first 
+ggplot(nucleus_qc_common, aes(x = alevin_resolution, y = subsets_mito_percent, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) + 
+  theme_classic() + 
+  ylab("% Mito /Cell") + 
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+
+# single cell
+ggplot(cell_qc_common, aes(x = alevin_resolution, y = subsets_mito_percent, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) + 
+  theme_classic() + 
+  ylab("% Mito /Cell") + 
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+```
+
+```{r}
+ggplot(nucleus_qc_common, aes(x = alevin_resolution, y = sum, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,30000))
+```
+```{r}
+ggplot(cell_qc_common, aes(x = alevin_resolution, y = sum, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  ylim(c(0,50000))
+```
+```{r}
+ggplot(nucleus_qc_common, aes(x = alevin_resolution, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,15000))
+```
+```{r}
+ggplot(cell_qc_common, aes(x = alevin_resolution, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,10000))
+```
+
+## Shared Cells, Minimum Gene Coverage 
+
+
+```{r}
+# 
+for(list in sce_list){
+  list <- list %>%
+    purrr::map(perCellQCMetrics_threshold, threshold = 5)
+}
+```
+
+
+```{r}
+# merge back into a dataframe for plotting 
+# let's make map to use for mapping the tool back to each of the configurations 
+alevin_fry <- c(  
+  'cDNA_salign_full',
+  'cDNA_sketch_full',
+  'cDNA_salign_cr',
+  'cDNA_sketch_cr',
+  'splici_salign_full',
+  'splici_sketch_full',
+  'splici_salign_cr',
+  'splici_sketch_cr',
+)
+
+df_list <- list()
+for(list in sce_list){
+  df_list[[i]] <- list %>%
+    purrr::map_df(coldata_to_df, .id = "quant_id")
+  df_list[[i]] <- df_list[[i]] %>%
+    dplyr::mutate(tool = dplyr::case_when(
+      names(sce_list)[[i]] %in% alevin_fry ~ "alevin-fry-unfiltered",
+      names(sce_list)[[i]] == "cellranger" ~ "cellranger"))
+}
+
+```
+
