@@ -53,7 +53,7 @@ quant_info_table <- function(data_dir, tools, samples){
   all_quant_info <- dplyr::bind_rows(quant_info_list) %>%
     dplyr::mutate(alevin_alignment = tidyr::replace_na(alevin_alignment, "not_alevin"),
                   alevin_resolution = tidyr::replace_na(alevin_resolution, "not_alevin"),
-                  usa_mode = index_type == "splici" & alevin_resolution == "cr" &  
+                  usa_mode = index_type == "splici" & alevin_resolution == "cr" 
                   intron_mode = index_type == "splici" & tool != "cellranger"  & !usa_mode
   return(all_quant_info)
 }
