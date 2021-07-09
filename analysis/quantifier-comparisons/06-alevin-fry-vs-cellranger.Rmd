@@ -92,27 +92,15 @@ cellranger <- readr::read_rds(cellranger_file)
 
 # make a list that will be used later for calculating qc with a specific threshold
 sce_list <- list(
-  cDNA_salign_full,
-  cDNA_sketch_full,
-  cDNA_salign_cr,
-  cDNA_sketch_cr,
-  splici_salign_full,
-  splici_sketch_full,
-  splici_salign_cr,
-  splici_sketch_cr,
-  cellranger
-)
-
-names(sce_list) <- c(
-  'cDNA_salign_full',
-  'cDNA_sketch_full',
-  'cDNA_salign_cr',
-  'cDNA_sketch_cr',
-  'splici_salign_full',
-  'splici_sketch_full',
-  'splici_salign_cr',
-  'splici_sketch_cr',
-  'cellranger'
+  cDNA_salign_full = cDNA_salign_full,
+  cDNA_sketch_full = cDNA_sketch_full,
+  cDNA_salign_cr = cDNA_salign_cr,
+  cDNA_sketch_cr = cDNA_sketch_cr,
+  splici_salign_full = splici_salign_full,
+  splici_sketch_full = splici_sketch_full,
+  splici_salign_cr = splici_salign_cr,
+  splici_sketch_cr = splici_sketch_cr,
+  cellranger = cellranger
 )
 ```
 
@@ -245,9 +233,7 @@ common_cells <- cell_counts %>%
   dplyr::pull(cell_id)
 
 cell_qc_common <- cell_coldata_qc %>%
-  dplyr::filter(
-    (cell_id %in% common_cells) 
-  )
+  dplyr::filter(cell_id %in% common_cells) 
 ```
 
 ```{r}
@@ -349,7 +335,7 @@ ggplot(cell_numbers, aes(x = sample, y = n, color = tool)) +
   geom_point() +
   theme_classic()
 ```
-As expected, for all samples (except SCPCR000006), cellranger is detecting less cells than in alevin-fry. 
+As expected, for all samples (except SCPCR000006), cellranger is detecting fewer cells than in alevin-fry. 
 I'm also not sure what has happened with SCPCR000118, but we saw this previously and it also shows strange patterns in mitochondrial content and very low coverage across the board.
 
 
