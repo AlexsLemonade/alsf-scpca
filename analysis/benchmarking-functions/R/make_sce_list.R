@@ -16,7 +16,7 @@ make_sce_list <- function(info_df, filename, mito){
   sce_list <- sce_list %>%
     purrr::map(addCellQC, mito) %>%
     purrr::map(
-      ~ scater::addPerFeatureQC(.x)
+      scater::addPerFeatureQC
     )
   names(sce_list) <- info_df$quant_dir
   readr::write_rds(sce_list, filename)

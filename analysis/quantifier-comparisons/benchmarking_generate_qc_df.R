@@ -8,7 +8,7 @@ library(optparse)
 
 # import benchmarking functions
 function_path <- file.path(".." ,"benchmarking-functions", "R")
-miceadds::source.all(function_path)
+purrr::walk(list.files(function_path, pattern = ".R$"), source)
 
 # Set up optparse options
 option_list <- list(
@@ -226,5 +226,4 @@ if("alevin-fry-unfiltered" %in% opt$tools & length(non_fry_tools) > 0){
 readr::write_tsv(quant_info, file.path(opt$output_dir, "quant_info.tsv"))
 readr::write_tsv(coldata_qc, file.path(opt$output_dir, "coldata_qc.tsv"))
 readr::write_tsv(rowdata_qc, file.path(opt$output_dir, "rowdata_qc.tsv"))
-
 

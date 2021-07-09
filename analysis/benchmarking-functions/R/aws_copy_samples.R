@@ -2,11 +2,11 @@ aws_copy_samples <- function(local_dir, s3_dir, samples, tools) {
   
   ## need to add in check for tools 
   
-  includes <- stringr::str_glue("--include \"{samples}*\"")
+  includes <- paste('--include "', samples, '*"', sep = '', collapse = ' ')
   
   for (tool in tools) {
     local_tool_dir = file.path(local_dir, tool)
-    s3_tool_dir = paste(s3_dir, paste(tool, 'quant/', sep = '-'), sep = '/')
+    s3_tool_dir = glue::glue("{s3_dir}/{tool}-quant/")
     dir.create(local_tool_dir, recursive = TRUE, showWarnings = FALSE)
     
     if (tool == 'alevin') {
