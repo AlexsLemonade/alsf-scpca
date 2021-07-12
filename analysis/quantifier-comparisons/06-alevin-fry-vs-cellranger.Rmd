@@ -356,9 +356,9 @@ To see if the increase in genes detected/cell in the full resolution could be du
 # use addCellQC function to addPerCellQC with gene detection threshold
 # only genes with detection in > 5% of cells will be included in the QC calculations
 sce_list <- sce_list %>%
-  purrr::map(.f =  
-               ~ purrr::walk(.x, addCellQC, mito = mito_genes, threshold = 5
-  ))
+  purrr::map(
+    ~ purrr::map(.x, addCellQC, mito = mito_genes, threshold = 5)
+  )
 ```
 
 
