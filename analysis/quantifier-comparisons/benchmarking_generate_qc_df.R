@@ -41,11 +41,11 @@ option_list <- list(
     opt_str = c("-o", "--output_dir"),
     type = "character",
     default = "results",
-    help = "path to folder where output files should be stored"
+    help = "path to folder where all output files should be stored"
   ),
   make_option(
     opt_str = c("--save"),
-    action = "store_false",
+    action = "store_true",
     type = "logical",
     help = "option to save individual rds files containing SingleCellExperiment objects."
   )
@@ -58,11 +58,12 @@ opt <- parse_args(OptionParser(option_list = option_list))
 if(!file.exists(opt$sample_file)){
   stop("Sample file does not exist.")
 }
+
 if(!file.exists(opt$tool_list)){
   stop("File containing tool list does not exist.")
 }
 
-# read in list of sample ID's and tools and start dataframe
+# read in list of sample ID's and tools
 sample_ids <- readr::read_tsv(opt$sample_file, col_names = c("sample_id")) %>%
   dplyr::pull("sample_id")
 tools <- readr::read_tsv(opt$tool_list, col_names = c("tools")) %>%
@@ -73,15 +74,14 @@ if(!dir.exists(opt$output_dir)){
   dir.create(opt$output_dir, recursive = TRUE)
 }
 
+# directory within output directory to store data copied over from AWS S3
+data_dir <- file.path(opt$output_dir, "data", "quants")
+
 # create results directory to write output files 
 results_dir <- file.path(opt$output_dir, "results")
 if(!dir.exists(results_dir)){
   dir.create(results_dir, recursive = TRUE, showWarnings = FALSE)
 }
-
-# directory within output directory to store data copied over from AWS S3
-data_dir <- file.path(output_dir, "data", "quants")
-
 
 # copy data from AWS
 # grab data from S3 for each tool and sample
@@ -107,12 +107,12 @@ sync_call <- paste('aws s3 sync', opt$annotation_files_s3, library_data_dir,
                    '--include "*.mitogenes.txt"')
 system(sync_call, ignore.stdout = TRUE)
 
-# Generate quant_info table for all benchmarking samples
+# Generate metadata table for all benchmarking samples containing run parameters for each sample
 quant_info <- quant_info_table(data_dir = data_dir,
                                tools = tools,
                                samples = sample_ids)
 
-# read in sample metadata
+# read in sample metadata and obtain sample id and sequencing unit 
 library_df <- readr::read_tsv(file.path(library_data_dir, "scpca-library-metadata.tsv"))
 select_metadata_df <- library_df %>%
   dplyr::select(scpca_run_id, seq_unit)
@@ -120,6 +120,7 @@ select_metadata_df <- library_df %>%
 # add sample metadata to quant_info
 quant_info <- quant_info %>% 
   dplyr::left_join(select_metadata_df, by = c("sample" = "scpca_run_id")) %>%
+  # get which_counts column based on seq_unit to be used to import quants data into R
   dplyr::mutate(which_counts = dplyr::case_when(seq_unit == "cell" ~ "spliced",
                                                 seq_unit == "nucleus" ~ "unspliced"))
 
@@ -165,11 +166,13 @@ if(opt$save){
                                                     paste(.x$group_name[1], "_sces.rds", sep = ""))))
   
 } else {
+  
   all_sces_list <- quant_info %>%
     # split into list of metadata tables 
     dplyr::group_split(group_name, .keep = TRUE) %>%
     # make individual sce lists for each group based on tool + run configurations 
     purrr::map(~ make_sce_list(info_df = .x, mito = mito_genes))
+  
 }
 
 # name list of list of sces based on tool + run configuration stored in group_name column 

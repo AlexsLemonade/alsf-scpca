@@ -38,39 +38,37 @@ aws_copy_samples <- function(local_dir, s3_dir, samples, tools) {
       stop("Invalid tool name.")
     }
     
-    local_tool_dir = file.path(local_dir, tool)
-    s3_tool_dir = glue::glue("{s3_dir}/{tool}-quant/")
-    dir.create(local_tool_dir, recursive = TRUE, showWarnings = FALSE)
-    
     # create a directory for the tool that is being used if not already existent
     local_tool_dir = file.path(local_dir, tool)
     if(!dir.exists(local_tool_dir)){
       dir.create(local_tool_dir, recursive = TRUE, showWarnings = FALSE) 
     }
+    s3_tool_dir = glue::glue("{s3_dir}/{tool}-quant/")
+    
     # based on each tool create the aws s3 cp call used to copy files from S3 to the local directory 
     # for each tool exclude certain large files 
     if (tool == 'alevin') {
       sync_call <- paste('aws s3 cp', s3_tool_dir, local_tool_dir, 
-                         "--exclude '*'", includes, '--recursive', sep = " ")
+                         '--exclude "*"', includes, '--recursive', sep = " ")
     }
     if (tool %in% c('alevin-fry', 'alevin-fry-unfiltered', 'alevin-fry-knee')) {
       # exclude large rad files 
       sync_call <- paste('aws s3 cp', s3_tool_dir, local_tool_dir, 
-                         "--exclude '*'", includes, "--exclude '*.rad'",
+                         '--exclude "*"', includes, '--exclude "*.rad"',
                          '--recursive')
     }
     if (tool == 'kallisto') {
       # excludes large outputs in bus directory for each sample
       sync_call <- paste('aws s3 cp', s3_tool_dir, local_tool_dir, 
-                         "--exclude '*'", includes, "--exclude '*/bus/*'",
+                         '--exclude "*"', includes, '--exclude "*/bus/*"',
                          '--recursive')
     }
     if (tool == 'cellranger') {
       # exclude large bam files 
       sync_call <- paste('aws s3 cp', s3_tool_dir, local_tool_dir, 
-                         "--exclude '*'", includes, 
-                         "--exclude '*/SC_RNA_COUNTER_CS/*'",
-                         "--exclude '*.bam'", "--exclude '*.bam.bai'",
+                         '--exclude "*"', includes, 
+                         '--exclude "*/SC_RNA_COUNTER_CS/*"',
+                         '--exclude "*.bam"', '--exclude "*.bam.bai"',
                          '--recursive')
     }
     system(sync_call, ignore.stdout = TRUE)

@@ -7,8 +7,8 @@
 #' @param samples List of samples to keep in the final metadata table.
 #'
 #' @return Metadata table with each row corresponding to a sample and information 
-#'   about the quants file for that sample and tool combination.
-#'   The columns included in the table include: 
+#'   about the quants file and run parameters used for that sample and tool combination.
+#'   The columns in the table include: 
 #'   data_dir - Local directory where the output quants data for all samples is stored. 
 #'   tool - which tool was used to process the samples. 
 #'   which_counts - Which counts to keep in the counts matrix, cDNA only ("spliced") or cDNA and introns ("unspliced").
@@ -58,6 +58,7 @@ quant_info_table <- function(data_dir, tools, samples){
                     "spliced_intron_txome_k31_full_sa",
                     "spliced_intron_txome_k31",
                     "cdna-pre_mRNA")
+  
   cdna_types <- c("cdna", 
                   "spliced_txome_k31_full_sa",
                   "txome_k31_full_sa", 
