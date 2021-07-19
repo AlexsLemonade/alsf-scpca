@@ -26,7 +26,7 @@ option_list <- list(
     help = "path to tab separated file with one column with list of tools used"
   ), 
   make_option(
-    opt_str = c("-s", "--quant_s3"),
+    opt_str = c("-q", "--quant_s3"),
     type = "character",
     default = "s3://nextflow-ccdl-results/scpca",
     help = "storage location for quant output files on S3"
