@@ -197,6 +197,6 @@ rowdata_df <- purrr::map_df(
 
 # save quant_info, coldata and rowdata qc
 readr::write_tsv(quant_info, file.path(results_dir, "quant_info.tsv"))
-readr::write_tsv(coldata_qc, file.path(results_dir, "coldata_qc.tsv"))
-readr::write_tsv(rowdata_qc, file.path(results_dir, "rowdata_qc.tsv"))
+readr::write_tsv(coldata_df, file.path(results_dir, "coldata_qc.tsv"))
+readr::write_tsv(rowdata_df, file.path(results_dir, "rowdata_qc.tsv"))
 
