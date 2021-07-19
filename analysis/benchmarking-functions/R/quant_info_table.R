@@ -70,6 +70,10 @@ quant_info_table <- function(data_dir, tools, samples){
   # make a list of tools that use knee filtering
   knee_tools <- c("cellranger",
                   "kallisto")
+  
+  #list of usa tools 
+  usa_tools <- c("cr-like", 
+                 "cr-like-em")
 
   for (tool in tools){
     
@@ -107,7 +111,7 @@ quant_info_table <- function(data_dir, tools, samples){
       tool_quant_info <- tool_quant_info %>%
         tidyr::separate(quant_dir, sep = "[-]",
                         into = c("sample", "index_type", "alevin_alignment", "alevin_resolution"),
-                        extra = "drop",
+                        extra = "merge",
                         fill = "right",
                         remove = FALSE) %>%
         # create filter strategy column based on tool used for alevin fry
@@ -131,7 +135,7 @@ quant_info_table <- function(data_dir, tools, samples){
                   filter = ifelse(alevin_alignment == "knee" | tool %in% knee_tools, FALSE, TRUE), 
                   alevin_alignment = tidyr::replace_na(alevin_alignment, "not_alevin"),
                   alevin_resolution = tidyr::replace_na(alevin_resolution, "not_alevin"),
-                  usa_mode = index_type == "splici" & alevin_resolution == "cr",
+                  usa_mode = index_type == "splici" & alevin_resolution %in% usa_tools,
                   intron_mode = index_type == "splici" & tool != "cellranger"  & !usa_mode)
   return(all_quant_info)
 }
