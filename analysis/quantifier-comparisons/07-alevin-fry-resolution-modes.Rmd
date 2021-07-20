@@ -1,0 +1,367 @@
+---
+title: "Alevin-Fry Comparison of Resolution Modes"
+author: "Ally Hawkins for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+In this notebook we are comparing the use of the `cr-like` resolution in alevin-fry to the `cr-like-em` resolution. 
+Previously in our benchmarking analysis we made the decision to use alevin-fry with the `splici` index and selective alignment (`salign`) for all samples, single-nucleus and single-cell. 
+The one remaining question was about resolution. 
+Alevin-fry using the `splici` index is recommended to be used in USA mode which is compatible with both `cr-like` and `cr-like-em`, so we have chosen to use one of these two methods. 
+
+Data in this notebook have been analyzed using alevin-fry 0.4.0 and salmon 1.5.1. 
+
+Here I am looking at comparisons of per cell QC metrics and taking a closer look at the genes that are detected in each method. 
+
+## Setup
+
+```{r}
+library(magrittr)
+library(ggplot2)
+library(SingleCellExperiment)
+library(eulerr)
+library(clusterProfiler)
+library(msigdbr)
+library(org.Hs.eg.db)
+```
+
+
+```{r}
+# load in benchmarking functions 
+function_path <- file.path("..", "benchmarking-functions", "R")
+file.path(function_path, list.files(function_path, pattern = ".R$")) %>%
+  purrr::walk(source)
+```
+
+```{r}
+# path to results files with sces and qc dataframes 
+base_dir <- here::here()
+file_dir <- file.path(base_dir, "data", "cr-like-test", "results")
+
+# qc files 
+
+quant_info_file <- file.path(file_dir, "quant_info.tsv")
+coldata_df_file <- file.path(file_dir, "coldata_qc.tsv")
+rowdata_df_file <- file.path(file_dir, "rowdata_qc.tsv")
+```
+
+```{r}
+# read in dataframes needed for plotting
+quant_info <- readr::read_tsv(quant_info_file)
+coldata_df <- readr::read_tsv(coldata_df_file)
+rowdata_df <- readr::read_tsv(rowdata_df_file)
+```
+
+```{r}
+alevin_fry_tools <- c("splici_salign_cr-like", "splici_salign_cr-like-em")
+
+# merge coldata df with quant_info
+coldata_info_df <- coldata_df %>%
+  # rename tool to be either cellranger or alevin-fry
+  dplyr::mutate(tool = ifelse(tool %in% alevin_fry_tools, "alevin-fry", "cellranger")) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir")) %>%
+  # rename the not_alevin to cellranger for plotting purposes
+  dplyr::mutate(alevin_resolution = ifelse(alevin_resolution == "not_alevin", "cellranger", alevin_resolution))
+```
+
+
+```{r}
+# split into cell and nucleus coldata
+cell_coldata_qc <- coldata_info_df %>%
+  dplyr::filter(seq_unit == "cell")
+
+nucleus_coldata_qc <- coldata_info_df %>%
+  dplyr::filter(seq_unit == "nucleus") %>%
+  dplyr::filter(index_type == "splici")
+```
+
+## Per Cell QC Metrics
+
+### All Cells 
+
+Let's briefly look at the UMI/cell and genes detected/cell when looking at all cells with these methods. 
+
+```{r}
+ggplot(nucleus_coldata_qc, aes(x = tool, y = sum, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,30000))
+```
+
+```{r}
+ggplot(cell_coldata_qc, aes(x = tool, y = sum, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  ylim(c(0,50000))
+```
+
+```{r}
+ggplot(nucleus_coldata_qc, aes(x = tool, y = detected, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,10000))
+```
+
+```{r}
+ggplot(cell_coldata_qc, aes(x = tool, y = detected, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") + 
+  ylim(c(0,10000))
+```
+As seen previously, when looking at all cells across all tools, we see that alevin-fry appears to detect lower UMI/cell and genes/detected/cell than cellranger regardless of resolution. 
+This is most likely due to the fact that alevin-fry detects more cells than cellranger and is an artifact of the filtering methods. 
+There is a population of cells passing filtering in alevin-fry with lower UMI/cell and genes detected/cell that should probably be filtered out. 
+
+## Shared cells only 
+
+To be sure that is the case, let's look at the shared cells only. 
+Here we also want to compare the differences between the two resolution modes of alevin-fry. 
+
+```{r}
+# filter for cells that are found in all configurations of alevin + cellranger
+cell_counts <- cell_coldata_qc %>%  
+  dplyr::count(cell_id, sample)
+
+common_cells <- cell_counts %>%
+  dplyr::filter(n == 3) %>%
+  dplyr::pull(cell_id)
+
+cell_qc_common <- cell_coldata_qc %>%
+  dplyr::filter(cell_id %in% common_cells) 
+```
+
+```{r}
+# filter for cells that are found in all configurations of alevin + cellranger
+nuclei_counts <- nucleus_coldata_qc %>%
+  dplyr::count(cell_id, sample)
+
+common_nuclei <- nuclei_counts %>%
+  dplyr::filter(n == 3) %>%
+  dplyr::pull(cell_id)
+
+nucleus_qc_common <- nucleus_coldata_qc %>%
+  dplyr::filter(
+    (cell_id %in% common_nuclei)
+  )
+```
+
+
+```{r}
+ggplot(nucleus_qc_common, aes(x = tool, y = sum, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_wrap(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,30000))
+```
+
+```{r}
+ggplot(cell_qc_common, aes(x = tool, y = sum, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_wrap(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,50000))
+```
+```{r}
+ggplot(nucleus_qc_common, aes(x = tool, y = detected, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_wrap(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,10000))
+```
+```{r}
+ggplot(cell_qc_common, aes(x = tool, y = detected, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_wrap(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,10000))
+```
+The `cr-like-em` resolution actually looks more similar to cellranger than the `cr-like` when looking at UMI/cell, but when looking at genes/cell you do see a shift upwards in the `cr-like-em`. 
+Cellranger appears to be somewhere in the middle with overall no major differences between these resolutions and cellranger so I would be inclined to use `cr-like-em` to resolve multi-mapped reads. 
+
+## Differences in Gene detection between Alevin-fry and Cellranger
+
+### Overlap of Genes 
+
+As another comparison, let's look at the actual genes that are identified in each of the tools. 
+Let's see how many are lost when we use alevin-fry over cellranger and what types of genes they are. 
+
+```{r}
+# pull out genes that are detected and expressed in each of the tools
+cellranger_genes <- rowdata_df %>%
+  dplyr::filter(tool == "cellranger" & detected > 0 & mean > 0) %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+
+cr_like_genes <- rowdata_df %>%
+  dplyr::filter(tool == "splici_salign_cr-like" & detected > 0 & mean > 0) %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+
+cr_em_genes <- rowdata_df %>%
+  dplyr::filter(tool == "splici_salign_cr-like-em" & detected > 0 & mean > 0) %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+```
+
+```{r}
+rowdata_df_filter <- rowdata_df %>%
+  dplyr::filter(detected > 0 & mean > 0)
+```
+
+
+```{r}
+# look at intersection between cellranger and alevin-fry cr-like
+cellranger_cr_intersect <- rowdata_df_filter %>%
+  dplyr::filter(gene_id %in% cr_like_genes & tool == "cellranger") %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+
+venn_prep <- c("Cellranger" = length(cellranger_genes) - length(cellranger_cr_intersect), 
+               "cr-like" = length(cr_like_genes) - length(cellranger_cr_intersect), 
+               "Cellranger&cr-like" = length(cellranger_cr_intersect))
+plot(euler(venn_prep), quantities = TRUE)
+
+```
+
+```{r}
+# look at intersection between cellranger and alevin-fry cr-like-em
+cellranger_cr_em_intersect <- rowdata_df_filter %>%
+  dplyr::filter(gene_id %in% cr_em_genes & tool == "cellranger") %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+
+venn_prep <- c("Cellranger" = length(cellranger_genes) - length(cellranger_cr_em_intersect), 
+               "cr-like-em" = length(cr_em_genes) - length(cellranger_cr_em_intersect), 
+               "Cellranger&cr-like-em" = length(cellranger_cr_em_intersect))
+plot(euler(venn_prep), quantities = TRUE)
+
+```
+
+
+```{r}
+# look at intersection between alevin-fry cr-like and alevin-fry cr-like-em
+cr_cr_em_intersect <- rowdata_df_filter %>%
+  dplyr::filter(gene_id %in% cr_em_genes & tool == "splici_salign_cr-like") %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+
+venn_prep <- c("cr-like" = length(cr_like_genes) - length(cr_cr_em_intersect), 
+               "cr-like-em" = length(cr_em_genes) - length(cr_cr_em_intersect), 
+               "cr-like&cr-like-em" = length(cr_cr_em_intersect))
+plot(euler(venn_prep), quantities = TRUE)
+```
+
+Here we can see that Alevin-fry in general detects more genes than cellranger but probably with lower counts as we saw when looking at all cells vs. shared cells above. 
+It looks like the majority of the genes are shared in all of the tools, but does this hold when we drop lowly expressed genes? 
+Do we see more or less genes overlapping? 
+
+
+If we now look at the gene expression for those genes that are unique to each tool, how do they compare to the gene expression for those genes that are shared?
+
+```{r}
+# add a column in colData to classify as shared or not shared
+rowdata_df_filter <- rowdata_df_filter %>%
+  dplyr::mutate(gene_status = ifelse(gene_id %in% c(cellranger_cr_intersect, cellranger_cr_em_intersect, cr_cr_em_intersect), "shared", "unique")) 
+```
+
+
+```{r}
+ggplot(rowdata_df_filter, aes(x = tool, y = mean, fill = gene_status)) + 
+  geom_boxplot() + 
+  ylim(c(0,2))
+```
+As expected, across the board, it looks like the unique genes are those with lower mean gene expression than those genes that are shared across other tools. 
+The genes that are lost are probably not contributing very much to downstream results as much. 
+ 
+
+### Gene Ontology
+
+Let's make sure that we aren't losing any genes that we might care about and would be important pathways in pediatric oncology. 
+To do this, I am using over-representation analysis with 
+
+```{r}
+cellranger_lost <- rowdata_df_filter %>%
+  dplyr::filter(gene_status == "unique" & tool == "cellranger") %>%
+  dplyr::arrange(desc(mean)) %>%
+  dplyr::select(gene_id, Symbol, mean, detected)
+
+cr_like_lost <- rowdata_df_filter %>%
+  dplyr::filter(gene_status == "unique" & tool == "splici_salign_cr-like") %>%
+  dplyr::arrange(desc(mean)) %>%
+  dplyr::select(gene_id, Symbol, mean, detected)
+
+cr_em_lost <- rowdata_df_filter %>%
+  dplyr::filter(gene_status == "unique" & tool == "splici_salign_cr-like-em") %>%
+  dplyr::arrange(desc(mean)) %>%
+  dplyr::select(tool, gene_id, Symbol, mean, detected)
+
+```
+
+There are 200 genes that are unique to cellranger, let's look and see what they are and what the average expression is. 
+```{r}
+head(cellranger_lost)
+summary(cellranger_lost$mean)
+summary(cellranger_lost$detected)
+```
+
+
+```{r}
+ora_genes <- cellranger_lost$Symbol
+background_genes <- rowdata_df$Symbol %>%
+  unique()
+```
+
+```{r}
+go_ora_results <- enrichGO(gene = ora_genes,
+                           universe = background_genes,
+                           keyType = "SYMBOL",
+                           OrgDb = org.Hs.eg.db,
+                           ont = "BP",
+                           pAdjustMethod = "BH",
+                           pvalueCutoff = 0.00001)
+```
+
+
+```{r}
+go_ora_results@result %>%
+  as.data.frame() %>%
+  dplyr::filter(p.adjust < 0.00001)
+```
+
+```{r}
+sessioninfo::session_info()
+```
+
