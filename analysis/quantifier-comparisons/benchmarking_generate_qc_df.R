@@ -155,25 +155,20 @@ quant_info <- quant_info %>%
 
 # if --save is used, pass filename through with make_sce_list() to save each list of sces for each 
 # unique combo of tool+run parameters as its own rds file 
-if(opt$save){
-  
-  all_sces_list <- quant_info %>%
+ all_sces_list <- quant_info %>%
     # split into list of metadata tables 
     dplyr::group_split(group_name, .keep = TRUE) %>%
     # make individual sce lists for each group based on tool + run configurations 
-    purrr::map(~ make_sce_list(info_df = .x, mito = mito_genes, 
-                               filename = file.path(results_dir, 
-                                                    paste(.x$group_name[1], "_sces.rds", sep = ""))))
-  
-} else {
-  
-  all_sces_list <- quant_info %>%
-    # split into list of metadata tables 
-    dplyr::group_split(group_name, .keep = TRUE) %>%
-    # make individual sce lists for each group based on tool + run configurations 
-    purrr::map(~ make_sce_list(info_df = .x, mito = mito_genes))
-  
-}
+    purrr::map(
+      ~ make_sce_list(
+        info_df = .x, 
+        mito = mito_genes, 
+        filename = ifelse(opt$save, 
+                          file.path(
+                            results_dir, 
+                            paste0(.x$group_name[1], "_sces.rds")),
+                          NULL)
+      ))
 
 # name list of list of sces based on tool + run configuration stored in group_name column 
 names(all_sces_list) <- quant_info %>%
@@ -199,4 +194,3 @@ rowdata_df <- purrr::map_df(
 readr::write_tsv(quant_info, file.path(results_dir, "quant_info.tsv"))
 readr::write_tsv(coldata_df, file.path(results_dir, "coldata_qc.tsv"))
 readr::write_tsv(rowdata_df, file.path(results_dir, "rowdata_qc.tsv"))
-
