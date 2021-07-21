@@ -1,0 +1,769 @@
+---
+title: "Alevin-Fry vs. Cellranger Comparison"
+author: "Ally Hawkins for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+In this notebook, we specifically compare using Alevin-fry with cellranger to quantify both single-cell and single-nuclei RNA seq data. 
+
+For cellranger, we are using the default parameters for single-cell RNA-seq and the `--include-introns` option for the single-nuclei RNA-seq option, which has been labeled as the `splici` index for easy comparison with alevin-fry. 
+For Alevin-fry, we are interested in a few different parameters specifically: 
+
+- The use of the splici index vs. the transcriptome index only for single-cell RNA-seq samples 
+- Use of the cr-like or full resolution 
+- Use of pseudoalignment (sketch) or selective alignment (salign)
+
+Previously, we had found that the sketch performed well, although there was a slight increase in UMIs/cell and genes detected/cell. 
+Data has also surfaced from Dobin _et al._ in [STARsolo: accurate, fast and versatile mapping/quantification of single-cell and single-nucleus RNA-seq data](https://www.biorxiv.org/content/10.1101/2021.05.05.442755v1) and in an [alevin-fry tutorial](https://combine-lab.github.io/alevin-fry-tutorials/2021/improving-txome-specificity/) indicating pseudoaligners have a tendency to result in false detection of increased gene expression. 
+Use of the `splici` index with alevin-fry has been reported to decrease this false positive expression. 
+
+More about use of the `splici` index and different resolutions can be found in the pre-print on [Alevin-fry.](https://www.biorxiv.org/content/10.1101/2021.06.29.450377v1)
+
+We will be testing the following conditions of alevin-fry: 
+
+- spliced (cDNA) txome, salign, full
+- spliced (cDNA) txome, sketch, full
+- spliced (cDNA) txome, salign, cr-like
+- spliced (cDNA) txome, sketch, cr-like
+- unspliced (splici) txome, salign, full
+- unspliced (splici) txome, sketch, full
+- unspliced (splici) txome, salign, cr-like
+- unspliced (splici) txome, sketch, cr-like
+
+There are three single-cell samples (SCPCR000006, SCPCR000126, SCPCR000127) and four single-nuclei samples that were used for comparisons (SCPCR000118, SCPCR000119, SCPCR000220, SCPCR000221). 
+
+## Setup 
+
+```{r}
+library(magrittr)
+library(ggplot2)
+library(SingleCellExperiment)
+```
+
+
+```{r}
+# load in benchmarking functions 
+function_path <- file.path("..", "benchmarking-functions", "R")
+file.path(function_path, list.files(function_path, pattern = ".R$")) %>%
+  purrr::walk(source)
+```
+
+
+```{r}
+# path to results files with sces and qc dataframes 
+base_dir <- here::here()
+file_dir <- file.path(base_dir, "results")
+
+# sce files 
+cDNA_salign_full_file <- file.path(file_dir, "cDNA_salign_full_sces.rds")
+cDNA_sketch_full_file <- file.path(file_dir, "cDNA_sketch_full_sces.rds")
+cDNA_salign_cr_file <- file.path(file_dir, "cDNA_salign_cr_sces.rds")
+cDNA_sketch_cr_file <- file.path(file_dir, "cDNA_sketch_cr_sces.rds")
+splici_salign_full_file <- file.path(file_dir, "splici_salign_full_sces.rds")
+splici_sketch_full_file <- file.path(file_dir, "splici_sketch_full_sces.rds")
+splici_salign_cr_file <- file.path(file_dir, "splici_salign_cr_sces.rds")
+splici_sketch_cr_file <- file.path(file_dir, "splici_sketch_cr_sces.rds")
+cellranger_file <- file.path(file_dir, "cellranger_sces.rds")
+
+# qc files 
+
+quant_info_file <- file.path(file_dir, "quant_info.tsv")
+coldata_df_file <- file.path(file_dir, "coldata_qc.tsv")
+rowdata_df_file <- file.path(file_dir, "rowdata_qc.tsv")
+
+# mito gene list 
+mito_file <- file.path(base_dir, "sample-info", "Homo_sapiens.GRCh38.103.mitogenes.txt")
+```
+
+
+```{r}
+# read in sces
+cDNA_salign_full <- readr::read_rds(cDNA_salign_full_file)
+cDNA_sketch_full <- readr::read_rds(cDNA_sketch_full_file)
+cDNA_salign_cr <- readr::read_rds(cDNA_salign_cr_file)
+cDNA_sketch_cr <- readr::read_rds(cDNA_sketch_cr_file)
+splici_salign_full <- readr::read_rds(splici_salign_full_file)
+splici_sketch_full <- readr::read_rds(splici_sketch_full_file)
+splici_salign_cr <- readr::read_rds(splici_salign_cr_file)
+splici_sketch_cr <- readr::read_rds(splici_sketch_cr_file)
+cellranger <- readr::read_rds(cellranger_file)
+
+# make a list that will be used later for calculating qc with a specific threshold
+sce_list <- list(
+  cDNA_salign_full = cDNA_salign_full,
+  cDNA_sketch_full = cDNA_sketch_full,
+  cDNA_salign_cr = cDNA_salign_cr,
+  cDNA_sketch_cr = cDNA_sketch_cr,
+  splici_salign_full = splici_salign_full,
+  splici_sketch_full = splici_sketch_full,
+  splici_salign_cr = splici_salign_cr,
+  splici_sketch_cr = splici_sketch_cr,
+  cellranger = cellranger
+)
+```
+
+
+```{r}
+# read in dataframes needed for plotting
+quant_info <- readr::read_tsv(quant_info_file)
+coldata_df <- readr::read_tsv(coldata_df_file)
+rowdata_df <- readr::read_tsv(rowdata_df_file)
+```
+
+
+```{r}
+# load in mito genes file used later 
+mito_genes <- readr::read_tsv(mito_file, col_names = "gene_id")
+mito_genes <- mito_genes %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+```
+
+```{r}
+# prep the dataframes for plotting
+## fix error for 220 and 221 run with cellranger that should have index_type as splici 
+quant_info[which(quant_info$quant_dir == "SCPCR000220-cdna-pre_mRNA"),"index_type"] <- "splici"
+quant_info[which(quant_info$quant_dir == "SCPCR000221-cdna-pre_mRNA"),"index_type"] <- "splici"
+
+# merge coldata df with quant_info
+coldata_info_df <- coldata_df %>%
+  dplyr::mutate(tool = dplyr::case_when(tool == "alevin-fry-unfiltered" ~ "alevin-fry",
+                                        tool == "cellranger" ~ "cellranger")) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir")) %>%
+  # rename the not_alevin to cellranger for plotting purposes
+  dplyr::mutate(alevin_resolution = ifelse(alevin_resolution == "not_alevin", "cellranger", alevin_resolution))
+```
+
+## Comparison of QC Metrics
+
+### Mitochondrial Content
+
+First, we will start by just looking at mitochondrial content across each of the tools. 
+
+
+```{r fig.height = 5, fig.width=5}
+ggplot(coldata_info_df, aes(x = tool, y = subsets_mito_percent, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) + 
+  theme_classic() + 
+  ylab("% Mito /Cell") + 
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_text(angle = 45, hjust = 1))
+```
+It looks like generally mitochondrial content is uniform and low across all tools and all samples, which is great. 
+
+Before doing anymore plotting, let's split our dataframe by single-cell and single-nucleus RNA-seq samples. 
+
+```{r}
+cell_coldata_qc <- coldata_info_df %>%
+  dplyr::filter(seq_unit == "cell")
+
+nucleus_coldata_qc <- coldata_info_df %>%
+  dplyr::filter(seq_unit == "nucleus") %>%
+  dplyr::filter(index_type == "splici")
+```
+
+### Per Cell QC Metrics in all cells
+
+We are going to look at some QC metrics at a per cell level. 
+Specifically we will look at UMI/cell and genes detected/cell. 
+
+```{r fig.height=2, fig.width=5}
+ggplot(nucleus_coldata_qc, aes(x = alevin_resolution, y = sum, fill = alevin_alignment)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,30000))
+```
+
+```{r fig.height=3, fig.width=5}
+ggplot(cell_coldata_qc, aes(x = alevin_resolution, y = sum, fill = alevin_alignment)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  ylim(c(0,50000))
+```
+In looking at UMI/cell between cell and nucleus samples, it's very clear to me that the single-nuclei samples have a bit more fluctuation - both across samples and across tools. 
+The single-cell samples tend to be fairly uniform across all tools, although it looks like the median in 126 and 127 is lower in alevin-fry than in cellranger. 
+This is not the case in the single-nuclei samples where we see that alevin-fry doesn't seem to be capturing as many counts, specifically in sample 220. 
+
+```{r fig.height=2, fig.width=5}
+ggplot(nucleus_coldata_qc, aes(x = alevin_resolution, y = detected, fill = alevin_alignment)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,15000))
+```
+
+Here, we see even more variation in genes detected per cell in the single-nuclei samples with cellranger tending to have much tighter IQR's than alevin-fry. 
+However, we are still looking at all cells and not just shared cells only, so that could be part of the issue. 
+Alevin-fry could be detecting more cells with lower counts than cellranger.
+```{r fig.height=3, fig.width=5}
+ggplot(cell_coldata_qc, aes(x = alevin_resolution, y = detected, fill = alevin_alignment)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") + 
+  ylim(c(0,10000))
+```
+
+
+### Per Cell QC Metrics in Shared Cells only, No Minimum Gene Coverage
+
+Now let's look at the same metrics but in shared cells only to see if any of these fluctuations across tools are because different cells are being identified. 
+
+```{r}
+# filter for cells that are found in all configurations of alevin + cellranger
+cell_counts <- cell_coldata_qc %>%  
+  dplyr::count(cell_id, sample)
+
+common_cells <- cell_counts %>%
+  dplyr::filter(n == 9) %>%
+  dplyr::pull(cell_id)
+
+cell_qc_common <- cell_coldata_qc %>%
+  dplyr::filter(cell_id %in% common_cells) 
+```
+
+```{r}
+# filter for cells that are found in all configurations of alevin + cellranger
+nuclei_counts <- nucleus_coldata_qc %>%
+  dplyr::count(cell_id, sample)
+
+common_nuclei <- nuclei_counts %>%
+  dplyr::filter(n == 5) %>%
+  dplyr::pull(cell_id)
+
+nucleus_qc_common <- nucleus_coldata_qc %>%
+  dplyr::filter(
+    (cell_id %in% common_nuclei)
+  )
+```
+
+Does mitochondrial content change when we only look at shared data?
+I expect not since it was already pretty uniform. 
+
+```{r fig.height = 5, fig.width =10}
+# mito comparison across shared cells only of all runs
+# nucleus samples first 
+ggplot(nucleus_qc_common, aes(x = alevin_resolution, y = subsets_mito_percent, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) + 
+  theme_classic() + 
+  ylab("% Mito /Cell") + 
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+
+# single cell
+ggplot(cell_qc_common, aes(x = alevin_resolution, y = subsets_mito_percent, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) + 
+  theme_classic() + 
+  ylab("% Mito /Cell") + 
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank())
+```
+The answer is no, it seems to still be quite similar, although here I am plotting it by breaking out the single-nuclei samples and you can see that SCPCR000118 has higher mito content than the other samples and fluctuates across tools. 
+In the previous benchmarking I was worried about this sample not being high quality and although technically the mito content is still below 20%, it doesn't look as uniform as in 220 or 221. 
+
+Let's look at UMI/cell and genes detected/cell in the shared cells. 
+
+```{r fig.width=5, fig.height=2}
+ggplot(nucleus_qc_common, aes(x = alevin_resolution, y = sum, fill = alevin_alignment)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,30000))
+```
+
+```{r fig.height=3, fig.width=5}
+ggplot(cell_qc_common, aes(x = alevin_resolution, y = sum, fill = alevin_alignment)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  ylim(c(0,50000))
+```
+
+```{r fig.width = 5, fig.height=2}
+ggplot(nucleus_qc_common, aes(x = alevin_resolution, y = detected, fill = alevin_alignment)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,15000))
+```
+
+```{r fig.height=3, fig.width=5}
+ggplot(cell_qc_common, aes(x = alevin_resolution, y = detected, fill = alevin_alignment)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,10000))
+```
+Overall, it looks like we have eliminated many of the differences between the tools in the single-nuclei RNA-seq data. 
+Although it appears that across the board the cr-like resolution gives more on par distributions to cellranger than the full resolution. 
+The `full` resolution seems to have higher UMIs/cell and genes/cell across most samples. 
+Another consistent finding is that the `--sketch` or pseudoalignment is giving higher UMIs/cell and genes detected/cell across the board, although this is more noticeable in the single-nuclei samples. 
+It also seems to be more apparent with the `full` resolution which is probably to be expected since the `full` resolution is not throwing out multi-mapped genes like the `cr-like` resolution will.  
+
+It does look like alevin-fry is detecting more cells than cellranger, so perhaps there is something we could be doing at the filtering stage that could help improve this? 
+
+Let's take a quick look at the number of cells detected by tool just to be sure that this hypothesis is correct. 
+```{r fig.height= 2, fig.width=5}
+cell_numbers <- coldata_info_df %>% 
+  dplyr::group_by(quant_id, tool, sample) %>% 
+  #dplyr::filter(sample != "SCPCR000118") %>%
+  dplyr::tally()
+
+ggplot(cell_numbers, aes(x = sample, y = n, color = tool)) + 
+  geom_point() +
+  theme_classic()
+```
+As expected, for all samples (except SCPCR000006), cellranger is detecting fewer cells than in alevin-fry. 
+I'm also not sure what has happened with SCPCR000118, but we saw this previously and it also shows strange patterns in mitochondrial content and very low coverage across the board.
+
+
+## Per Cell QC Metrics in Shared Cells, Minimum Gene Coverage 
+
+To see if the increase in genes detected/cell in the full resolution could be due to low covered genes, let's look at the number of genes detected if we were to remove genes only found in < 5% of cells. 
+
+
+```{r}
+# use addPerCellQC with gene detection threshold
+# only genes with detection in > 5% of cells will be included in the QC calculations
+sce_threshold_list <- sce_list %>%
+  purrr::map(
+    ~ purrr::map(.x, scpcaTools::add_cell_mito_qc, mito = mito_genes, threshold = 5)
+  )
+```
+
+
+```{r}
+# change names of the sce list to be the tool used first
+names(sce_threshold_list) <- c(rep("alevin-fry", 8), "cellranger")
+
+# merge back into a dataframe for plotting 
+coldata_threshold <- purrr::map_df(
+  sce_threshold_list,
+  ~ purrr::map_df(.x, scpcaTools::coldata_to_df, .id = "quant_id"), 
+  .id = "tool"
+)
+
+```
+
+```{r}
+# merge new coldata back with quant_info
+coldata_info_threshold_df <- coldata_threshold %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir")) %>%
+  # rename the not_alevin to cellranger for plotting purposes
+  dplyr::mutate(alevin_resolution = ifelse(alevin_resolution == "not_alevin", "cellranger", alevin_resolution))
+
+# break out into single cell and single nucleus 
+cell_coldata_threshold_qc <- coldata_info_threshold_df %>%
+  dplyr::filter(seq_unit == "cell")
+
+nucleus_coldata_threshold_qc <- coldata_info_threshold_df %>%
+  dplyr::filter(seq_unit == "nucleus" & index_type == "splici")
+```
+
+```{r}
+# look for shared cells only 
+cell_counts_threshold <- cell_coldata_threshold_qc %>%  
+  dplyr::count(cell_id, sample)
+
+common_cells_threshold <- cell_counts_threshold %>%
+  dplyr::filter(n == 9) %>%
+  dplyr::pull(cell_id)
+
+cell_qc_common_threshold <- cell_coldata_threshold_qc %>%
+  dplyr::filter(
+    (cell_id %in% common_cells_threshold) 
+  )
+```
+
+```{r}
+# look for shared cells only 
+nuclei_counts_threshold <- nucleus_coldata_threshold_qc %>%
+  dplyr::count(cell_id, sample)
+
+common_nuclei_threshold <- nuclei_counts_threshold %>%
+  dplyr::filter(n == 5) %>%
+  dplyr::pull(cell_id)
+
+nucleus_qc_common_threshold <- nucleus_coldata_threshold_qc %>%
+  dplyr::filter(
+    (cell_id %in% common_nuclei_threshold)
+  )
+```
+
+
+```{r fig.width=5, fig.height=2}
+ggplot(nucleus_qc_common_threshold, aes(x = alevin_resolution, y = detected, fill = alevin_alignment)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,15000))
+```
+```{r fig.width=5, fig.height=3}
+ggplot(cell_qc_common_threshold, aes(x = alevin_resolution, y = detected, fill = alevin_alignment)) + 
+  geom_boxplot() + 
+  facet_grid(sample ~ index_type) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,10000))
+```
+It does not appear that the increase in genes detected observed in the full resolution is resolved by removing lowly covered genes. 
+
+### Per Cell Correlations across tools
+
+The last comparison we will make at the per cell level is to look at the correlation of UMI/cell across tools. 
+Here we will compare each of the alevin-fry configurations to cellranger and look at the correlation coefficient and plot some of the individual values of UMI/cell to see how well correlated these tools are. 
+
+
+```{r}
+# spread table for comparisons
+cell_qc_common_cor <- cell_qc_common %>%
+  dplyr::select(tool, index_type, alevin_resolution, alevin_alignment, cell_id, sample, sum) %>%
+  # spread the mean expression stats to one column per caller
+  tidyr::pivot_wider(id_cols = c(cell_id, sample),
+                     names_from = c("tool", "index_type", "alevin_resolution", "alevin_alignment"),
+                     values_from = sum) %>%
+  # drop rows with NA values to ease correlation calculations
+  tidyr::drop_na()
+
+nucleus_qc_common_cor <- nucleus_qc_common %>%
+  dplyr::select(tool, index_type, alevin_resolution, alevin_alignment, cell_id, sample, sum) %>%
+  tidyr::pivot_wider(id_cols = c(cell_id, sample),
+                     names_from = c("tool", "index_type", "alevin_resolution", "alevin_alignment"),
+                     values_from = sum) %>%
+  tidyr::drop_na()
+```
+
+
+```{r}
+cell_qc_common_cor %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    cDNA_salign_full_cor = cor(`cellranger_cDNA_cellranger_not_alevin`, `alevin-fry_cDNA_full_salign`, method = "spearman"),
+    cDNA_sketch_full_cor =cor(`cellranger_cDNA_cellranger_not_alevin`, `alevin-fry_cDNA_full_sketch`, method = "spearman"),
+    cDNA_salign_cr_cor = cor(`cellranger_cDNA_cellranger_not_alevin`, `alevin-fry_cDNA_cr_salign`, method = "spearman"),
+    cDNA_sketch_cr_cor = cor(`cellranger_cDNA_cellranger_not_alevin`, `alevin-fry_cDNA_cr_sketch`, method = "spearman"), 
+    splici_salign_full_cor = cor(`cellranger_cDNA_cellranger_not_alevin`, `alevin-fry_splici_full_salign`, method = "spearman"),
+    splici_sketch_full_cor = cor(`cellranger_cDNA_cellranger_not_alevin`, `alevin-fry_splici_full_sketch`, method = "spearman"),
+    splici_salign_cr_cor = cor(`cellranger_cDNA_cellranger_not_alevin`, `alevin-fry_splici_cr_salign`, method = "spearman"),
+    splici_sketch_cr_cor = cor(`cellranger_cDNA_cellranger_not_alevin`, `alevin-fry_splici_cr_sketch`, method = "spearman")
+  )
+```
+
+```{r}
+nucleus_qc_common_cor %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    splici_salign_full_cor = cor(`cellranger_splici_cellranger_not_alevin`, `alevin-fry_splici_full_salign`, method = "spearman"),
+    splici_sketch_full_cor = cor(`cellranger_splici_cellranger_not_alevin`, `alevin-fry_splici_full_sketch`, method = "spearman"),
+    splici_salign_cr_cor = cor(`cellranger_splici_cellranger_not_alevin`, `alevin-fry_splici_cr_salign`, method = "spearman"),
+    splici_sketch_cr_cor = cor(`cellranger_splici_cellranger_not_alevin`, `alevin-fry_splici_cr_sketch`, method = "spearman")
+  )
+```
+We have previously looked at sample 118 and 119 and they have very few cells that are identified, which is why we added in sample 220 and 221. 
+Here, I am looking at 220 and 221 which both have > 5000 cells making them better candidates for these comparisons. 
+All of these tools have very high correlations with cellranger for both the single-cell and single-nucleus samples. 
+Below, I have made a few plots showing the direct comparisons for all of the variations using the `--sketch` option in comparison to cellranger and we see high correlations across the board. 
+
+```{r}
+ggplot(cell_qc_common_cor, aes(x = `cellranger_cDNA_cellranger_not_alevin`, y = `alevin-fry_cDNA_full_sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger UMI/cell", y = "Alevin Fry, cDNA index, Full Resolution Sketch UMI/cell") + 
+  theme_classic()
+```
+
+```{r}
+ggplot(cell_qc_common_cor, aes(x = `cellranger_cDNA_cellranger_not_alevin`, y = `alevin-fry_cDNA_cr_sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger UMI/cell", y = "Alevin Fry, cDNA index, cr-like Resolution Sketch UMI/cell") + 
+  theme_classic()
+```
+```{r}
+ggplot(cell_qc_common_cor, aes(x = `cellranger_cDNA_cellranger_not_alevin`, y = `alevin-fry_splici_full_sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger UMI/cell", y = "Alevin Fry, splici index, Full Resolution Sketch UMI/cell") + 
+  theme_classic()
+```
+```{r}
+ggplot(cell_qc_common_cor, aes(x = `cellranger_cDNA_cellranger_not_alevin`, y = `alevin-fry_splici_cr_sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger UMI/cell", y = "Alevin Fry, splici index, cr-like Resolution Sketch UMI/cell") + 
+  theme_classic()
+```
+```{r}
+ggplot(nucleus_qc_common_cor, aes(x = `cellranger_splici_cellranger_not_alevin`, y = `alevin-fry_splici_full_sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger UMI/cell", y = "Alevin Fry, splici index, Full Resolution Sketch UMI/cell") + 
+  theme_classic()
+```
+
+```{r}
+ggplot(nucleus_qc_common_cor, aes(x = `cellranger_splici_cellranger_not_alevin`, y = `alevin-fry_splici_cr_sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger UMI/cell", y = "Alevin Fry, splici index, cr-like Resolution Sketch UMI/cell") + 
+  theme_classic()
+```
+
+## Per Gene QC Metrics
+
+Next, we will look at some metrics comparing mean gene expression across genes identified for each sample using each tool. 
+To do that, we will first filter by only those genes that are detected in more than 5% of cells and shared across all tool configurations.  
+
+```{r}
+# combine rowdata with quant info
+rowdata_info_df <- rowdata_df %>%
+  dplyr::mutate(tool = dplyr::case_when(tool == "alevin-fry-unfiltered" ~ "alevin-fry",
+                                        tool == "cellranger" ~ "cellranger")) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir"))
+
+
+gene_counts <- rowdata_info_df %>% 
+  # remove genes that have a low frequency of being detected
+  dplyr::filter(detected >= 5.0) %>%
+  dplyr::count(gene_id, sample)
+
+common_genes <- gene_counts %>%
+  dplyr::filter(n == 9) %>%
+  dplyr::pull(gene_id)
+
+rowdata_qc_common <- rowdata_info_df %>%
+  dplyr::filter(
+    (gene_id %in% common_genes) 
+  )
+```
+
+```{r}
+# split into cell and nucleus
+cell_rowdata_common <- rowdata_qc_common %>%
+  dplyr::filter(seq_unit == "cell")
+nucleus_rowdata_common <- rowdata_qc_common %>%
+  dplyr::filter(seq_unit == "nucleus" & index_type == "splici")
+```
+
+
+```{r}
+# spread table for comparisons
+cell_rowdata_cor <- cell_rowdata_common %>%
+  dplyr::select(tool, index_type, alevin_resolution, alevin_alignment, gene_id, sample, mean) %>%
+  # spread the mean expression stats to one column per caller
+  tidyr::pivot_wider(id_cols = c(gene_id, sample),
+                     names_from = c("tool", "index_type", "alevin_resolution", "alevin_alignment"),
+                     values_from = mean) %>%
+  # drop rows with NA values to ease correlation calculations
+  tidyr::drop_na()
+
+nucleus_rowdata_cor <- nucleus_rowdata_common %>%
+  dplyr::select(tool, index_type, alevin_resolution, alevin_alignment, gene_id, sample, mean) %>%
+  tidyr::pivot_wider(id_cols = c(gene_id, sample),
+                     names_from = c("tool", "index_type", "alevin_resolution", "alevin_alignment"),
+                     values_from = mean) %>%
+  tidyr::drop_na()
+```
+
+
+Now we can look at the correlation of mean gene expression across each of our tool configurations in each sample. 
+
+```{r}
+cell_rowdata_cor %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    cDNA_salign_full_cor = cor(`cellranger_cDNA_not_alevin_not_alevin`, `alevin-fry_cDNA_full_salign`, method = "spearman"),
+    cDNA_sketch_full_cor =cor(`cellranger_cDNA_not_alevin_not_alevin`, `alevin-fry_cDNA_full_sketch`, method = "spearman"),
+    cDNA_salign_cr_cor = cor(`cellranger_cDNA_not_alevin_not_alevin`, `alevin-fry_cDNA_cr_salign`, method = "spearman"),
+    cDNA_sketch_cr_cor = cor(`cellranger_cDNA_not_alevin_not_alevin`, `alevin-fry_cDNA_cr_sketch`, method = "spearman"), 
+    splici_salign_full_cor = cor(`cellranger_cDNA_not_alevin_not_alevin`, `alevin-fry_splici_full_salign`, method = "spearman"),
+    splici_sketch_full_cor = cor(`cellranger_cDNA_not_alevin_not_alevin`, `alevin-fry_splici_full_sketch`, method = "spearman"),
+    splici_salign_cr_cor = cor(`cellranger_cDNA_not_alevin_not_alevin`, `alevin-fry_splici_cr_salign`, method = "spearman"),
+    splici_sketch_cr_cor = cor(`cellranger_cDNA_not_alevin_not_alevin`, `alevin-fry_splici_cr_sketch`, method = "spearman")
+  )
+```
+
+```{r}
+nucleus_rowdata_cor %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    splici_salign_full_cor = cor(`cellranger_splici_not_alevin_not_alevin`, `alevin-fry_splici_full_salign`, method = "spearman"),
+    splici_sketch_full_cor = cor(`cellranger_splici_not_alevin_not_alevin`, `alevin-fry_splici_full_sketch`, method = "spearman"),
+    splici_salign_cr_cor = cor(`cellranger_splici_not_alevin_not_alevin`, `alevin-fry_splici_cr_salign`, method = "spearman"),
+    splici_sketch_cr_cor = cor(`cellranger_splici_not_alevin_not_alevin`, `alevin-fry_splici_cr_sketch`, method = "spearman")
+  )
+```
+Just like with UMIs/cell, these correlations are quite high across all of the tools and all of the samples. 
+The biggest drop in correlation does seem to be in the `splici_salign_full` and `splici_sketch_full` vs. `cellranger` comparisons in the single-cell samples with only around 0.95-0.97 in correlation coefficients. 
+
+We can look at a few examples more closely to see how well the mean gene expression for each gene actually lines up. 
+
+```{r}
+ggplot(cell_rowdata_cor, aes(x = `cellranger_cDNA_not_alevin_not_alevin`, y = `alevin-fry_cDNA_full_sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry, cDNA index, Full Resolution Sketch Mean gene expression") + 
+  theme_classic()
+```
+
+```{r}
+ggplot(cell_rowdata_cor, aes(x = `cellranger_cDNA_not_alevin_not_alevin`, y = `alevin-fry_cDNA_cr_sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry, cDNA index, cr-like Resolution Sketch Mean gene expression") + 
+  theme_classic()
+```
+```{r}
+ggplot(cell_rowdata_cor, aes(x = `cellranger_cDNA_not_alevin_not_alevin`, y = `alevin-fry_cDNA_cr_salign`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry, cDNA index, cr-like Resolution salign Mean gene expression") + 
+  theme_classic()
+```
+
+```{r}
+ggplot(cell_rowdata_cor, aes(x = `cellranger_cDNA_not_alevin_not_alevin`, y = `alevin-fry_splici_full_sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry, splici index, Full Resolution Sketch Mean gene expression") + 
+  theme_classic()
+```
+
+```{r}
+ggplot(cell_rowdata_cor, aes(x = `cellranger_cDNA_not_alevin_not_alevin`, y = `alevin-fry_splici_cr_sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry, splici index, cr-like Resolution Sketch Mean gene expression") + 
+  theme_classic()
+```
+```{r}
+ggplot(cell_rowdata_cor, aes(x = `cellranger_cDNA_not_alevin_not_alevin`, y = `alevin-fry_splici_cr_salign`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry, splici index, cr-like Resolution Salign Mean gene expression") + 
+  theme_classic()
+```
+
+
+Interestingly, when you look at the cDNA index, you do see genes with higher expression found in Alevin-fry in compared to cellranger (shown by a group to the upper left of the diagonal), but when you move to the splici index that group disappears. 
+With the splici index and full resolution there still appears to be some increase in gene expression detected in Alevin-fry, but with the cr-like resolution it almost looks like there is now lower detection in gene expression and some genes have lost gene expression (shown with a group to the right of the diagonal in the last plot). 
+
+Additionally, when you look at the `--sketch` vs. the `salign` alignment, there appears to be some lower expressed genes that pop up off the diagonal with `--sketch` and the cDNA index, but not as much with the `splici` index when looking at the `cr-like` resolution. 
+
+Let's look at the single-nuclei data. 
+
+```{r}
+ggplot(nucleus_rowdata_cor, aes(x = `cellranger_splici_not_alevin_not_alevin`, y = `alevin-fry_splici_full_sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry, splici index, Full Resolution Sketch Mean gene expression") + 
+  theme_classic()
+```
+```{r}
+ggplot(nucleus_rowdata_cor, aes(x = `cellranger_splici_not_alevin_not_alevin`, y = `alevin-fry_splici_full_salign`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry, splici index, Full Resolution Salign Mean gene expression") + 
+  theme_classic()
+```
+
+
+```{r}
+ggplot(nucleus_rowdata_cor, aes(x = `cellranger_splici_not_alevin_not_alevin`, y = `alevin-fry_splici_cr_sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry, splici index, cr-like Resolution Sketch Mean gene expression") + 
+  theme_classic()
+```
+```{r}
+ggplot(nucleus_rowdata_cor, aes(x = `cellranger_splici_not_alevin_not_alevin`, y = `alevin-fry_splici_cr_salign`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry, splici index, cr-like Resolution Salign Mean gene expression") + 
+  theme_classic()
+```
+
+
+Here, we see a similar trend where with the full resolution there are genes with increased expression in Alevin-fry, while with the cr-like it seems more centered around the diagonal with some genes having increased expression and some having lower expression than in cellranger. 
+There also doesn't seem to be any obvious changes between mean gene expression with `--sketch` and `salign` in the single-nuclei samples. 
+
+*Some closing thoughts:*
+
+Should we be exploring some different filtering options with Alevin-fry? 
+It looks like Alevin-fry is doing just as good of a job as cellranger, but specifically with the single-nuclei data, we see more cells with low counts that are in the final counts matrix - maybe this isn't a problem and low count cells would get removed ideally before any downstream analysis anyways. 
+
+Splici with single-cell samples seems to be performing similarly to the other Alevin-fry modes and cellranger - it even looks like it does decrease some gene expression in genes that are poorly correlated between Alevin-fry and cellranger. 
+
+Cr-like gives similar results to cellranger, more so than the full resolution, although it does look like we could be leading to some lower gene expression in the single-cell samples with Alevin-fry. 
+I'm not sure I can confidently make a decision here on which one would be the appropriate choice yet (although I can say I think both seem to do well).
