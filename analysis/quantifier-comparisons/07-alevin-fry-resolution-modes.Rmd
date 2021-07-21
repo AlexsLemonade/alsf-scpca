@@ -11,6 +11,7 @@ In this notebook we are comparing the use of the `cr-like` resolution in alevin-
 Previously in our benchmarking analysis we made the decision to use alevin-fry with the `splici` index and selective alignment (`salign`) for all samples, single-nucleus and single-cell. 
 The one remaining question was about resolution. 
 Alevin-fry using the `splici` index is recommended to be used in USA mode which is compatible with both `cr-like` and `cr-like-em`, so we have chosen to use one of these two methods. 
+The difference between `cr-like` and `cr-like-em` is that the `cr-like-em` will use an expectation maximization algorithm to resolve multi-mapped reads, while `cr-like` will discard those reads. 
 
 Data in this notebook have been analyzed using alevin-fry 0.4.0 and salmon 1.5.1. 
 
@@ -30,7 +31,7 @@ library(org.Hs.eg.db)
 
 
 ```{r}
-# load in benchmarking functions 
+# load in aws_copy_samples, make_sce_list, and quan
 function_path <- file.path("..", "benchmarking-functions", "R")
 file.path(function_path, list.files(function_path, pattern = ".R$")) %>%
   purrr::walk(source)
