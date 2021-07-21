@@ -25,20 +25,12 @@ library(ggplot2)
 library(SingleCellExperiment)
 library(eulerr)
 library(clusterProfiler)
-library(msigdbr)
 library(org.Hs.eg.db)
 ```
 
 
 ```{r}
-# load in aws_copy_samples, make_sce_list, and quan
-function_path <- file.path("..", "benchmarking-functions", "R")
-file.path(function_path, list.files(function_path, pattern = ".R$")) %>%
-  purrr::walk(source)
-```
-
-```{r}
-# path to results files with sces and qc dataframes 
+# path to results files with sces and qc dataframes from running benchrmarking_generate_qc_df.R
 base_dir <- here::here()
 file_dir <- file.path(base_dir, "data", "cr-like-test", "results")
 
@@ -130,11 +122,11 @@ ggplot(cell_coldata_qc, aes(x = tool, y = detected, fill = alevin_resolution)) +
   xlab("") + 
   ylim(c(0,10000))
 ```
-As seen previously, when looking at all cells across all tools, we see that alevin-fry appears to detect lower UMI/cell and genes/detected/cell than cellranger regardless of resolution. 
+As seen previously, when looking at all cells across all tools, we see that alevin-fry appears to detect lower UMI/cell and genes detected/cell than cellranger regardless of resolution. 
 This is most likely due to the fact that alevin-fry detects more cells than cellranger and is an artifact of the filtering methods. 
 There is a population of cells passing filtering in alevin-fry with lower UMI/cell and genes detected/cell that should probably be filtered out. 
 
-## Shared cells only 
+### Shared cells only 
 
 To be sure that is the case, let's look at the shared cells only. 
 Here we also want to compare the differences between the two resolution modes of alevin-fry. 
@@ -238,6 +230,7 @@ cr_em_genes <- rowdata_df %>%
 ```
 
 ```{r}
+# make sure rowdata only has genes that are found in more than 0% cells and > 0% mean gene expression
 rowdata_df_filter <- rowdata_df %>%
   dplyr::filter(detected > 0 & mean > 0)
 ```
@@ -286,26 +279,27 @@ plot(euler(venn_prep), quantities = TRUE)
 ```
 
 Here we can see that Alevin-fry in general detects more genes than cellranger but probably with lower counts as we saw when looking at all cells vs. shared cells above. 
-It looks like the majority of the genes are shared in all of the tools, but does this hold when we drop lowly expressed genes? 
-Do we see more or less genes overlapping? 
+It looks like the majority of the genes are shared in all of the tools, but of the ones that aren't shared are they ones that we would miss out if we chose alevin-fry over cellranger?
 
+Perhaps they are lowly expressed genes and it wouldn't matter anyway. 
 
 If we now look at the gene expression for those genes that are unique to each tool, how do they compare to the gene expression for those genes that are shared?
 
 ```{r}
-# add a column in colData to classify as shared or not shared
+# add a column in colData to classify as shared or unique to that tool
 rowdata_df_filter <- rowdata_df_filter %>%
   dplyr::mutate(gene_status = ifelse(gene_id %in% c(cellranger_cr_intersect, cellranger_cr_em_intersect, cr_cr_em_intersect), "shared", "unique")) 
 ```
 
 
 ```{r}
+# make a plot to look at the mean gene expression of shared vs. unique genes for each tool
 ggplot(rowdata_df_filter, aes(x = tool, y = mean, fill = gene_status)) + 
   geom_boxplot() + 
   ylim(c(0,2))
 ```
 As expected, across the board, it looks like the unique genes are those with lower mean gene expression than those genes that are shared across other tools. 
-The genes that are lost are probably not contributing very much to downstream results as much. 
+The genes that are lost are probably not contributing very much to downstream results. 
  
 
 ### Gene Ontology
@@ -340,20 +334,27 @@ summary(cellranger_lost$mean)
 summary(cellranger_lost$detected)
 ```
 Notice that because we are looking at 4 different samples that have been run with cellranger, each gene is represented 4 times. 
-It looks like for the most part they are lowly expressed other than the one gene that still has low expression but is found in the majority of cells. 
+It looks like for the most part they are lowly expressed other than the one gene that still has low expression but is found in the majority of cells, PRRC2B.
+
 These genes probably do not have an impact on downstream results if we are missing them, but let's be sure that we aren't missing out on any major pathways we would care about. 
 
 Here, I am doing over representation analysis with the lost genes from not using cellranger as the target gene list and the background gene list being all genes identified in our tools. 
 
 ```{r}
-ora_genes <- cellranger_lost$Symbol %>%
+cellranger_lost_gene_list <- cellranger_lost$Symbol %>%
   unique()
 background_genes <- rowdata_df$Symbol %>%
   unique()
 ```
 
 ```{r}
-go_ora_results <- enrichGO(gene = ora_genes,
+# look to see what genes are found in cellranger and not found in alevin-fry
+cellranger_lost_gene_list
+```
+
+
+```{r}
+go_ora_results <- enrichGO(gene = cellranger_lost_gene_list,
                            universe = background_genes,
                            keyType = "SYMBOL",
                            OrgDb = org.Hs.eg.db,
@@ -373,9 +374,12 @@ go_results <- go_ora_results@result %>%
 ```{r fig.width=5}
 enrichplot::dotplot(go_ora_results)
 ```
-It looks like we are getting all very similar pathways involved in sensory genes. 
-For context, the samples used in benchmarking are two neuroblastoma samples and     1` cghb45htg
-This combined with the low expression makes me less concerned about 
+It looks like we are getting all the same variation of a similar pathway with 32 genes that are found to be involved in sensory perception. 
+
+For context, the samples used in benchmarking are two neuroblastoma samples and two wilms tumor samples. 
+There is some evidence of genes involved in sensory perception being involved in neuroblastoma, but generally these genes have very low expression and are detected in a small percentage of cells. 
+
+I think there is still strong support for use of alevin-fry with the `cr-like-em` resolution. 
 
 ```{r}
 sessioninfo::session_info()
