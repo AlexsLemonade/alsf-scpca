@@ -357,7 +357,7 @@ To see if the increase in genes detected/cell in the full resolution could be du
 # only genes with detection in > 5% of cells will be included in the QC calculations
 sce_threshold_list <- sce_list %>%
   purrr::map(
-    ~ purrr::map(.x, addCellQC, mito = mito_genes, threshold = 5)
+    ~ purrr::map(.x, scpcaTools::add_cell_mito_qc, mito = mito_genes, threshold = 5)
   )
 ```
 
@@ -369,7 +369,7 @@ names(sce_threshold_list) <- c(rep("alevin-fry", 8), "cellranger")
 # merge back into a dataframe for plotting 
 coldata_threshold <- purrr::map_df(
   sce_threshold_list,
-  ~ purrr::map_df(.x, coldata_to_df, .id = "quant_id"), 
+  ~ purrr::map_df(.x, scpcaTools::coldata_to_df, .id = "quant_id"), 
   .id = "tool"
 )
 
