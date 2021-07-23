@@ -89,7 +89,7 @@ process alevin{
 
 //generate permit list from RAD input 
 process generate_permit{
-  container 'quay.io/repository/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
+  container 'quay.io/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
   publishDir "${params.outdir}"
   input:
     path run_dir
@@ -110,7 +110,7 @@ process generate_permit{
 
 // given permit list and barcode mapping, collate RAD file 
 process collate_fry{
-  container 'quay.io/repository/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
+  container 'quay.io/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
   label 'cpus_8'
   publishDir "${params.outdir}"
   input: 
@@ -128,7 +128,7 @@ process collate_fry{
 
 // then quantify collated RAD file
 process quant_fry{
-  container 'quay.io/repository/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
+  container 'quay.io/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
   label 'cpus_8'
   publishDir "${params.outdir}"
   input: 
