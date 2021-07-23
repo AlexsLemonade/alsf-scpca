@@ -18,6 +18,11 @@ params.outdir = "s3://nextflow-ccdl-results/scpca/alevin-fry-${params.filter}-qu
 // or "All" to process all samples in the metadata file
 params.run_ids = "SCPCR000001,SCPCR000002"
 
+// containers
+SALMON_CONTAINER = 'quay.io/biocontainers/salmon:1.5.2--h84f40af_0'
+ALEVINFRY_CONTAINER = 'quay.io/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
+
+
 // index files 
 index_names_map = ['cdna': 'spliced_txome_k31',
                    'splici': 'spliced_intron_txome_k31']
@@ -49,7 +54,7 @@ if((params.resolution == 'cr-like' || params.resolution == 'cr-like-em') && para
 
 // generates RAD file using alevin
 process alevin{
-  container 'quay.io/biocontainers/salmon:1.5.2--h84f40af_0'
+  container SALMON_CONTAINER
   label 'cpus_8'
   tag "${id}-${index}"
   publishDir "${params.outdir}"
@@ -89,7 +94,7 @@ process alevin{
 
 //generate permit list from RAD input 
 process generate_permit{
-  container 'quay.io/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
+  container ALEVINFRY_CONTAINER
   publishDir "${params.outdir}"
   input:
     path run_dir
@@ -110,7 +115,7 @@ process generate_permit{
 
 // given permit list and barcode mapping, collate RAD file 
 process collate_fry{
-  container 'quay.io/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
+  container ALEVINFRY_CONTAINER
   label 'cpus_8'
   publishDir "${params.outdir}"
   input: 
@@ -128,7 +133,7 @@ process collate_fry{
 
 // then quantify collated RAD file
 process quant_fry{
-  container 'quay.io/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
+  container ALEVINFRY_CONTAINER
   label 'cpus_8'
   publishDir "${params.outdir}"
   input: 
