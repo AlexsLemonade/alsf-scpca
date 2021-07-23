@@ -50,14 +50,13 @@ if(params.resolution == 'cr-like' && params.index_type == 'splici'){
 
 // generates RAD file using alevin
 process alevin{
-  container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
+  container 'quay.io/biocontainers/salmon:1.5.2--h84f40af_0'
   label 'cpus_8'
   tag "${id}-${index}"
   publishDir "${params.outdir}"
   input:
     tuple val(id), val(tech), path(read1), path(read2)
     path index
-    path tx2gene
   output:
     path run_dir
   script:
@@ -70,7 +69,7 @@ process alevin{
     tech_flag = ['10Xv2': '--chromium',
                  '10Xv3': '--chromiumV3',
                  '10Xv3.1': '--chromiumV3']
-    // run alevin like normal with the --justAlign flag 
+    // run alevin like normal with the --rad flag 
     // creates output directory with RAD file needed for alevin-fry
     // uses sketch mode if --sketch was included at invocation
     """
@@ -81,18 +80,17 @@ process alevin{
       -1 ${read1} \
       -2 ${read2} \
       -i ${index} \
-      --tgMap ${tx2gene} \
       -o ${run_dir} \
       -p ${task.cpus} \
       --dumpFeatures \
-      --justAlign \
+      --rad \
       ${params.sketch ? '--sketch' : ''}
     """
 }
 
 //generate permit list from RAD input 
 process generate_permit{
-  container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
+  container 'quay.io/repository/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
   publishDir "${params.outdir}"
   input:
     path run_dir
@@ -113,7 +111,7 @@ process generate_permit{
 
 // given permit list and barcode mapping, collate RAD file 
 process collate_fry{
-  container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
+  container 'quay.io/repository/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
   label 'cpus_8'
   publishDir "${params.outdir}"
   input: 
@@ -131,7 +129,7 @@ process collate_fry{
 
 // then quantify collated RAD file
 process quant_fry{
-  container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
+  container 'quay.io/repository/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
   label 'cpus_8'
   publishDir "${params.outdir}"
   input: 
@@ -173,7 +171,7 @@ workflow{
     .map{row -> file("${params.barcode_dir}/${barcodes[row.technology]}")}
 
   // run Alevin
-  alevin(reads_ch, index_path, t2g_path)
+  alevin(reads_ch, index_path)
   // generate permit list from alignment 
   generate_permit(alevin.out, barcodes_ch)
   // collate RAD files 
