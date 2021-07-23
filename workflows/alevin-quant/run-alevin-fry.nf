@@ -22,7 +22,7 @@ params.run_ids = "SCPCR000001,SCPCR000002"
 index_names_map = ['cdna': 'spliced_txome_k31',
                    'splici': 'spliced_intron_txome_k31']
 
-// tx2gene files
+// tx2gene 2 column files
 t2g_map = ['cdna': 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv',
            'splici': 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene.tsv']
 
@@ -37,14 +37,13 @@ tech_list = barcodes.keySet()
 // file paths
 index_path = "${params.ref_dir}/${params.index_dir}/${index_names_map[params.index_type]}"
 index_prefix = "${params.ref_dir}/${params.annotation_dir}"
-t2g_path = "${index_prefix}/${t2g_map[params.index_type]}"
   
 // if using splici and cr-like use the 3 column t2g file for alevin-fry quant
-if(params.resolution == 'cr-like' && params.index_type == 'splici'){
+if((params.resolution == 'cr-like' || params.resolution == 'cr-like-em') && params.index_type == 'splici'){
     t2g_quant_path = "${index_prefix}/${params.t2g_3col}"
     use_mtx = true
 } else{
-    t2g_quant_path = t2g_path
+    t2g_quant_path = "${index_prefix}/${t2g_map[params.index_type]}"
     use_mtx = false
 }
 
