@@ -8,9 +8,9 @@ params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.t
 params.outdir = "s3://nextflow-ccdl-results/scpca/alevin-fry-features"
 
 // 10X barcode files
-barcodes = ['CITE-seq-10Xv2': '737K-august-2016.txt',
-            'CITE-seq-10Xv3': '3M-february-2018.txt',
-            'CITE-seq-10Xv3.1': '3M-february-2018.txt']
+barcodes = ['CITEseq_10Xv2': '737K-august-2016.txt',
+            'CITEseq_10Xv3': '3M-february-2018.txt',
+            'CITEseq_10Xv3.1': '3M-february-2018.txt']
 // supported single cell technologies
 tech_list = barcodes.keySet()
 
@@ -54,9 +54,9 @@ process alevin_feature{
     // label the run directory by id
     run_dir = "${id}-features"
     // Define umi geometries
-    umi_geoms = ['CITE-seq-10Xv2': '1[17-26]',
-                 'CITE-seq-10Xv3': '1[17-28]',
-                 'CITE-seq-10Xv2': '1[17-28]']
+    umi_geoms = ['CITEseq_10Xv2': '1[17-26]',
+                 'CITEseq_10Xv3': '1[17-28]',
+                 'CITEseq_10Xv3.1': '1[17-28]']
     """
     mkdir -p ${run_dir}
     salmon alevin \
@@ -137,7 +137,6 @@ workflow{
                       )}
     .combine(index_feature.out, by: 0) // combine by the feature_barcode_file
     .map{ it.subList(1, it.size())} // remove the first element
-  
 
   // run Alevin
   alevin_feature(reads_ch)
