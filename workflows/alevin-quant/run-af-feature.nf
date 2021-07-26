@@ -26,9 +26,9 @@ process index_feature{
   container SALMON_CONTAINER
   
   input:
-    path feature_file
+    tuple val(id), path(feature_file)
   output:
-    path "feature_index"
+    tuple val(id), path("feature_index")
   script:
     """
     salmon index \
@@ -36,6 +36,8 @@ process index_feature{
       -i feature_index \
       --features \
       -k 7 
+
+    awk '{print \$1"\\t"\$1;}' ${feature_file} > feature_index/t2g.tsv
     """
 }
 
@@ -45,10 +47,9 @@ process alevin_feature{
   label 'cpus_8'
   tag "${id}-features"
   input:
-    tuple val(id), val(tech), val(feature_geom), path(read1), path(read2)
-    path (index)
+    tuple val(id), val(tech), path(read1), path(read2), val(feature_geom), path(feature_index)
   output:
-    path run_dir
+    tuple val(id), path(run_dir), path(feature_index)
   script:
     // label the run directory by id
     run_dir = "${id}-features"
@@ -62,7 +63,7 @@ process alevin_feature{
       -l ISR \
       -1 ${read1} \
       -2 ${read2} \
-      -i ${index} \
+      -i ${feature_index} \
       --read-geometry ${feature_geom} \
       --bc-geometry 1[1-16] \
       --umi-geometry ${umi_geoms[tech]} \
@@ -80,16 +81,13 @@ process permit_collate_quant_feature{
   publishDir "${params.outdir}"
 
   input:
-    path run_dir
-    path feature_file 
+    tuple val(id), path(run_dir), path(feature_index)
     path barcode_file
   output:
     path run_dir
   
   script: 
     """
-    awk '{print \$1"\\t"\$1;}' ${feature_file} > t2g.tsv
-
     alevin-fry generate-permit-list \
       -i ${run_dir} \
       --expected-ori fw \
@@ -103,7 +101,7 @@ process permit_collate_quant_feature{
     
     alevin-fry quant \
       --input-dir ${run_dir} \
-      --tg-map t2g.tsv \
+      --tg-map ${feature_index}/t2g.tsv \
       -r ${params.resolution} \
       -o ${run_dir} \
       --use-mtx \
@@ -121,24 +119,31 @@ workflow{
     // use only the rows in the sample list
     .filter{run_all || (it.scpca_run_id in run_ids)}
 
-
-  // create tuple of [sample_id, technology, feature_geometry, [Read1 files], [Read2 files]]
-  reads_ch = samples_ch
-    .map{row -> tuple(row.scpca_run_id,
-                      row.technology,
-                      row.feature_barcode_geom,
-                      file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
-                      file("s3://${row.s3_prefix}/*_R2_*.fastq.gz")
-                      )}
+  //get and map the feature barcode files
   features_ch = samples_ch
-    .map{row -> file("s3://${row.feature_barcode_file}")}
+    .map{row -> tuple(row.feature_barcode_file,
+                      file("s3://${row.feature_barcode_file}"))}
+    .unique()
+  index_feature(features_ch)
+
+  // create tuple of [sample_id, technology, [Read1 files], [Read2 files], feature_geometry, feature_index]
+  reads_ch = samples_ch
+    .map{row -> tuple(row.feature_barcode_file,
+                      row.scpca_run_id,
+                      row.technology,
+                      file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
+                      file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
+                      row.feature_barcode_geom
+                      )}
+    .combine(index_feature.out, by: 0) // combine by the feature_barcode_file
+    .map{ it.subList(1, it.size())} // remove the first element
+  
+
+  // run Alevin
+  alevin_feature(reads_ch)
+  
   barcodes_ch = samples_ch
     .map{row -> file("${params.barcode_dir}/${barcodes[row.technology]}")}
-
-  // make index
-  index_feature(features_ch)
-  // run Alevin
-  alevin_feature(reads_ch, index_feature.out)
   // generate permit list from alignment 
-  permit_collate_quant_feature(alevin_feature.out, features_ch, barcodes_ch)
+  permit_collate_quant_feature(alevin_feature.out, barcodes_ch)
 }
