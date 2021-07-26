@@ -1,0 +1,144 @@
+#!/usr/bin/env nextflow
+nextflow.enable.dsl=2
+
+// run parameters
+params.resolution = 'cr-like' //default resolution is cr-like, can also use full, cr-like-em, parsimony, and trivial
+params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
+params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
+params.outdir = "s3://nextflow-ccdl-results/scpca/alevin-fry-features"
+
+// 10X barcode files
+barcodes = ['CITE-seq-10Xv2': '737K-august-2016.txt',
+            'CITE-seq-10Xv3': '3M-february-2018.txt',
+            'CITE-seq-10Xv3.1': '3M-february-2018.txt']
+// supported single cell technologies
+tech_list = barcodes.keySet()
+
+// run_ids are comma separated list to be parsed into a list of run ids,
+// or "All" to process all samples in the metadata file
+params.run_ids = "SCPCR000084,SCPCR000085,SCPCR000340"
+
+// containers
+SALMON_CONTAINER = 'quay.io/biocontainers/salmon:1.5.2--h84f40af_0'
+ALEVINFRY_CONTAINER = 'quay.io/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
+
+process index_feature{
+  container SALMON_CONTAINER
+  
+  input:
+    path feature_file
+  output:
+    path "feature_index"
+  script:
+    """
+    salmon index \
+      -t ${feature_file} \
+      -i feature_index \
+      --features \
+      -k 7 
+    """
+}
+
+// generates RAD file for alevin feature matrix using alevin
+process alevin_feature{
+  container SALMON_CONTAINER
+  label 'cpus_8'
+  tag "${id}-features"
+  input:
+    tuple val(id), val(tech), val(feature_geom), path(read1), path(read2)
+    path (index)
+  output:
+    path run_dir
+  script:
+    // label the run directory by id
+    run_dir = "${id}-features"
+    // Define umi geometries
+    umi_geoms = ['CITE-seq-10Xv2': '1[17-26]',
+                 'CITE-seq-10Xv3': '1[17-28]',
+                 'CITE-seq-10Xv2': '1[17-28]']
+    """
+    mkdir -p ${run_dir}
+    salmon alevin \
+      -l ISR \
+      -1 ${read1} \
+      -2 ${read2} \
+      -i ${index} \
+      --read-geometry ${feature_geom} \
+      --bc-geometry 1[1-16] \
+      --umi-geometry ${umi_geoms[tech]} \
+      --sketch \
+      --rad \
+      -o ${run_dir} \
+      -p ${task.cpus} 
+    """
+}
+
+// quantify from rad input
+process permit_collate_quant_feature{
+  container ALEVINFRY_CONTAINER
+  label 'cpus_8'
+  publishDir "${params.outdir}"
+
+  input:
+    path run_dir
+    path feature_file 
+    path barcode_file
+  output:
+    path run_dir
+  
+  script: 
+    """
+    awk '{print \$1"\\t"\$1;}' ${feature_file} > t2g.tsv
+
+    alevin-fry generate-permit-list \
+      -i ${run_dir} \
+      --expected-ori fw \
+      -o ${run_dir} \
+      -u ${barcode_file}
+
+    alevin-fry collate \
+      --input-dir ${run_dir} \
+      --rad-dir ${run_dir} \
+      -t ${task.cpus}
+    
+    alevin-fry quant \
+      --input-dir ${run_dir} \
+      --tg-map t2g.tsv \
+      -r ${params.resolution} \
+      -o ${run_dir} \
+      --use-mtx \
+      -t ${task.cpus} \
+      
+    """
+}
+
+workflow{
+  run_ids = params.run_ids?.tokenize(',') ?: []
+  run_all = run_ids[0] == "All"
+  samples_ch = Channel.fromPath(params.run_metafile)
+    .splitCsv(header: true, sep: '\t')
+    .filter{it.technology in tech_list} 
+    // use only the rows in the sample list
+    .filter{run_all || (it.scpca_run_id in run_ids)}
+
+
+  // create tuple of [sample_id, technology, feature_geometry, [Read1 files], [Read2 files]]
+  reads_ch = samples_ch
+    .map{row -> tuple(row.scpca_run_id,
+                      row.technology,
+                      row.feature_barcode_geom,
+                      file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
+                      file("s3://${row.s3_prefix}/*_R2_*.fastq.gz")
+                      )}
+  features_ch = samples_ch
+    .map{row -> file("s3://${row.feature_barcode_file}")}
+  barcodes_ch = samples_ch
+    .map{row -> file("${params.barcode_dir}/${barcodes[row.technology]}")}
+
+  // make index
+  index_feature(features_ch)
+  // run Alevin
+  alevin_feature(reads_ch, index_feature.out)
+  // generate permit list from alignment 
+  permit_collate_quant_feature(alevin_feature.out, features_ch, barcodes_ch)
+}
