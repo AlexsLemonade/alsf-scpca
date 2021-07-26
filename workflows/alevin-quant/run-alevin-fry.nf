@@ -18,11 +18,16 @@ params.outdir = "s3://nextflow-ccdl-results/scpca/alevin-fry-${params.filter}-qu
 // or "All" to process all samples in the metadata file
 params.run_ids = "SCPCR000001,SCPCR000002"
 
+// containers
+SALMON_CONTAINER = 'quay.io/biocontainers/salmon:1.5.2--h84f40af_0'
+ALEVINFRY_CONTAINER = 'quay.io/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
+
+
 // index files 
 index_names_map = ['cdna': 'spliced_txome_k31',
                    'splici': 'spliced_intron_txome_k31']
 
-// tx2gene files
+// tx2gene 2 column files
 t2g_map = ['cdna': 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv',
            'splici': 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene.tsv']
 
@@ -37,27 +42,25 @@ tech_list = barcodes.keySet()
 // file paths
 index_path = "${params.ref_dir}/${params.index_dir}/${index_names_map[params.index_type]}"
 index_prefix = "${params.ref_dir}/${params.annotation_dir}"
-t2g_path = "${index_prefix}/${t2g_map[params.index_type]}"
   
 // if using splici and cr-like use the 3 column t2g file for alevin-fry quant
-if(params.resolution == 'cr-like' && params.index_type == 'splici'){
+if((params.resolution == 'cr-like' || params.resolution == 'cr-like-em') && params.index_type == 'splici'){
     t2g_quant_path = "${index_prefix}/${params.t2g_3col}"
     use_mtx = true
 } else{
-    t2g_quant_path = t2g_path
+    t2g_quant_path = "${index_prefix}/${t2g_map[params.index_type]}"
     use_mtx = false
 }
 
 // generates RAD file using alevin
 process alevin{
-  container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
+  container SALMON_CONTAINER
   label 'cpus_8'
   tag "${id}-${index}"
   publishDir "${params.outdir}"
   input:
     tuple val(id), val(tech), path(read1), path(read2)
     path index
-    path tx2gene
   output:
     path run_dir
   script:
@@ -70,7 +73,7 @@ process alevin{
     tech_flag = ['10Xv2': '--chromium',
                  '10Xv3': '--chromiumV3',
                  '10Xv3.1': '--chromiumV3']
-    // run alevin like normal with the --justAlign flag 
+    // run alevin like normal with the --rad flag 
     // creates output directory with RAD file needed for alevin-fry
     // uses sketch mode if --sketch was included at invocation
     """
@@ -81,18 +84,17 @@ process alevin{
       -1 ${read1} \
       -2 ${read2} \
       -i ${index} \
-      --tgMap ${tx2gene} \
       -o ${run_dir} \
       -p ${task.cpus} \
       --dumpFeatures \
-      --justAlign \
+      --rad \
       ${params.sketch ? '--sketch' : ''}
     """
 }
 
 //generate permit list from RAD input 
 process generate_permit{
-  container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
+  container ALEVINFRY_CONTAINER
   publishDir "${params.outdir}"
   input:
     path run_dir
@@ -113,7 +115,7 @@ process generate_permit{
 
 // given permit list and barcode mapping, collate RAD file 
 process collate_fry{
-  container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
+  container ALEVINFRY_CONTAINER
   label 'cpus_8'
   publishDir "${params.outdir}"
   input: 
@@ -131,7 +133,7 @@ process collate_fry{
 
 // then quantify collated RAD file
 process quant_fry{
-  container 'ghcr.io/alexslemonade/scpca-alevin-fry:latest'
+  container ALEVINFRY_CONTAINER
   label 'cpus_8'
   publishDir "${params.outdir}"
   input: 
@@ -173,7 +175,7 @@ workflow{
     .map{row -> file("${params.barcode_dir}/${barcodes[row.technology]}")}
 
   // run Alevin
-  alevin(reads_ch, index_path, t2g_path)
+  alevin(reads_ch, index_path)
   // generate permit list from alignment 
   generate_permit(alevin.out, barcodes_ch)
   // collate RAD files 

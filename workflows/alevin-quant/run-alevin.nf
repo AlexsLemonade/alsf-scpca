@@ -25,7 +25,7 @@ params.mito_path = "${params.ref_dir}/${params.annotation_dir}/${params.mitolist
 tech_list = ['10Xv2', '10Xv3', '10Xv3.1'] 
 
 process alevin{
-  container 'quay.io/biocontainers/salmon:1.4.0--hf69c8f4_0'
+  container 'quay.io/biocontainers/salmon:1.5.2--h84f40af_0'
   label 'cpus_8'
   tag "${id}-${index}"
   publishDir "${params.outdir}"
