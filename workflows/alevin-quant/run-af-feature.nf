@@ -3,16 +3,16 @@ nextflow.enable.dsl=2
 
 // run parameters
 params.resolution = 'cr-like' //default resolution is cr-like, can also use full, cr-like-em, parsimony, and trivial
-params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
+params.feature_barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 params.outdir = "s3://nextflow-ccdl-results/scpca/alevin-fry-features"
 
 // 10X barcode files
-barcodes = ['CITEseq_10Xv2': '737K-august-2016.txt',
+feature_barcodes = ['CITEseq_10Xv2': '737K-august-2016.txt',
             'CITEseq_10Xv3': '3M-february-2018.txt',
             'CITEseq_10Xv3.1': '3M-february-2018.txt']
 // supported single cell technologies
-tech_list = barcodes.keySet()
+feature_tech_list = feature_barcodes.keySet()
 
 // run_ids are comma separated list to be parsed into a list of run ids,
 // or "All" to process all samples in the metadata file
@@ -45,14 +45,17 @@ process index_feature{
 process alevin_feature{
   container SALMON_CONTAINER
   label 'cpus_8'
-  tag "${id}-features"
+  tag "${run_id}-features"
   input:
-    tuple val(id), val(tech), path(read1), path(read2), val(feature_geom), path(feature_index)
+    tuple val(run_id), val(sample_id), val(tech), 
+          path(read1), path(read2), 
+          val(feature_geom), path(feature_index)
   output:
-    tuple val(id), path(run_dir), path(feature_index)
+    tuple val(run_id), val(sample_id), 
+          path(run_dir), path(feature_index)
   script:
     // label the run directory by id
-    run_dir = "${id}-features"
+    run_dir = "${run_id}-features"
     // Define umi geometries
     umi_geoms = ['CITEseq_10Xv2': '1[17-26]',
                  'CITEseq_10Xv3': '1[17-28]',
@@ -67,7 +70,6 @@ process alevin_feature{
       --read-geometry ${feature_geom} \
       --bc-geometry 1[1-16] \
       --umi-geometry ${umi_geoms[tech]} \
-      --sketch \
       --rad \
       -o ${run_dir} \
       -p ${task.cpus} 
@@ -81,10 +83,12 @@ process permit_collate_quant_feature{
   publishDir "${params.outdir}"
 
   input:
-    tuple val(id), path(run_dir), path(feature_index)
+    tuple val(run_id), val(sample_id),
+          path(run_dir), path(feature_index)
     path barcode_file
   output:
-    path run_dir
+    tuple val(run_id), val(sample_id),
+          path(run_dir)
   
   script: 
     """
@@ -106,30 +110,34 @@ process permit_collate_quant_feature{
       -o ${run_dir} \
       --use-mtx \
       -t ${task.cpus} \
-      
+
+    # remove large files
+    rm ${run_dir}/*.rad ${run_dir}/*.bin 
     """
 }
 
 workflow{
   run_ids = params.run_ids?.tokenize(',') ?: []
   run_all = run_ids[0] == "All"
-  samples_ch = Channel.fromPath(params.run_metafile)
+  feature_runs_ch = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
-    .filter{it.technology in tech_list} 
+    .filter{it.technology in feature_tech_list} 
     // use only the rows in the sample list
     .filter{run_all || (it.scpca_run_id in run_ids)}
 
   //get and map the feature barcode files
-  features_ch = samples_ch
+  feature_barcodes_ch = feature_runs_ch
     .map{row -> tuple(row.feature_barcode_file,
                       file("s3://${row.feature_barcode_file}"))}
     .unique()
-  index_feature(features_ch)
+  index_feature(feature_barcodes_ch)
 
-  // create tuple of [sample_id, technology, [Read1 files], [Read2 files], feature_geometry, feature_index]
-  reads_ch = samples_ch
+  // create tuple of [run_id, sample_id, technology, [Read1 files], [Read2 files], feature_geometry, feature_index]
+  // WE start by including the feature_barcode file so we can join to the indices, but that will be removed
+  reads_ch = feature_runs_ch
     .map{row -> tuple(row.feature_barcode_file,
                       row.scpca_run_id,
+                      row.scpca_sample_id,
                       row.technology,
                       file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
                       file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
@@ -141,8 +149,8 @@ workflow{
   // run Alevin
   alevin_feature(reads_ch)
   
-  barcodes_ch = samples_ch
-    .map{row -> file("${params.barcode_dir}/${barcodes[row.technology]}")}
+  barcodes_ch = feature_runs_ch
+    .map{row -> file("${params.feature_barcode_dir}/${feature_barcodes[row.technology]}")}
   // generate permit list from alignment 
   permit_collate_quant_feature(alevin_feature.out, barcodes_ch)
 }
