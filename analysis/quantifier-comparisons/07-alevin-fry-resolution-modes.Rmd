@@ -221,6 +221,7 @@ Let's look at if there is a difference in the actual genes that are detected ove
 # make a function to filter sces by subset of cells and re-calculate feature stats
 filter_sce <- function(sce, cells){
   cells_to_keep <- colnames(sce) %in% cells
+  rowData(sce) <- NULL
   sce[, cells_to_keep] %>%
     scater::addPerFeatureQC()
 }
@@ -266,7 +267,8 @@ all_rowdata_filtered <- rbind(cell_rowdata_filtered, nucleus_rowdata_filtered)
 
 # join with quant info to get sample names 
 all_rowdata_filtered <- all_rowdata_filtered %>%
-  dplyr::left_join(quant_info)
+  dplyr::left_join(quant_info) %>%
+  dplyr::filter(mean > 0 & detected > 0)
 ```
 
 ```{r}
@@ -284,35 +286,14 @@ cr_like_em_genes <- all_rowdata_filtered %>%
 
 ```{r}
 gene_overlap <- intersect(cr_like_genes, cr_like_em_genes)
-length(gene_overlap)/(length(cr_like_em_genes))
+glue::glue("Number of genes in cr-like {length(cr_like_genes)}")
+glue::glue("Number of genes in cr-like-em {length(cr_like_em_genes)}")
+glue::glue("Number of genes found in both {length(gene_overlap)}")
 ```
 
-When you look at shared cells only, `cr-like` and `cr-like-em` identify the exact same genes. 
-However, we had seen an increase in the genes detected/cell. 
-It looks like the actual number of genes doesn't increase, but the coverage of some genes across each the cells increases, leading to a slight increase in the number of genes/cell with `cr-like-em`. 
+When you look at shared cells only and genes with expression > 0 and detected in at least 1 cell, `cr-like` and `cr-like-em`, 2,056 genes are not found to intersect.
 
-```{r}
-ggplot(all_rowdata_filtered, aes(x = alevin_resolution, y = detected)) +
-  geom_boxplot()+
-  facet_grid(~ sample) +
-  theme_classic() +
-  coord_cartesian(ylim = c(0,10)) +
-  ylab("Percent of Cells Gene Detected In")
-```
-Here we can see that across the board, the `cr-like-em` resolution results in what appears to be an increase in the percentage of cells genes are detected in when compared to `cr-like`. 
-Does this still hold if we remove genes that are only detected in 5% of cells? 
-
-```{r}
-ggplot(all_rowdata_filtered %>%
-         dplyr::filter(detected > 5), aes(x = alevin_resolution, y = detected)) +
-  geom_boxplot()+
-  facet_grid(~ sample) +
-  theme_classic() +
-  #coord_cartesian(ylim = c(0,10)) +
-  ylab("Percent of Cells Gene Detected In")
-```
-If we only look at genes detected in > 5% of cells we no longer see a clear difference between the two resolutions. 
-
+I'm going to look at gene expression and how this actually affects individual genes in another notebook. 
 
 ```{r}
 sessioninfo::session_info()
