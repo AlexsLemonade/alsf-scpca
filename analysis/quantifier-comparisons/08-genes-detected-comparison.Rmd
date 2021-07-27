@@ -188,11 +188,11 @@ gene_detect_df %>%
   dplyr::distinct(gene_id, .keep_all = TRUE) %>%
   ggplot(aes(x = tools_detected)) +
   geom_bar() +
-  scale_x_upset(n_intersections = 5)
+  scale_x_upset(n_intersections = 6)
 ```
 
 
-When looking at shared cells only and genes that are expressed and detected > 0, we see that alevin-fry detects more genes than cellranger in both methods`. 
+When looking at shared cells only and genes that are expressed and detected > 0, we see that alevin-fry detects more genes than cellranger in both methods. 
 Almost every gene that is found in cellranger is also being found in Alevin-fry so we are probably not losing much.
 We also see here that there are more in `cr-like-em` than in `cr-like`. 
 
