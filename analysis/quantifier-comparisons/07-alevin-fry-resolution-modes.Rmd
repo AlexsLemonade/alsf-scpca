@@ -32,10 +32,14 @@ base_dir <- here::here()
 file_dir <- file.path(base_dir, "data", "cr-like-test", "results")
 
 # qc files 
-
 quant_info_file <- file.path(file_dir, "quant_info.tsv")
 coldata_df_file <- file.path(file_dir, "coldata_qc.tsv")
 rowdata_df_file <- file.path(file_dir, "rowdata_qc.tsv")
+
+# sce objects
+cr_like_file <- file.path(file_dir, "splici_salign_cr-like_sces.rds")
+cr_like_em_file <- file.path(file_dir, "splici_salign_cr-like-em_sces.rds")
+cellranger_file <- file.path(file_dir, "cellranger_sces.rds")
 ```
 
 ```{r}
@@ -44,6 +48,14 @@ quant_info <- readr::read_tsv(quant_info_file)
 coldata_df <- readr::read_tsv(coldata_df_file)
 rowdata_df <- readr::read_tsv(rowdata_df_file)
 ```
+
+```{r}
+# read in sces
+cr_like_sce <- readr::read_rds(cr_like_file)
+cr_like_em_sce <- readr::read_rds(cr_like_em_file)
+cellranger_sce <- readr::read_rds(cellranger_file)
+```
+
 
 ```{r}
 alevin_fry_tools <- c("splici_salign_cr-like", "splici_salign_cr-like-em")
@@ -95,7 +107,7 @@ ggplot(cell_coldata_qc, aes(x = tool, y = sum, fill = alevin_resolution)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   ylab("UMI/cell") + 
   xlab("") + 
-  ylim(c(0,50000))
+  coord_cartesian(ylim = c(0,50000))
 ```
 
 ```{r}
@@ -117,7 +129,7 @@ ggplot(cell_coldata_qc, aes(x = tool, y = detected, fill = alevin_resolution)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   ylab("Genes detected/cell") + 
   xlab("") + 
-  ylim(c(0,10000))
+  coord_cartesian(ylim = c(0,10000))
 ```
 As seen previously, when looking at all cells across all tools, we see that alevin-fry appears to detect lower UMI/cell and genes detected/cell than cellranger regardless of resolution. 
 This is most likely due to the fact that alevin-fry detects more cells than cellranger and is an artifact of the filtering methods. 
@@ -200,6 +212,106 @@ ggplot(cell_qc_common, aes(x = tool, y = detected, fill = alevin_resolution)) +
 ```
 The `cr-like-em` resolution actually looks more similar to cellranger than the `cr-like` when looking at UMI/cell, but when looking at genes/cell you do see a shift upwards in the `cr-like-em`. 
 Cellranger appears to be somewhere in the middle with overall no major differences between these resolutions and cellranger so I would be inclined to use `cr-like-em` to resolve multi-mapped reads. 
+
+### Gene overlap 
+
+Let's look at if there is a difference in the actual genes that are detected overall between using `cr-like` and `cr-like-em` or if we are just picking up more genes/cell 
+
+```{r}
+# make a function to filter sces by subset of cells and re-calculate feature stats
+filter_sce <- function(sce, cells){
+  cells_to_keep <- colnames(sce) %in% cells
+  sce[, cells_to_keep] %>%
+    scater::addPerFeatureQC()
+}
+```
+
+
+```{r}
+# split into cell and nucleus 
+resolution <- c('cr-like', 'cr-like-em')
+cell_sces <- list(cr_like_sce[1:2],
+                  cr_like_em_sce[1:2])
+nucleus_sces <- list(cr_like_sce[3:4],
+                     cr_like_em_sce[3:4])
+
+names(cell_sces) <- resolution
+names(nucleus_sces) <- resolution
+
+# filter list of sces based on common cells 
+cell_sces_filtered <- cell_sces %>%
+  purrr::map(
+    ~ purrr::map(.x, filter_sce, cells = common_cells)
+  )
+
+nucleus_sces_filtered <- nucleus_sces %>%
+  purrr::map(
+    ~ purrr::map(.x, filter_sce, cells = common_nuclei)
+  )
+
+# grab rowdata and combine into dataframe to be used for plotting
+cell_rowdata_filtered <- cell_sces %>% 
+  purrr::map_df(
+    ~ purrr::map_df(.x, scpcaTools::rowdata_to_df, .id = "quant_dir"),
+    .id = "alevin_resolution"
+  )
+
+nucleus_rowdata_filtered <- nucleus_sces %>% 
+  purrr::map_df(
+    ~ purrr::map_df(.x, scpcaTools::rowdata_to_df, .id = "quant_dir"),
+    .id = "alevin_resolution"
+  )
+# merge into one dataframe 
+all_rowdata_filtered <- rbind(cell_rowdata_filtered, nucleus_rowdata_filtered)
+
+# join with quant info to get sample names 
+all_rowdata_filtered <- all_rowdata_filtered %>%
+  dplyr::left_join(quant_info)
+```
+
+```{r}
+# get list of cr_like and cr_like_em genes
+cr_like_genes <- all_rowdata_filtered %>%
+  dplyr::filter(alevin_resolution == "cr-like") %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+
+cr_like_em_genes <- all_rowdata_filtered %>%
+  dplyr::filter(alevin_resolution == "cr-like-em") %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+```
+
+```{r}
+gene_overlap <- intersect(cr_like_genes, cr_like_em_genes)
+length(gene_overlap)/(length(cr_like_em_genes))
+```
+
+When you look at shared cells only, `cr-like` and `cr-like-em` identify the exact same genes. 
+However, we had seen an increase in the genes detected/cell. 
+It looks like the actual number of genes doesn't increase, but the coverage of some genes across each the cells increases, leading to a slight increase in the number of genes/cell with `cr-like-em`. 
+
+```{r}
+ggplot(all_rowdata_filtered, aes(x = alevin_resolution, y = detected)) +
+  geom_boxplot()+
+  facet_grid(~ sample) +
+  theme_classic() +
+  coord_cartesian(ylim = c(0,10)) +
+  ylab("Percent of Cells Gene Detected In")
+```
+Here we can see that across the board, the `cr-like-em` resolution results in what appears to be an increase in the percentage of cells genes are detected in when compared to `cr-like`. 
+Does this still hold if we remove genes that are only detected in 5% of cells? 
+
+```{r}
+ggplot(all_rowdata_filtered %>%
+         dplyr::filter(detected > 5), aes(x = alevin_resolution, y = detected)) +
+  geom_boxplot()+
+  facet_grid(~ sample) +
+  theme_classic() +
+  #coord_cartesian(ylim = c(0,10)) +
+  ylab("Percent of Cells Gene Detected In")
+```
+If we only look at genes detected in > 5% of cells we no longer see a clear difference between the two resolutions. 
 
 
 ```{r}
