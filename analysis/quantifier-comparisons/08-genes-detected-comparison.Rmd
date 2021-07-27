@@ -15,7 +15,8 @@ Here, we have alevin-fry that has been run in two different resolution modes, `c
 ```{r}
 library(magrittr)
 library(ggplot2)
-library(eulerr)
+library(UpSetR)
+library(SingleCellExperiment)
 library(clusterProfiler)
 library(org.Hs.eg.db)
 ```
@@ -27,11 +28,85 @@ file_dir <- file.path(base_dir, "data", "cr-like-test", "results")
 
 # qc files 
 rowdata_df_file <- file.path(file_dir, "rowdata_qc.tsv")
+coldata_df_file <- file.path(file_dir, "coldata_qc.tsv")
+quant_info_file <- file.path(file_dir, "quant_info.tsv")
+
+# sce objects
+cr_like_file <- file.path(file_dir, "splici_salign_cr-like_sces.rds")
+cr_like_em_file <- file.path(file_dir, "splici_salign_cr-like-em_sces.rds")
+cellranger_file <- file.path(file_dir, "cellranger_sces.rds")
 ```
 
 ```{r}
 # read in rowdata_df containing information about each gene
 rowdata_df <- readr::read_tsv(rowdata_df_file)
+coldata_df <- readr::read_tsv(coldata_df_file)
+quant_info <- readr::read_tsv(quant_info_file)
+```
+
+```{r}
+# read in sces
+cr_like_sce <- readr::read_rds(cr_like_file)
+cr_like_em_sce <- readr::read_rds(cr_like_em_file)
+cellranger_sce <- readr::read_rds(cellranger_file)
+```
+
+
+```{r}
+# join coldata with quant_info 
+alevin_fry_tools <- c("splici_salign_cr-like", "splici_salign_cr-like-em")
+# merge coldata df with quant_info
+coldata_info_df <- coldata_df %>%
+  # rename tool to be either cellranger or alevin-fry
+  dplyr::mutate(tool = ifelse(tool %in% alevin_fry_tools, "alevin-fry", "cellranger")) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir")) %>%
+  # rename the not_alevin to cellranger for plotting purposes
+  dplyr::mutate(alevin_resolution = ifelse(alevin_resolution == "not_alevin", "cellranger", alevin_resolution))
+```
+
+
+```{r}
+# filter for common cells across all samples 
+cell_counts <- coldata_info_df %>%  
+  dplyr::count(cell_id, sample)
+
+common_cells <- cell_counts %>%
+  dplyr::filter(n == 3) %>%
+  dplyr::pull(cell_id)
+```
+
+```{r}
+# make a function to filter sces by subset of cells and re-calculate feature stats
+filter_sce <- function(sce, cells){
+  cells_to_keep <- colnames(sce) %in% cells
+  SummarizedExperiment::rowData(sce) <- NULL
+  sce[, cells_to_keep] %>%
+    scater::addPerFeatureQC()
+}
+```
+
+
+```{r}
+# filter all sces together 
+all_sces <- list(cr_like_sce,
+                 cr_like_em_sce,
+                 cellranger_sce)
+names(all_sces) <- c('cr-like', 'cr-like-em', 'not_alevin')
+
+sces_filtered <- all_sces %>%
+  purrr::map(
+    ~ purrr::map(.x, filter_sce, cells = common_cells)
+  )
+
+# grab rowdata from filtered sces 
+rowdata_filtered <- sces_filtered %>% 
+  purrr::map_df(
+    ~ purrr::map_df(.x, scpcaTools::rowdata_to_df, .id = "quant_dir"),
+    .id = "alevin_resolution"
+  ) %>%
+  dplyr::left_join(quant_info)
 ```
 
 ## Differences in Gene detection between Alevin-fry and Cellranger
@@ -42,95 +117,168 @@ As another comparison, let's look at the actual genes that are identified in eac
 Let's see how many are lost when we use alevin-fry over cellranger and what types of genes they are. 
 
 ```{r}
-# pull out genes that are detected and expressed in each of the tools
-cellranger_genes <- rowdata_df %>%
-  dplyr::filter(tool == "cellranger" & detected > 0 & mean > 0) %>%
-  dplyr::pull(gene_id) %>%
-  unique()
-
-cr_like_genes <- rowdata_df %>%
-  dplyr::filter(tool == "splici_salign_cr-like" & detected > 0 & mean > 0) %>%
-  dplyr::pull(gene_id) %>%
-  unique()
-
-cr_em_genes <- rowdata_df %>%
-  dplyr::filter(tool == "splici_salign_cr-like-em" & detected > 0 & mean > 0) %>%
-  dplyr::pull(gene_id) %>%
-  unique()
-```
-
-```{r}
 # make sure rowdata only has genes that are found in more than 0% cells and > 0% mean gene expression
-rowdata_df_filter <- rowdata_df %>%
+rowdata_filtered <- rowdata_filtered %>%
   dplyr::filter(detected > 0 & mean > 0)
 ```
 
 
 ```{r}
+# pull out genes that are detected and expressed in each of the tools
+cellranger_genes <- rowdata_filtered %>%
+  dplyr::filter(tool == "cellranger" & detected > 0 & mean > 0) %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+
+cr_like_genes <- rowdata_filtered %>%
+  dplyr::filter(alevin_resolution == "cr-like" & detected > 0 & mean > 0) %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+
+cr_em_genes <- rowdata_filtered %>%
+  dplyr::filter(alevin_resolution == "cr-like-em" & detected > 0 & mean > 0) %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+```
+
+
+```{r}
+# get intersection gene lists 
 # look at intersection between cellranger and alevin-fry cr-like
-cellranger_cr_intersect <- rowdata_df_filter %>%
-  dplyr::filter(gene_id %in% cr_like_genes & tool == "cellranger") %>%
-  dplyr::pull(gene_id) %>%
-  unique()
+cellranger_cr_intersect <- intersect(cellranger_genes, cr_like_genes)
 
-venn_prep <- c("Cellranger" = length(cellranger_genes) - length(cellranger_cr_intersect), 
-               "cr-like" = length(cr_like_genes) - length(cellranger_cr_intersect), 
-               "Cellranger&cr-like" = length(cellranger_cr_intersect))
-plot(euler(venn_prep), quantities = TRUE)
-
-```
-
-```{r}
 # look at intersection between cellranger and alevin-fry cr-like-em
-cellranger_cr_em_intersect <- rowdata_df_filter %>%
-  dplyr::filter(gene_id %in% cr_em_genes & tool == "cellranger") %>%
-  dplyr::pull(gene_id) %>%
-  unique()
+cellranger_cr_em_intersect <- intersect(cellranger_genes, cr_em_genes)
 
-venn_prep <- c("Cellranger" = length(cellranger_genes) - length(cellranger_cr_em_intersect), 
-               "cr-like-em" = length(cr_em_genes) - length(cellranger_cr_em_intersect), 
-               "Cellranger&cr-like-em" = length(cellranger_cr_em_intersect))
-plot(euler(venn_prep), quantities = TRUE)
-
+# look at intersection between alevin-fry cr-like and alevin-fry cr-like-em
+cr_cr_em_intersect <- intersect(cr_like_genes, cr_em_genes)
 ```
 
 ```{r}
-# look at intersection between alevin-fry cr-like and alevin-fry cr-like-em
-cr_cr_em_intersect <- rowdata_df_filter %>%
-  dplyr::filter(gene_id %in% cr_em_genes & tool == "splici_salign_cr-like") %>%
+# get unique gene lists by getting genes that overlap with all other tools first and then the set difference with the list of genes for that tool
+all_cellranger_overlap <- rowdata_filtered %>%
+  dplyr::filter(gene_id %in% cellranger_genes & tool =="alevin-fry") %>%
   dplyr::pull(gene_id) %>%
   unique()
+cellranger_unique <- setdiff(cellranger_genes, all_cellranger_overlap)
 
-venn_prep <- c("cr-like" = length(cr_like_genes) - length(cr_cr_em_intersect), 
-               "cr-like-em" = length(cr_em_genes) - length(cr_cr_em_intersect), 
-               "cr-like&cr-like-em" = length(cr_cr_em_intersect))
-plot(euler(venn_prep), quantities = TRUE)
+cr_overlap <- rowdata_filtered %>%
+  dplyr::filter(gene_id %in% cr_like_genes & alevin_resolution %in% c("cr-like-em", "not_alevin")) %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+cr_unique <- setdiff(cr_like_genes, cr_overlap)
+
+cr_like_overlap <- rowdata_filtered %>%
+  dplyr::filter(gene_id %in% cr_em_genes & alevin_resolution %in% c("cr-like", "not_alevin")) %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+cr_like_unique <- setdiff(cr_em_genes, cr_like_overlap)
 ```
 
-Here we can see that Alevin-fry in general detects more genes than cellranger but probably with lower counts as we saw when looking at all cells vs. shared cells above. 
-It looks like the majority of the genes are shared in all of the tools, but of the ones that aren't shared are they ones that we would miss out if we chose alevin-fry over cellranger?
 
-Perhaps they are lowly expressed genes and it wouldn't matter anyway. 
+```{r}
+# visualize overlap between gene sets based on tool
+rowdata_filtered[which(rowdata_filtered$alevin_resolution == "not_alevin"), "alevin_resolution"] <- "cellranger"
+
+gene_detect_df <- rowdata_filtered %>%
+  group_by(gene_id) %>%
+  dplyr::summarise(tools_detected = list(unique(alevin_resolution)))
+
+gene_detect_df %>%
+  dplyr::distinct(gene_id, .keep_all = TRUE) %>%
+  ggplot(aes(x = tools_detected)) +
+  geom_bar() +
+  scale_x_upset(n_intersections = 5)
+```
+
+
+When looking at shared cells only and genes that are expressed and detected > 0, we see that alevin-fry detects more genes than cellranger in both methods`. 
+Almost every gene that is found in cellranger is also being found in Alevin-fry so we are probably not losing much.
+We also see here that there are more in `cr-like-em` than in `cr-like`. 
+
+Perhaps the genes that are different are lowly expressed genes and it wouldn't matter anyway. 
 
 If we now look at the gene expression for those genes that are unique to each tool, how do they compare to the gene expression for those genes that are shared?
 
+
 ```{r}
-# add a column in colData to classify as shared or unique to that tool
-rowdata_df_filter <- rowdata_df_filter %>%
+# calculate mean expression of log transformed counts matrix 
+log_row_means <- function(sce){
+   rowMeans(log1p(counts(sce))) %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("gene_id") %>%
+    dplyr::rename("mean" = ".")
+}
+
+# get list of row mean data frames 
+mean_exp_list <- sces_filtered %>%
+  purrr::map(
+    ~ purrr::map(.x, log_row_means)
+  )
+
+# join together into larger data frame with quant_dir and alevin_resolution as unique ID's
+mean_exp_df <- mean_exp_list %>%
+  purrr::map_df(
+    ~ purrr::map_df(.x, rbind, .id = "quant_dir"), 
+    .id = "alevin_resolution"
+  ) %>%
+  dplyr::left_join(quant_info)
+
+# join back with quant_info to get sample information 
+```
+
+
+```{r}
+# add a column to classify as shared or unique to that tool
+mean_exp_df <- mean_exp_df %>%
   dplyr::mutate(gene_status = ifelse(gene_id %in% c(cellranger_cr_intersect, cellranger_cr_em_intersect, cr_cr_em_intersect), "shared", "unique")) 
 ```
 
 
-```{r}
+```{r fig.height = 5, fig.width=10}
 # make a plot to look at the mean gene expression of shared vs. unique genes for each tool
-ggplot(rowdata_df_filter, aes(x = tool, y = mean, fill = gene_status)) + 
+ggplot(mean_exp_df, aes(x = alevin_resolution, y = mean, fill = gene_status)) + 
   geom_boxplot() + 
-  ylim(c(0,2))
+  facet_grid(~sample) + 
+  coord_cartesian(ylim = c(0,2))
 ```
 
 As expected, across the board, it looks like the unique genes are those with lower mean gene expression than those genes that are shared across other tools. 
 The genes that are lost are probably not contributing very much to downstream results. 
+
+Let's look at the few unique genes in `cr-like-em` and cellranger that are higher expressed. 
  
+```{r}
+cellranger_unique_high <- mean_exp_df %>%
+  dplyr::filter(alevin_resolution == "not_alevin" & 
+                  gene_status == "unique" & 
+                  mean > 0.25) %>%
+  dplyr::pull(gene_id)
+
+rowdata_filtered %>%
+  dplyr::filter(gene_id %in% cellranger_unique_high)
+```
+ All of the points that are high in cellranger are from PRRC2B, or proline-rich coiled-coil 2B. 
+ 
+```{r}
+cr_like_em_unique_high <- mean_exp_df %>%
+  dplyr::filter(alevin_resolution == "cr-like-em" & 
+                  gene_status == "unique" & 
+                  mean > 0.25) %>%
+  dplyr::pull(gene_id)
+
+rowdata_filtered %>%
+  dplyr::filter(gene_id %in% cr_like_em_unique_high)
+```
+
+These genes that are found in cr-like-em include the following: 
+
+ENSG00000214736 - TOMM6
+ENSG00000220842 - RPL21P16
+ENSG00000244398 - RP11
+
+These all appear to be expressed in a majority of the cells. 
+The RPL genes represent ribosomal genes that are likely not biologically significant. 
 
 ### Gene Ontology
 
@@ -139,33 +287,41 @@ Let's make sure that we aren't losing any genes that we might care about and wou
 First we need to identify the genes that are unique to each of the tools and would be lost if we weren't using that tool. 
 
 ```{r}
-cellranger_lost <- rowdata_df_filter %>%
-  dplyr::filter(gene_status == "unique" & tool == "cellranger") %>%
-  dplyr::arrange(desc(mean)) %>%
-  dplyr::select(gene_id, Symbol, mean, detected)
+# join back with initial rowdata_df to get symbol to use for gene set enrichment analysis 
+cellranger_rowdata <- rowdata_df %>%
+  dplyr::filter(tool == "cellranger") %>%
+  dplyr::select(gene_id, Symbol)
 
-cr_like_lost <- rowdata_df_filter %>%
-  dplyr::filter(gene_status == "unique" & tool == "splici_salign_cr-like") %>%
+cellranger_lost <- rowdata_filtered %>%
+  dplyr::filter(gene_id %in% cellranger_unique) %>%
+  dplyr::left_join(cellranger_rowdata) %>%
   dplyr::arrange(desc(mean)) %>%
-  dplyr::select(gene_id, Symbol, mean, detected)
+  dplyr::select(gene_id, mean, Symbol, detected, sample) %>%
+  unique()
 
-cr_em_lost <- rowdata_df_filter %>%
-  dplyr::filter(gene_status == "unique" & tool == "splici_salign_cr-like-em") %>%
+cr_em_rowdata <- rowdata_df %>%
+  dplyr::filter(tool == "splici_salign_cr-like-em") %>%
+  dplyr::select(gene_id, Symbol)
+
+cr_em_lost <- rowdata_filtered %>%
+  dplyr::filter(gene_id %in% cr_like_unique) %>%
+  dplyr::left_join(cr_em_rowdata) %>%
   dplyr::arrange(desc(mean)) %>%
-  dplyr::select(tool, gene_id, Symbol, mean, detected)
+  dplyr::select(tool, gene_id, Symbol, mean, detected, sample) %>%
+  unique()
 
 ```
 
 Since we are specifically interested in looking at what we would lose if we were to use alevin-fry over cellranger, let's focus on the genes lost in cellranger. 
 
 ```{r}
-head(cellranger_lost)
+cellranger_lost
 summary(cellranger_lost$mean)
 summary(cellranger_lost$detected)
 ```
 
 Notice that because we are looking at 4 different samples that have been run with cellranger, each gene is represented 4 times. 
-It looks like for the most part they are lowly expressed other than the one gene that still has low expression but is found in the majority of cells, PRRC2B.
+It looks like for the most part they are lowly expressed other than the one gene, PRRC2B, but is found in the majority of cells.
 
 These genes probably do not have an impact on downstream results if we are missing them, but let's be sure that we aren't missing out on any major pathways we would care about. 
 
@@ -205,12 +361,44 @@ go_results <- go_ora_results@result %>%
 enrichplot::dotplot(go_ora_results)
 ```
 
-It looks like we are getting all the same variation of a similar pathway with 32 genes that are found to be involved in sensory perception. 
+It looks like we are getting all the same variation of a similar pathway with 32 genes that are found to be involved in sensory perception, which makes sense given the amount of olfactory genes that are detected. 
 
-For context, the samples used in benchmarking are two neuroblastoma samples and two wilms tumor samples. 
-There is some evidence of genes involved in sensory perception being involved in neuroblastoma, but generally these genes have very low expression and are detected in a small percentage of cells. 
+As a reminder, these are the genes that are not being detected by alevin-fry using either method so using alevin-fry would mean losing this list of genes, but the low expression doesn't seem cause for worry. 
 
-I think there is still strong support for use of alevin-fry with the `cr-like-em` resolution. 
+What about the type of genes that are unique to `cr-like-em`. 
+
+```{r}
+cr_em_lost_gene_list <- cr_em_lost$gene_id %>%
+  unique()
+background_genes <- rowdata_df$gene_id %>%
+  unique()
+```
+
+```{r}
+go_ora_results <- enrichGO(gene = cr_em_lost_gene_list,
+                           universe = background_genes,
+                           keyType = "ENSEMBL",
+                           OrgDb = org.Hs.eg.db,
+                           ont = "BP",
+                           pAdjustMethod = "BH",
+                           pvalueCutoff = 0.00001)
+```
+
+
+```{r}
+go_results <- go_ora_results@result %>%
+  as.data.frame() %>%
+  dplyr::filter(p.adjust < 0.00001)
+go_results
+```
+
+
+```{r}
+enrichplot::dotplot(go_ora_results)
+```
+
+Now if we look at the types of genes that are identified uniquely by using the `cr-like-em` resolution in Alevin-fry we see detection of RNA processing genes and metabolism related genes. 
+These are probably ribosomal genes and other related genes based on looking at the few unique genes that are higly expressed and noting that those are ribosomal genes. 
 
 ```{r}
 sessioninfo::session_info()
