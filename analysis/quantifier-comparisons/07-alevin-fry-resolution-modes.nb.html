@@ -300,11 +300,90 @@ div.tocify {
 <h2>Setup</h2>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShtYWdyaXR0cilcbmxpYnJhcnkoZ2dwbG90MilcbmxpYnJhcnkoU2luZ2xlQ2VsbEV4cGVyaW1lbnQpXG5gYGAifQ== -->
-<pre class="r"><code>library(magrittr)
-library(ggplot2)
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShtYWdyaXR0cilcbmBgYCJ9 -->
+<pre class="r"><code>library(magrittr)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiV2FybmluZyBtZXNzYWdlOlxuSW4gaWYgKGNoYXJUb1Jhdyh4KSA8IDIwKSBwYXN0ZShcIlxcXFx1XCIsIHRvdXBwZXIoZm9ybWF0KGFzLmhleG1vZGUoYXMuaW50ZWdlcihjaGFyVG9SYXcoeCkpKSwgIDpcbiAgdGhlIGNvbmRpdGlvbiBoYXMgbGVuZ3RoID4gMSBhbmQgb25seSB0aGUgZmlyc3QgZWxlbWVudCB3aWxsIGJlIHVzZWRcbiJ9 -->
+<pre><code>Warning message:
+In if (charToRaw(x) &lt; 20) paste(&quot;\\u&quot;, toupper(format(as.hexmode(as.integer(charToRaw(x))),  :
+  the condition has length &gt; 1 and only the first element will be used</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShnZ3Bsb3QyKVxubGlicmFyeShTaW5nbGVDZWxsRXhwZXJpbWVudClcbmBgYCJ9 -->
+<pre class="r"><code>library(ggplot2)
 library(SingleCellExperiment)</code></pre>
 <!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBTdW1tYXJpemVkRXhwZXJpbWVudFxuTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBNYXRyaXhHZW5lcmljc1xuTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBtYXRyaXhTdGF0c1xuXG5BdHRhY2hpbmcgcGFja2FnZTog4oCYTWF0cml4R2VuZXJpY3PigJlcblxuVGhlIGZvbGxvd2luZyBvYmplY3RzIGFyZSBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOm1hdHJpeFN0YXRz4oCZOlxuXG4gICAgY29sQWxscywgY29sQW55TkFzLCBjb2xBbnlzLCBjb2xBdmdzUGVyUm93U2V0LCBjb2xDb2xsYXBzZSwgY29sQ291bnRzLCBjb2xDdW1tYXhzLFxuICAgIGNvbEN1bW1pbnMsIGNvbEN1bXByb2RzLCBjb2xDdW1zdW1zLCBjb2xEaWZmcywgY29sSVFSRGlmZnMsIGNvbElRUnMsIGNvbExvZ1N1bUV4cHMsXG4gICAgY29sTWFkRGlmZnMsIGNvbE1hZHMsIGNvbE1heHMsIGNvbE1lYW5zMiwgY29sTWVkaWFucywgY29sTWlucywgY29sT3JkZXJTdGF0cywgY29sUHJvZHMsXG4gICAgY29sUXVhbnRpbGVzLCBjb2xSYW5nZXMsIGNvbFJhbmtzLCBjb2xTZERpZmZzLCBjb2xTZHMsIGNvbFN1bXMyLCBjb2xUYWJ1bGF0ZXMsIGNvbFZhckRpZmZzLFxuICAgIGNvbFZhcnMsIGNvbFdlaWdodGVkTWFkcywgY29sV2VpZ2h0ZWRNZWFucywgY29sV2VpZ2h0ZWRNZWRpYW5zLCBjb2xXZWlnaHRlZFNkcyxcbiAgICBjb2xXZWlnaHRlZFZhcnMsIHJvd0FsbHMsIHJvd0FueU5Bcywgcm93QW55cywgcm93QXZnc1BlckNvbFNldCwgcm93Q29sbGFwc2UsIHJvd0NvdW50cyxcbiAgICByb3dDdW1tYXhzLCByb3dDdW1taW5zLCByb3dDdW1wcm9kcywgcm93Q3Vtc3Vtcywgcm93RGlmZnMsIHJvd0lRUkRpZmZzLCByb3dJUVJzLFxuICAgIHJvd0xvZ1N1bUV4cHMsIHJvd01hZERpZmZzLCByb3dNYWRzLCByb3dNYXhzLCByb3dNZWFuczIsIHJvd01lZGlhbnMsIHJvd01pbnMsXG4gICAgcm93T3JkZXJTdGF0cywgcm93UHJvZHMsIHJvd1F1YW50aWxlcywgcm93UmFuZ2VzLCByb3dSYW5rcywgcm93U2REaWZmcywgcm93U2RzLCByb3dTdW1zMixcbiAgICByb3dUYWJ1bGF0ZXMsIHJvd1ZhckRpZmZzLCByb3dWYXJzLCByb3dXZWlnaHRlZE1hZHMsIHJvd1dlaWdodGVkTWVhbnMsIHJvd1dlaWdodGVkTWVkaWFucyxcbiAgICByb3dXZWlnaHRlZFNkcywgcm93V2VpZ2h0ZWRWYXJzXG5cbkxvYWRpbmcgcmVxdWlyZWQgcGFja2FnZTogR2Vub21pY1Jhbmdlc1xuTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBzdGF0czRcbkxvYWRpbmcgcmVxdWlyZWQgcGFja2FnZTogQmlvY0dlbmVyaWNzXG5Mb2FkaW5nIHJlcXVpcmVkIHBhY2thZ2U6IHBhcmFsbGVsXG5cbkF0dGFjaGluZyBwYWNrYWdlOiDigJhCaW9jR2VuZXJpY3PigJlcblxuVGhlIGZvbGxvd2luZyBvYmplY3RzIGFyZSBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOnBhcmFsbGVs4oCZOlxuXG4gICAgY2x1c3RlckFwcGx5LCBjbHVzdGVyQXBwbHlMQiwgY2x1c3RlckNhbGwsIGNsdXN0ZXJFdmFsUSwgY2x1c3RlckV4cG9ydCwgY2x1c3Rlck1hcCxcbiAgICBwYXJBcHBseSwgcGFyQ2FwcGx5LCBwYXJMYXBwbHksIHBhckxhcHBseUxCLCBwYXJSYXBwbHksIHBhclNhcHBseSwgcGFyU2FwcGx5TEJcblxuVGhlIGZvbGxvd2luZyBvYmplY3RzIGFyZSBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOnN0YXRz4oCZOlxuXG4gICAgSVFSLCBtYWQsIHNkLCB2YXIsIHh0YWJzXG5cblRoZSBmb2xsb3dpbmcgb2JqZWN0cyBhcmUgbWFza2VkIGZyb20g4oCYcGFja2FnZTpiYXNl4oCZOlxuXG4gICAgYW55RHVwbGljYXRlZCwgYXBwZW5kLCBhcy5kYXRhLmZyYW1lLCBiYXNlbmFtZSwgY2JpbmQsIGNvbG5hbWVzLCBkaXJuYW1lLCBkby5jYWxsLFxuICAgIGR1cGxpY2F0ZWQsIGV2YWwsIGV2YWxxLCBGaWx0ZXIsIEZpbmQsIGdldCwgZ3JlcCwgZ3JlcGwsIGludGVyc2VjdCwgaXMudW5zb3J0ZWQsIGxhcHBseSxcbiAgICBNYXAsIG1hcHBseSwgbWF0Y2gsIG1nZXQsIG9yZGVyLCBwYXN0ZSwgcG1heCwgcG1heC5pbnQsIHBtaW4sIHBtaW4uaW50LCBQb3NpdGlvbiwgcmFuayxcbiAgICByYmluZCwgUmVkdWNlLCByb3duYW1lcywgc2FwcGx5LCBzZXRkaWZmLCBzb3J0LCB0YWJsZSwgdGFwcGx5LCB1bmlvbiwgdW5pcXVlLCB1bnNwbGl0LFxuICAgIHdoaWNoLm1heCwgd2hpY2gubWluXG5cbkxvYWRpbmcgcmVxdWlyZWQgcGFja2FnZTogUzRWZWN0b3JzXG5cbkF0dGFjaGluZyBwYWNrYWdlOiDigJhTNFZlY3RvcnPigJlcblxuVGhlIGZvbGxvd2luZyBvYmplY3QgaXMgbWFza2VkIGZyb20g4oCYcGFja2FnZTpiYXNl4oCZOlxuXG4gICAgZXhwYW5kLmdyaWRcblxuTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBJUmFuZ2VzXG5Mb2FkaW5nIHJlcXVpcmVkIHBhY2thZ2U6IEdlbm9tZUluZm9EYlxuTG9hZGluZyByZXF1aXJlZCBwYWNrYWdlOiBCaW9iYXNlXG5XZWxjb21lIHRvIEJpb2NvbmR1Y3RvclxuXG4gICAgVmlnbmV0dGVzIGNvbnRhaW4gaW50cm9kdWN0b3J5IG1hdGVyaWFsOyB2aWV3IHdpdGggJ2Jyb3dzZVZpZ25ldHRlcygpJy4gVG8gY2l0ZVxuICAgIEJpb2NvbmR1Y3Rvciwgc2VlICdjaXRhdGlvbihcIkJpb2Jhc2VcIiknLCBhbmQgZm9yIHBhY2thZ2VzICdjaXRhdGlvbihcInBrZ25hbWVcIiknLlxuXG5cbkF0dGFjaGluZyBwYWNrYWdlOiDigJhCaW9iYXNl4oCZXG5cblRoZSBmb2xsb3dpbmcgb2JqZWN0IGlzIG1hc2tlZCBmcm9tIOKAmHBhY2thZ2U6TWF0cml4R2VuZXJpY3PigJk6XG5cbiAgICByb3dNZWRpYW5zXG5cblRoZSBmb2xsb3dpbmcgb2JqZWN0cyBhcmUgbWFza2VkIGZyb20g4oCYcGFja2FnZTptYXRyaXhTdGF0c+KAmTpcblxuICAgIGFueU1pc3NpbmcsIHJvd01lZGlhbnNcbiJ9 -->
+<pre><code>Loading required package: SummarizedExperiment
+Loading required package: MatrixGenerics
+Loading required package: matrixStats
+
+Attaching package: ‘MatrixGenerics’
+
+The following objects are masked from ‘package:matrixStats’:
+
+    colAlls, colAnyNAs, colAnys, colAvgsPerRowSet, colCollapse, colCounts, colCummaxs,
+    colCummins, colCumprods, colCumsums, colDiffs, colIQRDiffs, colIQRs, colLogSumExps,
+    colMadDiffs, colMads, colMaxs, colMeans2, colMedians, colMins, colOrderStats, colProds,
+    colQuantiles, colRanges, colRanks, colSdDiffs, colSds, colSums2, colTabulates, colVarDiffs,
+    colVars, colWeightedMads, colWeightedMeans, colWeightedMedians, colWeightedSds,
+    colWeightedVars, rowAlls, rowAnyNAs, rowAnys, rowAvgsPerColSet, rowCollapse, rowCounts,
+    rowCummaxs, rowCummins, rowCumprods, rowCumsums, rowDiffs, rowIQRDiffs, rowIQRs,
+    rowLogSumExps, rowMadDiffs, rowMads, rowMaxs, rowMeans2, rowMedians, rowMins,
+    rowOrderStats, rowProds, rowQuantiles, rowRanges, rowRanks, rowSdDiffs, rowSds, rowSums2,
+    rowTabulates, rowVarDiffs, rowVars, rowWeightedMads, rowWeightedMeans, rowWeightedMedians,
+    rowWeightedSds, rowWeightedVars
+
+Loading required package: GenomicRanges
+Loading required package: stats4
+Loading required package: BiocGenerics
+Loading required package: parallel
+
+Attaching package: ‘BiocGenerics’
+
+The following objects are masked from ‘package:parallel’:
+
+    clusterApply, clusterApplyLB, clusterCall, clusterEvalQ, clusterExport, clusterMap,
+    parApply, parCapply, parLapply, parLapplyLB, parRapply, parSapply, parSapplyLB
+
+The following objects are masked from ‘package:stats’:
+
+    IQR, mad, sd, var, xtabs
+
+The following objects are masked from ‘package:base’:
+
+    anyDuplicated, append, as.data.frame, basename, cbind, colnames, dirname, do.call,
+    duplicated, eval, evalq, Filter, Find, get, grep, grepl, intersect, is.unsorted, lapply,
+    Map, mapply, match, mget, order, paste, pmax, pmax.int, pmin, pmin.int, Position, rank,
+    rbind, Reduce, rownames, sapply, setdiff, sort, table, tapply, union, unique, unsplit,
+    which.max, which.min
+
+Loading required package: S4Vectors
+
+Attaching package: ‘S4Vectors’
+
+The following object is masked from ‘package:base’:
+
+    expand.grid
+
+Loading required package: IRanges
+Loading required package: GenomeInfoDb
+Loading required package: Biobase
+Welcome to Bioconductor
+
+    Vignettes contain introductory material; view with &#39;browseVignettes()&#39;. To cite
+    Bioconductor, see &#39;citation(&quot;Biobase&quot;)&#39;, and for packages &#39;citation(&quot;pkgname&quot;)&#39;.
+
+
+Attaching package: ‘Biobase’
+
+The following object is masked from ‘package:MatrixGenerics’:
+
+    rowMedians
+
+The following objects are masked from ‘package:matrixStats’:
+
+    anyMissing, rowMedians</code></pre>
+<!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
@@ -332,11 +411,11 @@ cellranger_file &lt;- file.path(file_dir, &quot;cellranger_sces.rds&quot;)</code
 <pre class="r"><code># read in dataframes needed for plotting
 quant_info &lt;- readr::read_tsv(quant_info_file)</code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiUm93czogMTIgQ29sdW1uczogMTRcbuKUgOKUgCBDb2x1bW4gc3BlY2lmaWNhdGlvbiDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIBcbkRlbGltaXRlcjogXCJcXHRcIlxuY2hyICgxMSk6IHRvb2wsIHF1YW50X2Rpciwgc2FtcGxlLCBpbmRleF90eXBlLCBhbGV2aW5fYWxpZ25tZW50LCBhbGV2aW5fcmVzb2x1dGlvbiwgZmlsdGVyX3N0cmF0ZWd5LCBkYXRhX2RpciwuLi5cbmxnbCAgKDMpOiBmaWx0ZXIsIHVzYV9tb2RlLCBpbnRyb25fbW9kZVxuXG7ihLkgVXNlIGBzcGVjKClgIHRvIHJldHJpZXZlIHRoZSBmdWxsIGNvbHVtbiBzcGVjaWZpY2F0aW9uIGZvciB0aGlzIGRhdGEuXG7ihLkgU3BlY2lmeSB0aGUgY29sdW1uIHR5cGVzIG9yIHNldCBgc2hvd19jb2xfdHlwZXMgPSBGQUxTRWAgdG8gcXVpZXQgdGhpcyBtZXNzYWdlLlxuIn0= -->
+<!-- rnb-output-begin eyJkYXRhIjoiUm93czogMTIgQ29sdW1uczogMTRcbuKUgOKUgCBDb2x1bW4gc3BlY2lmaWNhdGlvbiDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIBcbkRlbGltaXRlcjogXCJcXHRcIlxuY2hyICgxMSk6IHRvb2wsIHF1YW50X2Rpciwgc2FtcGxlLCBpbmRleF90eXBlLCBhbGV2aW5fYWxpZ25tZW50LCBhbGV2aW5fcmVzb2x1dGlvbiwgZmlsdGVyX3N0cmF0ZWd5LCBkYS4uLlxubGdsICAoMyk6IGZpbHRlciwgdXNhX21vZGUsIGludHJvbl9tb2RlXG5cbuKEuSBVc2UgYHNwZWMoKWAgdG8gcmV0cmlldmUgdGhlIGZ1bGwgY29sdW1uIHNwZWNpZmljYXRpb24gZm9yIHRoaXMgZGF0YS5cbuKEuSBTcGVjaWZ5IHRoZSBjb2x1bW4gdHlwZXMgb3Igc2V0IGBzaG93X2NvbF90eXBlcyA9IEZBTFNFYCB0byBxdWlldCB0aGlzIG1lc3NhZ2UuXG4ifQ== -->
 <pre><code>Rows: 12 Columns: 14
-── Column specification ──────────────────────────────────────────────────────────────────────────────────────────
+── Column specification ───────────────────────────────────────────────────────────────────────────────────
 Delimiter: &quot;\t&quot;
-chr (11): tool, quant_dir, sample, index_type, alevin_alignment, alevin_resolution, filter_strategy, data_dir,...
+chr (11): tool, quant_dir, sample, index_type, alevin_alignment, alevin_resolution, filter_strategy, da...
 lgl  (3): filter, usa_mode, intron_mode
 
 ℹ Use `spec()` to retrieve the full column specification for this data.
@@ -345,9 +424,9 @@ lgl  (3): filter, usa_mode, intron_mode
 <!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuY29sZGF0YV9kZiA8LSByZWFkcjo6cmVhZF90c3YoY29sZGF0YV9kZl9maWxlKVxuYGBgIn0= -->
 <pre class="r"><code>coldata_df &lt;- readr::read_tsv(coldata_df_file)</code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiUm93czogMTU3NzM3IENvbHVtbnM6IDlcbuKUgOKUgCBDb2x1bW4gc3BlY2lmaWNhdGlvbiDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIBcbkRlbGltaXRlcjogXCJcXHRcIlxuY2hyICgzKTogdG9vbCwgcXVhbnRfaWQsIGNlbGxfaWRcbmRibCAoNik6IHN1bSwgZGV0ZWN0ZWQsIHN1YnNldHNfbWl0b19zdW0sIHN1YnNldHNfbWl0b19kZXRlY3RlZCwgc3Vic2V0c19taXRvX3BlcmNlbnQsIHRvdGFsXG5cbuKEuSBVc2UgYHNwZWMoKWAgdG8gcmV0cmlldmUgdGhlIGZ1bGwgY29sdW1uIHNwZWNpZmljYXRpb24gZm9yIHRoaXMgZGF0YS5cbuKEuSBTcGVjaWZ5IHRoZSBjb2x1bW4gdHlwZXMgb3Igc2V0IGBzaG93X2NvbF90eXBlcyA9IEZBTFNFYCB0byBxdWlldCB0aGlzIG1lc3NhZ2UuXG4ifQ== -->
+<!-- rnb-output-begin eyJkYXRhIjoiUm93czogMTU3NzM3IENvbHVtbnM6IDlcbuKUgOKUgCBDb2x1bW4gc3BlY2lmaWNhdGlvbiDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIBcbkRlbGltaXRlcjogXCJcXHRcIlxuY2hyICgzKTogdG9vbCwgcXVhbnRfaWQsIGNlbGxfaWRcbmRibCAoNik6IHN1bSwgZGV0ZWN0ZWQsIHN1YnNldHNfbWl0b19zdW0sIHN1YnNldHNfbWl0b19kZXRlY3RlZCwgc3Vic2V0c19taXRvX3BlcmNlbnQsIHRvdGFsXG5cbuKEuSBVc2UgYHNwZWMoKWAgdG8gcmV0cmlldmUgdGhlIGZ1bGwgY29sdW1uIHNwZWNpZmljYXRpb24gZm9yIHRoaXMgZGF0YS5cbuKEuSBTcGVjaWZ5IHRoZSBjb2x1bW4gdHlwZXMgb3Igc2V0IGBzaG93X2NvbF90eXBlcyA9IEZBTFNFYCB0byBxdWlldCB0aGlzIG1lc3NhZ2UuXG4ifQ== -->
 <pre><code>Rows: 157737 Columns: 9
-── Column specification ──────────────────────────────────────────────────────────────────────────────────────────
+── Column specification ───────────────────────────────────────────────────────────────────────────────────
 Delimiter: &quot;\t&quot;
 chr (3): tool, quant_id, cell_id
 dbl (6): sum, detected, subsets_mito_sum, subsets_mito_detected, subsets_mito_percent, total
@@ -358,9 +437,9 @@ dbl (6): sum, detected, subsets_mito_sum, subsets_mito_detected, subsets_mito_pe
 <!-- rnb-source-begin eyJkYXRhIjoiYGBgclxucm93ZGF0YV9kZiA8LSByZWFkcjo6cmVhZF90c3Yocm93ZGF0YV9kZl9maWxlKVxuYGBgIn0= -->
 <pre class="r"><code>rowdata_df &lt;- readr::read_tsv(rowdata_df_file)</code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiUm93czogNTYyNDQ4IENvbHVtbnM6IDhcbuKUgOKUgCBDb2x1bW4gc3BlY2lmaWNhdGlvbiDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIBcbkRlbGltaXRlcjogXCJcXHRcIlxuY2hyICg2KTogdG9vbCwgcXVhbnRfaWQsIGdlbmVfaWQsIElELCBTeW1ib2wsIFR5cGVcbmRibCAoMik6IG1lYW4sIGRldGVjdGVkXG5cbuKEuSBVc2UgYHNwZWMoKWAgdG8gcmV0cmlldmUgdGhlIGZ1bGwgY29sdW1uIHNwZWNpZmljYXRpb24gZm9yIHRoaXMgZGF0YS5cbuKEuSBTcGVjaWZ5IHRoZSBjb2x1bW4gdHlwZXMgb3Igc2V0IGBzaG93X2NvbF90eXBlcyA9IEZBTFNFYCB0byBxdWlldCB0aGlzIG1lc3NhZ2UuXG4ifQ== -->
+<!-- rnb-output-begin eyJkYXRhIjoiUm93czogNTYyNDQ4IENvbHVtbnM6IDhcbuKUgOKUgCBDb2x1bW4gc3BlY2lmaWNhdGlvbiDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIBcbkRlbGltaXRlcjogXCJcXHRcIlxuY2hyICg2KTogdG9vbCwgcXVhbnRfaWQsIGdlbmVfaWQsIElELCBTeW1ib2wsIFR5cGVcbmRibCAoMik6IG1lYW4sIGRldGVjdGVkXG5cbuKEuSBVc2UgYHNwZWMoKWAgdG8gcmV0cmlldmUgdGhlIGZ1bGwgY29sdW1uIHNwZWNpZmljYXRpb24gZm9yIHRoaXMgZGF0YS5cbuKEuSBTcGVjaWZ5IHRoZSBjb2x1bW4gdHlwZXMgb3Igc2V0IGBzaG93X2NvbF90eXBlcyA9IEZBTFNFYCB0byBxdWlldCB0aGlzIG1lc3NhZ2UuXG4ifQ== -->
 <pre><code>Rows: 562448 Columns: 8
-── Column specification ──────────────────────────────────────────────────────────────────────────────────────────
+── Column specification ───────────────────────────────────────────────────────────────────────────────────
 Delimiter: &quot;\t&quot;
 chr (6): tool, quant_id, gene_id, ID, Symbol, Type
 dbl (2): mean, detected
@@ -607,14 +686,47 @@ filter_sce &lt;- function(sce, cells){
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYWxsX3Jvd2RhdGFfZmlsdGVyZWQgPC0gcmJpbmQoY2VsbF9yb3dkYXRhX2ZpbHRlcmVkLCBudWNsZXVzX3Jvd2RhdGFfZmlsdGVyZWQpXG5cbiMgam9pbiB3aXRoIHF1YW50IGluZm8gdG8gZ2V0IHNhbXBsZSBuYW1lcyBcbmFsbF9yb3dkYXRhX2ZpbHRlcmVkIDwtIGFsbF9yb3dkYXRhX2ZpbHRlcmVkICU+JVxuICBkcGx5cjo6bGVmdF9qb2luKHF1YW50X2luZm8pICU+JVxuICBkcGx5cjo6ZmlsdGVyKG1lYW4gPiAwICYgZGV0ZWN0ZWQgPiAwKVxuXG5gYGAifQ== -->
-<pre class="r"><code>all_rowdata_filtered &lt;- rbind(cell_rowdata_filtered, nucleus_rowdata_filtered)
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBzcGxpdCBpbnRvIGNlbGwgYW5kIG51Y2xldXMgXG5yZXNvbHV0aW9uIDwtIGMoJ2NyLWxpa2UnLCAnY3ItbGlrZS1lbScpXG5jZWxsX3NjZXMgPC0gbGlzdChjcl9saWtlX3NjZVsxOjJdLFxuICAgICAgICAgICAgICAgICAgY3JfbGlrZV9lbV9zY2VbMToyXSlcbm51Y2xldXNfc2NlcyA8LSBsaXN0KGNyX2xpa2Vfc2NlWzM6NF0sXG4gICAgICAgICAgICAgICAgICAgICBjcl9saWtlX2VtX3NjZVszOjRdKVxuXG5uYW1lcyhjZWxsX3NjZXMpIDwtIHJlc29sdXRpb25cbm5hbWVzKG51Y2xldXNfc2NlcykgPC0gcmVzb2x1dGlvblxuXG4jIGZpbHRlciBsaXN0IG9mIHNjZXMgYmFzZWQgb24gY29tbW9uIGNlbGxzIFxuY2VsbF9zY2VzX2ZpbHRlcmVkIDwtIGNlbGxfc2NlcyAlPiVcbiAgcHVycnI6Om1hcChcbiAgICB+IHB1cnJyOjptYXAoLngsIGZpbHRlcl9zY2UsIGNlbGxzID0gY29tbW9uX2NlbGxzKVxuICApXG5cbm51Y2xldXNfc2Nlc19maWx0ZXJlZCA8LSBudWNsZXVzX3NjZXMgJT4lXG4gIHB1cnJyOjptYXAoXG4gICAgfiBwdXJycjo6bWFwKC54LCBmaWx0ZXJfc2NlLCBjZWxscyA9IGNvbW1vbl9udWNsZWkpXG4gIClcblxuIyBncmFiIHJvd2RhdGEgYW5kIGNvbWJpbmUgaW50byBkYXRhZnJhbWUgdG8gYmUgdXNlZCBmb3IgcGxvdHRpbmdcbmNlbGxfcm93ZGF0YV9maWx0ZXJlZCA8LSBjZWxsX3NjZXMgJT4lIFxuICBwdXJycjo6bWFwX2RmKFxuICAgIH4gcHVycnI6Om1hcF9kZigueCwgc2NwY2FUb29sczo6cm93ZGF0YV90b19kZiwgLmlkID0gXCJxdWFudF9kaXJcIiksXG4gICAgLmlkID0gXCJhbGV2aW5fcmVzb2x1dGlvblwiXG4gIClcblxubnVjbGV1c19yb3dkYXRhX2ZpbHRlcmVkIDwtIG51Y2xldXNfc2NlcyAlPiUgXG4gIHB1cnJyOjptYXBfZGYoXG4gICAgfiBwdXJycjo6bWFwX2RmKC54LCBzY3BjYVRvb2xzOjpyb3dkYXRhX3RvX2RmLCAuaWQgPSBcInF1YW50X2RpclwiKSxcbiAgICAuaWQgPSBcImFsZXZpbl9yZXNvbHV0aW9uXCJcbiAgKVxuIyBtZXJnZSBpbnRvIG9uZSBkYXRhZnJhbWUgXG5hbGxfcm93ZGF0YV9maWx0ZXJlZCA8LSByYmluZChjZWxsX3Jvd2RhdGFfZmlsdGVyZWQsIG51Y2xldXNfcm93ZGF0YV9maWx0ZXJlZClcblxuIyBqb2luIHdpdGggcXVhbnQgaW5mbyB0byBnZXQgc2FtcGxlIG5hbWVzIFxuYWxsX3Jvd2RhdGFfZmlsdGVyZWQgPC0gYWxsX3Jvd2RhdGFfZmlsdGVyZWQgJT4lXG4gIGRwbHlyOjpsZWZ0X2pvaW4ocXVhbnRfaW5mbykgJT4lXG4gIGRwbHlyOjpmaWx0ZXIobWVhbiA+IDAgJiBkZXRlY3RlZCA+IDApXG5gYGAifQ== -->
+<pre class="r"><code># split into cell and nucleus 
+resolution &lt;- c(&#39;cr-like&#39;, &#39;cr-like-em&#39;)
+cell_sces &lt;- list(cr_like_sce[1:2],
+                  cr_like_em_sce[1:2])
+nucleus_sces &lt;- list(cr_like_sce[3:4],
+                     cr_like_em_sce[3:4])
+
+names(cell_sces) &lt;- resolution
+names(nucleus_sces) &lt;- resolution
+
+# filter list of sces based on common cells 
+cell_sces_filtered &lt;- cell_sces %&gt;%
+  purrr::map(
+    ~ purrr::map(.x, filter_sce, cells = common_cells)
+  )
+
+nucleus_sces_filtered &lt;- nucleus_sces %&gt;%
+  purrr::map(
+    ~ purrr::map(.x, filter_sce, cells = common_nuclei)
+  )
+
+# grab rowdata and combine into dataframe to be used for plotting
+cell_rowdata_filtered &lt;- cell_sces %&gt;% 
+  purrr::map_df(
+    ~ purrr::map_df(.x, scpcaTools::rowdata_to_df, .id = &quot;quant_dir&quot;),
+    .id = &quot;alevin_resolution&quot;
+  )
+
+nucleus_rowdata_filtered &lt;- nucleus_sces %&gt;% 
+  purrr::map_df(
+    ~ purrr::map_df(.x, scpcaTools::rowdata_to_df, .id = &quot;quant_dir&quot;),
+    .id = &quot;alevin_resolution&quot;
+  )
+# merge into one dataframe 
+all_rowdata_filtered &lt;- rbind(cell_rowdata_filtered, nucleus_rowdata_filtered)
 
 # join with quant info to get sample names 
 all_rowdata_filtered &lt;- all_rowdata_filtered %&gt;%
   dplyr::left_join(quant_info) %&gt;%
-  dplyr::filter(mean &gt; 0 &amp; detected &gt; 0)
-</code></pre>
+  dplyr::filter(mean &gt; 0 &amp; detected &gt; 0)</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-output-begin eyJkYXRhIjoiSm9pbmluZywgYnkgPSBjKFwiYWxldmluX3Jlc29sdXRpb25cIiwgXCJxdWFudF9kaXJcIilcbiJ9 -->
 <pre><code>Joining, by = c(&quot;alevin_resolution&quot;, &quot;quant_dir&quot;)</code></pre>
@@ -664,54 +776,142 @@ glue::glue(&quot;Number of genes in cr-like {length(cr_like_genes)}&quot;)</code
 <p>I’m going to look at gene expression and how this actually affects individual genes in another notebook.</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuYGBgclxuc2Vzc2lvbmluZm86OnNlc3Npb25faW5mbygpXG5gYGBcbmBgYCJ9 -->
-<pre class="r"><code>```r
-sessioninfo::session_info()</code></pre>
-<pre><code>
-&lt;!-- rnb-source-end --&gt;
-
-&lt;!-- rnb-output-begin eyJkYXRhIjoi4pSAIFNlc3Npb24gaW5mbyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIBcblxu4pSAIFBhY2thZ2VzIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgFxuIHBhY2thZ2UgICAgICAgICAgICAgICogdmVyc2lvbiAgZGF0ZSAgICAgICBsaWIgc291cmNlICAgICAgICBcbiBhc3NlcnR0aGF0ICAgICAgICAgICAgIDAuMi4xICAgIDIwMTktMDMtMjEgWzFdIENSQU4gKFIgNC4wLjIpXG4gYmVhY2htYXQgICAgICAgICAgICAgICAyLjYuNCAgICAyMDIwLTEyLTIwIFsxXSBCaW9jb25kdWN0b3IgIFxuIGJlZXN3YXJtICAgICAgICAgICAgICAgMC40LjAgICAgMjAyMS0wNi0wMSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBCaW9iYXNlICAgICAgICAgICAgICAqIDIuNTAuMCAgIDIwMjAtMTAtMjcgWzFdIEJpb2NvbmR1Y3RvciAgXG4gQmlvY0dlbmVyaWNzICAgICAgICAgKiAwLjM2LjEgICAyMDIxLTA0LTE2IFsxXSBCaW9jb25kdWN0b3IgIFxuIEJpb2NOZWlnaGJvcnMgICAgICAgICAgMS44LjIgICAgMjAyMC0xMi0wNyBbMV0gQmlvY29uZHVjdG9yICBcbiBCaW9jUGFyYWxsZWwgICAgICAgICAgIDEuMjQuMSAgIDIwMjAtMTEtMDYgWzFdIEJpb2NvbmR1Y3RvciAgXG4gQmlvY1Npbmd1bGFyICAgICAgICAgICAxLjYuMCAgICAyMDIwLTEwLTI3IFsxXSBCaW9jb25kdWN0b3IgIFxuIGJpdCAgICAgICAgICAgICAgICAgICAgNC4wLjQgICAgMjAyMC0wOC0wNCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBiaXQ2NCAgICAgICAgICAgICAgICAgIDQuMC41ICAgIDIwMjAtMDgtMzAgWzFdIENSQU4gKFIgNC4wLjIpXG4gYml0b3BzICAgICAgICAgICAgICAgICAxLjAtNyAgICAyMDIxLTA0LTI0IFsxXSBDUkFOIChSIDQuMC4yKVxuIGJzbGliICAgICAgICAgICAgICAgICAgMC4yLjUuMSAgMjAyMS0wNS0xOCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBjbGkgICAgICAgICAgICAgICAgICAgIDMuMC4xICAgIDIwMjEtMDctMTcgWzFdIENSQU4gKFIgNC4wLjIpXG4gY29sb3JzcGFjZSAgICAgICAgICAgICAyLjAtMiAgICAyMDIxLTA2LTI0IFsxXSBDUkFOIChSIDQuMC4yKVxuIGNyYXlvbiAgICAgICAgICAgICAgICAgMS40LjEgICAgMjAyMS0wMi0wOCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBEQkkgICAgICAgICAgICAgICAgICAgIDEuMS4xICAgIDIwMjEtMDEtMTUgWzFdIENSQU4gKFIgNC4wLjIpXG4gRGVsYXllZEFycmF5ICAgICAgICAgICAwLjE2LjMgICAyMDIxLTAzLTI0IFsxXSBCaW9jb25kdWN0b3IgIFxuIERlbGF5ZWRNYXRyaXhTdGF0cyAgICAgMS4xMi4zICAgMjAyMS0wMi0wMyBbMV0gQmlvY29uZHVjdG9yICBcbiBkaWdlc3QgICAgICAgICAgICAgICAgIDAuNi4yNyAgIDIwMjAtMTAtMjQgWzFdIENSQU4gKFIgNC4wLjIpXG4gZHBseXIgICAgICAgICAgICAgICAgICAxLjAuNyAgICAyMDIxLTA2LTE4IFsxXSBDUkFOIChSIDQuMC4yKVxuIGRxcm5nICAgICAgICAgICAgICAgICAgMC4zLjAgICAgMjAyMS0wNS0wMSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBEcm9wbGV0VXRpbHMgICAgICAgICAgIDEuMTAuMyAgIDIwMjEtMDItMDIgWzFdIEJpb2NvbmR1Y3RvciAgXG4gZWRnZVIgICAgICAgICAgICAgICAgICAzLjMyLjEgICAyMDIxLTAxLTE0IFsxXSBCaW9jb25kdWN0b3IgIFxuIGVsbGlwc2lzICAgICAgICAgICAgICAgMC4zLjIgICAgMjAyMS0wNC0yOSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBldmFsdWF0ZSAgICAgICAgICAgICAgIDAuMTQgICAgIDIwMTktMDUtMjggWzFdIENSQU4gKFIgNC4wLjEpXG4gZmFuc2kgICAgICAgICAgICAgICAgICAwLjUuMCAgICAyMDIxLTA1LTI1IFsxXSBDUkFOIChSIDQuMC4yKVxuIGZhcnZlciAgICAgICAgICAgICAgICAgMi4xLjAgICAgMjAyMS0wMi0yOCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBnZW5lcmljcyAgICAgICAgICAgICAgIDAuMS4wICAgIDIwMjAtMTAtMzEgWzFdIENSQU4gKFIgNC4wLjIpXG4gR2Vub21lSW5mb0RiICAgICAgICAgKiAxLjI2LjcgICAyMDIxLTA0LTA4IFsxXSBCaW9jb25kdWN0b3IgIFxuIEdlbm9tZUluZm9EYkRhdGEgICAgICAgMS4yLjQgICAgMjAyMS0wNC0wOSBbMV0gQmlvY29uZHVjdG9yICBcbiBHZW5vbWljUmFuZ2VzICAgICAgICAqIDEuNDIuMCAgIDIwMjAtMTAtMjcgWzFdIEJpb2NvbmR1Y3RvciAgXG4gZ2diZWVzd2FybSAgICAgICAgICAgICAwLjYuMCAgICAyMDE3LTA4LTA3IFsxXSBDUkFOIChSIDQuMC4yKVxuIGdncGxvdDIgICAgICAgICAgICAgICogMy4zLjUgICAgMjAyMS0wNi0yNSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBnbHVlICAgICAgICAgICAgICAgICAgIDEuNC4yICAgIDIwMjAtMDgtMjcgWzFdIENSQU4gKFIgNC4wLjIpXG4gZ3JpZEV4dHJhICAgICAgICAgICAgICAyLjMgICAgICAyMDE3LTA5LTA5IFsxXSBDUkFOIChSIDQuMC4yKVxuIGd0YWJsZSAgICAgICAgICAgICAgICAgMC4zLjAgICAgMjAxOS0wMy0yNSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBIREY1QXJyYXkgICAgICAgICAgICAgIDEuMTguMSAgIDIwMjEtMDItMDQgWzFdIEJpb2NvbmR1Y3RvciAgXG4gaGVyZSAgICAgICAgICAgICAgICAgICAxLjAuMSAgICAyMDIwLTEyLTEzIFsxXSBDUkFOIChSIDQuMC4yKVxuIGhtcyAgICAgICAgICAgICAgICAgICAgMS4xLjAgICAgMjAyMS0wNS0xNyBbMV0gQ1JBTiAoUiA0LjAuMilcbiBodG1sdG9vbHMgICAgICAgICAgICAgIDAuNS4xLjEgIDIwMjEtMDEtMjIgWzFdIENSQU4gKFIgNC4wLjIpXG4gSVJhbmdlcyAgICAgICAgICAgICAgKiAyLjI0LjEgICAyMDIwLTEyLTEyIFsxXSBCaW9jb25kdWN0b3IgIFxuIGlybGJhICAgICAgICAgICAgICAgICAgMi4zLjMgICAgMjAxOS0wMi0wNSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBqcXVlcnlsaWIgICAgICAgICAgICAgIDAuMS40ICAgIDIwMjEtMDQtMjYgWzFdIENSQU4gKFIgNC4wLjIpXG4ganNvbmxpdGUgICAgICAgICAgICAgICAxLjcuMiAgICAyMDIwLTEyLTA5IFsxXSBDUkFOIChSIDQuMC4yKVxuIGtuaXRyICAgICAgICAgICAgICAgICAgMS4zMyAgICAgMjAyMS0wNC0yNCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBsYWJlbGluZyAgICAgICAgICAgICAgIDAuNC4yICAgIDIwMjAtMTAtMjAgWzFdIENSQU4gKFIgNC4wLjIpXG4gbGF0dGljZSAgICAgICAgICAgICAgICAwLjIwLTQ0ICAyMDIxLTA1LTAyIFsxXSBDUkFOIChSIDQuMC4yKVxuIGxpZmVjeWNsZSAgICAgICAgICAgICAgMS4wLjAgICAgMjAyMS0wMi0xNSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBsaW1tYSAgICAgICAgICAgICAgICAgIDMuNDYuMCAgIDIwMjAtMTAtMjcgWzFdIEJpb2NvbmR1Y3RvciAgXG4gbG9jZml0ICAgICAgICAgICAgICAgICAxLjUtOS40ICAyMDIwLTAzLTI1IFsxXSBDUkFOIChSIDQuMC4yKVxuIG1hZ3JpdHRyICAgICAgICAgICAgICogMi4wLjEgICAgMjAyMC0xMS0xNyBbMV0gQ1JBTiAoUiA0LjAuMilcbiBNYXRyaXggICAgICAgICAgICAgICAgIDEuMy00ICAgIDIwMjEtMDYtMDEgWzFdIENSQU4gKFIgNC4wLjIpXG4gTWF0cml4R2VuZXJpY3MgICAgICAgKiAxLjIuMSAgICAyMDIxLTAxLTMwIFsxXSBCaW9jb25kdWN0b3IgIFxuIG1hdHJpeFN0YXRzICAgICAgICAgICogMC41OS4wICAgMjAyMS0wNi0wMSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBtdW5zZWxsICAgICAgICAgICAgICAgIDAuNS4wICAgIDIwMTgtMDYtMTIgWzFdIENSQU4gKFIgNC4wLjIpXG4gcGlsbGFyICAgICAgICAgICAgICAgICAxLjYuMSAgICAyMDIxLTA1LTE2IFsxXSBDUkFOIChSIDQuMC4yKVxuIHBrZ2NvbmZpZyAgICAgICAgICAgICAgMi4wLjMgICAgMjAxOS0wOS0yMiBbMV0gQ1JBTiAoUiA0LjAuMilcbiBwdXJyciAgICAgICAgICAgICAgICAgIDAuMy40ICAgIDIwMjAtMDQtMTcgWzFdIENSQU4gKFIgNC4wLjIpXG4gUi5tZXRob2RzUzMgICAgICAgICAgICAxLjguMSAgICAyMDIwLTA4LTI2IFsxXSBDUkFOIChSIDQuMC4yKVxuIFIub28gICAgICAgICAgICAgICAgICAgMS4yNC4wICAgMjAyMC0wOC0yNiBbMV0gQ1JBTiAoUiA0LjAuMilcbiBSLnV0aWxzICAgICAgICAgICAgICAgIDIuMTAuMSAgIDIwMjAtMDgtMjYgWzFdIENSQU4gKFIgNC4wLjIpXG4gUjYgICAgICAgICAgICAgICAgICAgICAyLjUuMCAgICAyMDIwLTEwLTI4IFsxXSBDUkFOIChSIDQuMC4yKVxuIFJjcHAgICAgICAgICAgICAgICAgICAgMS4wLjcgICAgMjAyMS0wNy0wNyBbMV0gQ1JBTiAoUiA0LjAuMilcbiBSQ3VybCAgICAgICAgICAgICAgICAgIDEuOTgtMS4zIDIwMjEtMDMtMTYgWzFdIENSQU4gKFIgNC4wLjIpXG4gcmVhZHIgICAgICAgICAgICAgICAgICAyLjAuMCAgICAyMDIxLTA3LTIwIFsxXSBDUkFOIChSIDQuMC41KVxuIHJoZGY1ICAgICAgICAgICAgICAgICAgMi4zNC4wICAgMjAyMC0xMC0yNyBbMV0gQmlvY29uZHVjdG9yICBcbiByaGRmNWZpbHRlcnMgICAgICAgICAgIDEuMi4xICAgIDIwMjEtMDUtMDMgWzFdIEJpb2NvbmR1Y3RvciAgXG4gUmhkZjVsaWIgICAgICAgICAgICAgICAxLjEyLjEgICAyMDIxLTAxLTI2IFsxXSBCaW9jb25kdWN0b3IgIFxuIHJsYW5nICAgICAgICAgICAgICAgICAgMC40LjExICAgMjAyMS0wNC0zMCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBybWFya2Rvd24gICAgICAgICAgICAgIDIuOSAgICAgIDIwMjEtMDYtMTUgWzFdIENSQU4gKFIgNC4wLjIpXG4gcnByb2pyb290ICAgICAgICAgICAgICAyLjAuMiAgICAyMDIwLTExLTE1IFsxXSBDUkFOIChSIDQuMC4yKVxuIHJzdHVkaW9hcGkgICAgICAgICAgICAgMC4xMyAgICAgMjAyMC0xMS0xMiBbMV0gQ1JBTiAoUiA0LjAuMilcbiByc3ZkICAgICAgICAgICAgICAgICAgIDEuMC41ICAgIDIwMjEtMDQtMTYgWzFdIENSQU4gKFIgNC4wLjIpXG4gUzRWZWN0b3JzICAgICAgICAgICAgKiAwLjI4LjEgICAyMDIwLTEyLTA5IFsxXSBCaW9jb25kdWN0b3IgIFxuIHNhc3MgICAgICAgICAgICAgICAgICAgMC40LjAgICAgMjAyMS0wNS0xMiBbMV0gQ1JBTiAoUiA0LjAuNSlcbiBzY2FsZXMgICAgICAgICAgICAgICAgIDEuMS4xICAgIDIwMjAtMDUtMTEgWzFdIENSQU4gKFIgNC4wLjIpXG4gc2NhdGVyICAgICAgICAgICAgICAgICAxLjE4LjYgICAyMDIxLTAyLTI2IFsxXSBCaW9jb25kdWN0b3IgIFxuIHNjcGNhVG9vbHMgICAgICAgICAgICAgMC4xLjAgICAgMjAyMS0wNy0yMCBbMV0gbG9jYWwgICAgICAgICBcbiBzY3V0dGxlICAgICAgICAgICAgICAgIDEuMC40ICAgIDIwMjAtMTItMTcgWzFdIEJpb2NvbmR1Y3RvciAgXG4gc2Vzc2lvbmluZm8gICAgICAgICAgICAxLjEuMSAgICAyMDE4LTExLTA1IFsxXSBDUkFOIChSIDQuMC4yKVxuIFNpbmdsZUNlbGxFeHBlcmltZW50ICogMS4xMi4wICAgMjAyMC0xMC0yNyBbMV0gQmlvY29uZHVjdG9yICBcbiBzcGFyc2VNYXRyaXhTdGF0cyAgICAgIDEuMi4xICAgIDIwMjEtMDItMDIgWzFdIEJpb2NvbmR1Y3RvciAgXG4gc3RyaW5naSAgICAgICAgICAgICAgICAxLjcuMyAgICAyMDIxLTA3LTE2IFsxXSBDUkFOIChSIDQuMC4yKVxuIHN0cmluZ3IgICAgICAgICAgICAgICAgMS40LjAgICAgMjAxOS0wMi0xMCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBTdW1tYXJpemVkRXhwZXJpbWVudCAqIDEuMjAuMCAgIDIwMjAtMTAtMjcgWzFdIEJpb2NvbmR1Y3RvciAgXG4gdGliYmxlICAgICAgICAgICAgICAgICAzLjEuMiAgICAyMDIxLTA1LTE2IFsxXSBDUkFOIChSIDQuMC4yKVxuIHRpZHlyICAgICAgICAgICAgICAgICAgMS4xLjMgICAgMjAyMS0wMy0wMyBbMV0gQ1JBTiAoUiA0LjAuMilcbiB0aWR5c2VsZWN0ICAgICAgICAgICAgIDEuMS4xICAgIDIwMjEtMDQtMzAgWzFdIENSQU4gKFIgNC4wLjIpXG4gdHpkYiAgICAgICAgICAgICAgICAgICAwLjEuMiAgICAyMDIxLTA3LTIwIFsxXSBDUkFOIChSIDQuMC41KVxuIHV0ZjggICAgICAgICAgICAgICAgICAgMS4yLjEgICAgMjAyMS0wMy0xMiBbMV0gQ1JBTiAoUiA0LjAuMilcbiB2Y3RycyAgICAgICAgICAgICAgICAgIDAuMy44ICAgIDIwMjEtMDQtMjkgWzFdIENSQU4gKFIgNC4wLjIpXG4gdmlwb3IgICAgICAgICAgICAgICAgICAwLjQuNSAgICAyMDE3LTAzLTIyIFsxXSBDUkFOIChSIDQuMC4yKVxuIHZpcmlkaXMgICAgICAgICAgICAgICAgMC42LjEgICAgMjAyMS0wNS0xMSBbMV0gQ1JBTiAoUiA0LjAuMilcbiB2aXJpZGlzTGl0ZSAgICAgICAgICAgIDAuNC4wICAgIDIwMjEtMDQtMTMgWzFdIENSQU4gKFIgNC4wLjIpXG4gdnJvb20gICAgICAgICAgICAgICAgICAxLjUuMyAgICAyMDIxLTA3LTE0IFsxXSBDUkFOIChSIDQuMC4yKVxuIHdpdGhyICAgICAgICAgICAgICAgICAgMi40LjIgICAgMjAyMS0wNC0xOCBbMV0gQ1JBTiAoUiA0LjAuNSlcbiB4ZnVuICAgICAgICAgICAgICAgICAgIDAuMjQgICAgIDIwMjEtMDYtMTUgWzFdIENSQU4gKFIgNC4wLjIpXG4gWFZlY3RvciAgICAgICAgICAgICAgICAwLjMwLjAgICAyMDIwLTEwLTI4IFsxXSBCaW9jb25kdWN0b3IgIFxuIHlhbWwgICAgICAgICAgICAgICAgICAgMi4yLjEgICAgMjAyMC0wMi0wMSBbMV0gQ1JBTiAoUiA0LjAuMilcbiB6bGliYmlvYyAgICAgICAgICAgICAgIDEuMzYuMCAgIDIwMjAtMTAtMjggWzFdIEJpb2NvbmR1Y3RvciAgXG5cblsxXSAvTGlicmFyeS9GcmFtZXdvcmtzL1IuZnJhbWV3b3JrL1ZlcnNpb25zLzQuMC9SZXNvdXJjZXMvbGlicmFyeVxuIn0= --&gt;
-</code></pre>
-<p>─ Session info ───────────────────────────────────────────────────────────────────────────────────</p>
-<p>─ Packages ─────────────────────────────────────────────────────────────────────────────────────── package * version date lib source<br />
-assertthat 0.2.1 2019-03-21 [1] CRAN (R 4.0.2) beachmat 2.6.4 2020-12-20 [1] Bioconductor<br />
-beeswarm 0.4.0 2021-06-01 [1] CRAN (R 4.0.2) Biobase * 2.50.0 2020-10-27 [1] Bioconductor<br />
-BiocGenerics * 0.36.1 2021-04-16 [1] Bioconductor<br />
-BiocNeighbors 1.8.2 2020-12-07 [1] Bioconductor<br />
-BiocParallel 1.24.1 2020-11-06 [1] Bioconductor<br />
-BiocSingular 1.6.0 2020-10-27 [1] Bioconductor<br />
-bit 4.0.4 2020-08-04 [1] CRAN (R 4.0.2) bit64 4.0.5 2020-08-30 [1] CRAN (R 4.0.2) bitops 1.0-7 2021-04-24 [1] CRAN (R 4.0.2) bslib 0.2.5.1 2021-05-18 [1] CRAN (R 4.0.2) cli 3.0.1 2021-07-17 [1] CRAN (R 4.0.2) colorspace 2.0-2 2021-06-24 [1] CRAN (R 4.0.2) crayon 1.4.1 2021-02-08 [1] CRAN (R 4.0.2) DBI 1.1.1 2021-01-15 [1] CRAN (R 4.0.2) DelayedArray 0.16.3 2021-03-24 [1] Bioconductor<br />
-DelayedMatrixStats 1.12.3 2021-02-03 [1] Bioconductor<br />
-digest 0.6.27 2020-10-24 [1] CRAN (R 4.0.2) dplyr 1.0.7 2021-06-18 [1] CRAN (R 4.0.2) dqrng 0.3.0 2021-05-01 [1] CRAN (R 4.0.2) DropletUtils 1.10.3 2021-02-02 [1] Bioconductor<br />
-edgeR 3.32.1 2021-01-14 [1] Bioconductor<br />
-ellipsis 0.3.2 2021-04-29 [1] CRAN (R 4.0.2) evaluate 0.14 2019-05-28 [1] CRAN (R 4.0.1) fansi 0.5.0 2021-05-25 [1] CRAN (R 4.0.2) farver 2.1.0 2021-02-28 [1] CRAN (R 4.0.2) generics 0.1.0 2020-10-31 [1] CRAN (R 4.0.2) GenomeInfoDb * 1.26.7 2021-04-08 [1] Bioconductor<br />
-GenomeInfoDbData 1.2.4 2021-04-09 [1] Bioconductor<br />
-GenomicRanges * 1.42.0 2020-10-27 [1] Bioconductor<br />
-ggbeeswarm 0.6.0 2017-08-07 [1] CRAN (R 4.0.2) ggplot2 * 3.3.5 2021-06-25 [1] CRAN (R 4.0.2) glue 1.4.2 2020-08-27 [1] CRAN (R 4.0.2) gridExtra 2.3 2017-09-09 [1] CRAN (R 4.0.2) gtable 0.3.0 2019-03-25 [1] CRAN (R 4.0.2) HDF5Array 1.18.1 2021-02-04 [1] Bioconductor<br />
-here 1.0.1 2020-12-13 [1] CRAN (R 4.0.2) hms 1.1.0 2021-05-17 [1] CRAN (R 4.0.2) htmltools 0.5.1.1 2021-01-22 [1] CRAN (R 4.0.2) IRanges * 2.24.1 2020-12-12 [1] Bioconductor<br />
-irlba 2.3.3 2019-02-05 [1] CRAN (R 4.0.2) jquerylib 0.1.4 2021-04-26 [1] CRAN (R 4.0.2) jsonlite 1.7.2 2020-12-09 [1] CRAN (R 4.0.2) knitr 1.33 2021-04-24 [1] CRAN (R 4.0.2) labeling 0.4.2 2020-10-20 [1] CRAN (R 4.0.2) lattice 0.20-44 2021-05-02 [1] CRAN (R 4.0.2) lifecycle 1.0.0 2021-02-15 [1] CRAN (R 4.0.2) limma 3.46.0 2020-10-27 [1] Bioconductor<br />
-locfit 1.5-9.4 2020-03-25 [1] CRAN (R 4.0.2) magrittr * 2.0.1 2020-11-17 [1] CRAN (R 4.0.2) Matrix 1.3-4 2021-06-01 [1] CRAN (R 4.0.2) MatrixGenerics * 1.2.1 2021-01-30 [1] Bioconductor<br />
-matrixStats * 0.59.0 2021-06-01 [1] CRAN (R 4.0.2) munsell 0.5.0 2018-06-12 [1] CRAN (R 4.0.2) pillar 1.6.1 2021-05-16 [1] CRAN (R 4.0.2) pkgconfig 2.0.3 2019-09-22 [1] CRAN (R 4.0.2) purrr 0.3.4 2020-04-17 [1] CRAN (R 4.0.2) R.methodsS3 1.8.1 2020-08-26 [1] CRAN (R 4.0.2) R.oo 1.24.0 2020-08-26 [1] CRAN (R 4.0.2) R.utils 2.10.1 2020-08-26 [1] CRAN (R 4.0.2) R6 2.5.0 2020-10-28 [1] CRAN (R 4.0.2) Rcpp 1.0.7 2021-07-07 [1] CRAN (R 4.0.2) RCurl 1.98-1.3 2021-03-16 [1] CRAN (R 4.0.2) readr 2.0.0 2021-07-20 [1] CRAN (R 4.0.5) rhdf5 2.34.0 2020-10-27 [1] Bioconductor<br />
-rhdf5filters 1.2.1 2021-05-03 [1] Bioconductor<br />
-Rhdf5lib 1.12.1 2021-01-26 [1] Bioconductor<br />
-rlang 0.4.11 2021-04-30 [1] CRAN (R 4.0.2) rmarkdown 2.9 2021-06-15 [1] CRAN (R 4.0.2) rprojroot 2.0.2 2020-11-15 [1] CRAN (R 4.0.2) rstudioapi 0.13 2020-11-12 [1] CRAN (R 4.0.2) rsvd 1.0.5 2021-04-16 [1] CRAN (R 4.0.2) S4Vectors * 0.28.1 2020-12-09 [1] Bioconductor<br />
-sass 0.4.0 2021-05-12 [1] CRAN (R 4.0.5) scales 1.1.1 2020-05-11 [1] CRAN (R 4.0.2) scater 1.18.6 2021-02-26 [1] Bioconductor<br />
-scpcaTools 0.1.0 2021-07-20 [1] local<br />
-scuttle 1.0.4 2020-12-17 [1] Bioconductor<br />
-sessioninfo 1.1.1 2018-11-05 [1] CRAN (R 4.0.2) SingleCellExperiment * 1.12.0 2020-10-27 [1] Bioconductor<br />
-sparseMatrixStats 1.2.1 2021-02-02 [1] Bioconductor<br />
-stringi 1.7.3 2021-07-16 [1] CRAN (R 4.0.2) stringr 1.4.0 2019-02-10 [1] CRAN (R 4.0.2) SummarizedExperiment * 1.20.0 2020-10-27 [1] Bioconductor<br />
-tibble 3.1.2 2021-05-16 [1] CRAN (R 4.0.2) tidyr 1.1.3 2021-03-03 [1] CRAN (R 4.0.2) tidyselect 1.1.1 2021-04-30 [1] CRAN (R 4.0.2) tzdb 0.1.2 2021-07-20 [1] CRAN (R 4.0.5) utf8 1.2.1 2021-03-12 [1] CRAN (R 4.0.2) vctrs 0.3.8 2021-04-29 [1] CRAN (R 4.0.2) vipor 0.4.5 2017-03-22 [1] CRAN (R 4.0.2) viridis 0.6.1 2021-05-11 [1] CRAN (R 4.0.2) viridisLite 0.4.0 2021-04-13 [1] CRAN (R 4.0.2) vroom 1.5.3 2021-07-14 [1] CRAN (R 4.0.2) withr 2.4.2 2021-04-18 [1] CRAN (R 4.0.5) xfun 0.24 2021-06-15 [1] CRAN (R 4.0.2) XVector 0.30.0 2020-10-28 [1] Bioconductor<br />
-yaml 2.2.1 2020-02-01 [1] CRAN (R 4.0.2) zlibbioc 1.36.0 2020-10-28 [1] Bioconductor</p>
-<p>[1] /Library/Frameworks/R.framework/Versions/4.0/Resources/library ```</p>
-<!-- rnb-output-end -->
-<!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjoiZGF0YS5mcmFtZSIsIm5yb3ciOjksIm5jb2wiOjIsInN1bW1hcnkiOnsiRGVzY3JpcHRpb24iOiJkZiBbOSDDlyAyXSJ9fSwicmRmIjoiSDRzSUFBQUFBQUFBQThWU3kwK0RNQnp1MkhDQzhSRk5QSG5nT0JPcHNCZTdtcWxIVFRhWDdMWlVxS3l4bElXV1BmempwMlcwWmlQeDdLSDArNzdmKzBkSGo5T09QYlVCQUhYUUFDYW9teElDYy9MMjdBNEFhQmlTMUtUQkt1NjFkTHFTb0JBdjVMR1VvYm5FR1NjcFU5Ukl1VUpIZk1NRlRyU2VFNFdPS1dKeGptS3NFNFFwcFVob2FvWmlzOURFRUY4S05hTEM1YkQwemNoUnhaMHU5R0RQYWJXOXR1OTZIYmZqM3lxZjZ3U0ZyMk5uaUFTaWhDSEg5NkRmZzRHeVhxNEgvVm0vZStkRUtGc1I1Z2ZRMDEyTnhpS1BTS3JMdDU1ZWRNb1R6R2FUTVN5MzlLZDAvcERnaklUb2ZqaVgzMWduc3NzV0E3Y2RWRFpzTXBSZ3JrWTBkQnNjQzBGWXJIMldpT2E0RW1obDZRcnVCLy9QcnprY0pxU0k2MzYwYUV0SEJEOHkyYXBrMjBwSU0xMEkyYXdNTW9wM1psYUNhMWxGT005Wk1YVGtodk9jZmJwK1VXQm5McytwdXEwOWJKUWxqVytWeXRUN3dDd203SGRNaXQ0eFZlUk1MbmUzVzdqSUNCTjZFcWx5S0ZMNXFMUWlWNldWM1d4Zyt3TXJFb3NJWGdNQUFBPT0ifQ== -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuc2Vzc2lvbmluZm86OnNlc3Npb25faW5mbygpXG5gYGAifQ== -->
+<pre class="r"><code>sessioninfo::session_info()</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbImRhdGEuZnJhbWUiXSwibnJvdyI6OSwibmNvbCI6Miwic3VtbWFyeSI6eyJEZXNjcmlwdGlvbiI6WyJkZiBbOSDDlyAyXSJdfX0sInJkZiI6Ikg0c0lBQUFBQUFBQUE4VlNUVStETUJqdTJIQ0NVUmROUEhuZ09CT3B3RDZ2WnVwUms4MGx1eTBWS21zc1phRmxILzc0YVJtdGNTU2VQWlErei9OK3YzVDhNT3ZZTXhzQVVBY05ZSUs2S1NFd3A2OVA3aENBaGlGSlRScXM0dDVJcDBzSkNyRWxqNlVNelJYT09FbVpva2JLRlRyaVd5NXdvdldjS0hSTUVZdHpGR09kSUV3cFJVSlRNeFRicFNhRytGU29FUlV1aDZXdng0NHE3blNoQjN0T08vQUMzL1U2YnNlL1VUNVhDUXBmSnM0SUNVUUpRNDd2UWI4SEI4cDZzUm4yNS8zdXJST2hiRTJZUDRDZTdtbzhFWGxFVWwyKy9maXNVNTVnTnA5T1lMbWxQNlh6K3dSbkpFUjNvNFg4eGpxUlhiWTRjSVBxaGsyR0VzelZpSVp1ZzJNaENJdTF6d3JSSEZjQ3JTeGR3OS9CLy9OckRvY0pLZUs2SHkzYTBoSEI5MHkyS3RtdUV0Sk1sMEkySzRPTTRwMlpsZUJhVmhGYU9TdUdqdHh3a2JNUE4vQ0xDbnQ3ZVU3VmJmM0NSbG5UK0ZLNVRMMFF6R0xDZnVhazZBMVRSYzdrZHZmTGhjdU1NS0ZIa1NxSElwV3ZTaXR5VjFyWkR3ZDIzNGVHRzdsZkF3QUEifQ== -->
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
-{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["setting"],"name":[1],"type":["chr"],"align":["left"]},{"label":["value"],"name":[2],"type":["chr"],"align":["left"]}],"data":[{"1":"version","2":"R version 4.0.5 (2021-03-31)","_rn_":"version"},{"1":"os","2":"macOS Catalina 10.15.7","_rn_":"os"},{"1":"system","2":"x86_64, darwin17.0","_rn_":"system"},{"1":"ui","2":"RStudio","_rn_":"ui"},{"1":"language","2":"(EN)","_rn_":"language"},{"1":"collate","2":"en_US.UTF-8","_rn_":"collate"},{"1":"ctype","2":"en_US.UTF-8","_rn_":"ctype"},{"1":"tz","2":"America/Chicago","_rn_":"tz"},{"1":"date","2":"2021-07-27","_rn_":"date"}],"options":{"columns":{"min":{},"max":[10],"total":[2]},"rows":{"min":[10],"max":[10],"total":[9]},"pages":{}}}
+{"columns":[{"label":[""],"name":["_rn_"],"type":[""],"align":["left"]},{"label":["setting"],"name":[1],"type":["chr"],"align":["left"]},{"label":["value"],"name":[2],"type":["chr"],"align":["left"]}],"data":[{"1":"version","2":"R version 4.0.5 (2021-03-31)","_rn_":"version"},{"1":"os","2":"macOS Catalina 10.15.7","_rn_":"os"},{"1":"system","2":"x86_64, darwin17.0","_rn_":"system"},{"1":"ui","2":"RStudio","_rn_":"ui"},{"1":"language","2":"(EN)","_rn_":"language"},{"1":"collate","2":"en_US.UTF-8","_rn_":"collate"},{"1":"ctype","2":"en_US.UTF-8","_rn_":"ctype"},{"1":"tz","2":"America/Chicago","_rn_":"tz"},{"1":"date","2":"2021-07-28","_rn_":"date"}],"options":{"columns":{"min":{},"max":[10],"total":[2]},"rows":{"min":[10],"max":[10],"total":[9]},"pages":{}}}
   </script>
 </div>
 <!-- rnb-frame-end -->
+<!-- rnb-output-begin eyJkYXRhIjoi4pSAIFNlc3Npb24gaW5mbyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIBcblxu4pSAIFBhY2thZ2VzIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgFxuIHBhY2thZ2UgICAgICAgICAgICAgICogdmVyc2lvbiAgZGF0ZSAgICAgICBsaWIgc291cmNlICAgICAgICBcbiBBbm5vdGF0aW9uRGJpICAgICAgICAgIDEuNTIuMCAgIDIwMjAtMTAtMjcgWzFdIEJpb2NvbmR1Y3RvciAgXG4gYXNzZXJ0dGhhdCAgICAgICAgICAgICAwLjIuMSAgICAyMDE5LTAzLTIxIFsxXSBDUkFOIChSIDQuMC4yKVxuIGJlYWNobWF0ICAgICAgICAgICAgICAgMi42LjQgICAgMjAyMC0xMi0yMCBbMV0gQmlvY29uZHVjdG9yICBcbiBiZWVzd2FybSAgICAgICAgICAgICAgIDAuNC4wICAgIDIwMjEtMDYtMDEgWzFdIENSQU4gKFIgNC4wLjIpXG4gQmlvYmFzZSAgICAgICAgICAgICAgKiAyLjUwLjAgICAyMDIwLTEwLTI3IFsxXSBCaW9jb25kdWN0b3IgIFxuIEJpb2NHZW5lcmljcyAgICAgICAgICogMC4zNi4xICAgMjAyMS0wNC0xNiBbMV0gQmlvY29uZHVjdG9yICBcbiBCaW9jTWFuYWdlciAgICAgICAgICAgIDEuMzAuMTYgIDIwMjEtMDYtMTUgWzFdIENSQU4gKFIgNC4wLjIpXG4gQmlvY05laWdoYm9ycyAgICAgICAgICAxLjguMiAgICAyMDIwLTEyLTA3IFsxXSBCaW9jb25kdWN0b3IgIFxuIEJpb2NQYXJhbGxlbCAgICAgICAgICAgMS4yNC4xICAgMjAyMC0xMS0wNiBbMV0gQmlvY29uZHVjdG9yICBcbiBCaW9jU2luZ3VsYXIgICAgICAgICAgIDEuNi4wICAgIDIwMjAtMTAtMjcgWzFdIEJpb2NvbmR1Y3RvciAgXG4gYml0ICAgICAgICAgICAgICAgICAgICA0LjAuNCAgICAyMDIwLTA4LTA0IFsxXSBDUkFOIChSIDQuMC4yKVxuIGJpdDY0ICAgICAgICAgICAgICAgICAgNC4wLjUgICAgMjAyMC0wOC0zMCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBiaXRvcHMgICAgICAgICAgICAgICAgIDEuMC03ICAgIDIwMjEtMDQtMjQgWzFdIENSQU4gKFIgNC4wLjIpXG4gYmxvYiAgICAgICAgICAgICAgICAgICAxLjIuMiAgICAyMDIxLTA3LTIzIFsxXSBDUkFOIChSIDQuMC4yKVxuIGNhY2hlbSAgICAgICAgICAgICAgICAgMS4wLjUgICAgMjAyMS0wNS0xNSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBjbGkgICAgICAgICAgICAgICAgICAgIDMuMC4xICAgIDIwMjEtMDctMTcgWzFdIENSQU4gKFIgNC4wLjIpXG4gY29sb3JzcGFjZSAgICAgICAgICAgICAyLjAtMiAgICAyMDIxLTA2LTI0IFsxXSBDUkFOIChSIDQuMC4yKVxuIGNvd3Bsb3QgICAgICAgICAgICAgICAgMS4xLjEgICAgMjAyMC0xMi0zMCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBjcmF5b24gICAgICAgICAgICAgICAgIDEuNC4xICAgIDIwMjEtMDItMDggWzFdIENSQU4gKFIgNC4wLjIpXG4gZGF0YS50YWJsZSAgICAgICAgICAgICAxLjE0LjAgICAyMDIxLTAyLTIxIFsxXSBDUkFOIChSIDQuMC4yKVxuIERCSSAgICAgICAgICAgICAgICAgICAgMS4xLjEgICAgMjAyMS0wMS0xNSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBEZWxheWVkQXJyYXkgICAgICAgICAgIDAuMTYuMyAgIDIwMjEtMDMtMjQgWzFdIEJpb2NvbmR1Y3RvciAgXG4gRGVsYXllZE1hdHJpeFN0YXRzICAgICAxLjEyLjMgICAyMDIxLTAyLTAzIFsxXSBCaW9jb25kdWN0b3IgIFxuIGRpZ2VzdCAgICAgICAgICAgICAgICAgMC42LjI3ICAgMjAyMC0xMC0yNCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBETy5kYiAgICAgICAgICAgICAgICAgIDIuOSAgICAgIDIwMjEtMDctMjAgWzFdIEJpb2NvbmR1Y3RvciAgXG4gRE9TRSAgICAgICAgICAgICAgICAgICAzLjE2LjAgICAyMDIwLTEwLTI3IFsxXSBCaW9jb25kdWN0b3IgIFxuIGRwbHlyICAgICAgICAgICAgICAgICAgMS4wLjcgICAgMjAyMS0wNi0xOCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBlbGxpcHNpcyAgICAgICAgICAgICAgIDAuMy4yICAgIDIwMjEtMDQtMjkgWzFdIENSQU4gKFIgNC4wLjIpXG4gZW5yaWNocGxvdCAgICAgICAgICAgICAxLjEwLjIgICAyMDIxLTAxLTI4IFsxXSBCaW9jb25kdWN0b3IgIFxuIGV2YWx1YXRlICAgICAgICAgICAgICAgMC4xNCAgICAgMjAxOS0wNS0yOCBbMV0gQ1JBTiAoUiA0LjAuMSlcbiBmYW5zaSAgICAgICAgICAgICAgICAgIDAuNS4wICAgIDIwMjEtMDUtMjUgWzFdIENSQU4gKFIgNC4wLjIpXG4gZmFydmVyICAgICAgICAgICAgICAgICAyLjEuMCAgICAyMDIxLTAyLTI4IFsxXSBDUkFOIChSIDQuMC4yKVxuIGZhc3RtYXAgICAgICAgICAgICAgICAgMS4xLjAgICAgMjAyMS0wMS0yNSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBmYXN0bWF0Y2ggICAgICAgICAgICAgIDEuMS0zICAgIDIwMjEtMDctMjMgWzFdIENSQU4gKFIgNC4wLjIpXG4gZmdzZWEgICAgICAgICAgICAgICAgICAxLjE2LjAgICAyMDIwLTEwLTI3IFsxXSBCaW9jb25kdWN0b3IgIFxuIGdlbmVyaWNzICAgICAgICAgICAgICAgMC4xLjAgICAgMjAyMC0xMC0zMSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBHZW5vbWVJbmZvRGIgICAgICAgICAqIDEuMjYuNyAgIDIwMjEtMDQtMDggWzFdIEJpb2NvbmR1Y3RvciAgXG4gR2Vub21lSW5mb0RiRGF0YSAgICAgICAxLjIuNCAgICAyMDIxLTA0LTA5IFsxXSBCaW9jb25kdWN0b3IgIFxuIEdlbm9taWNSYW5nZXMgICAgICAgICogMS40Mi4wICAgMjAyMC0xMC0yNyBbMV0gQmlvY29uZHVjdG9yICBcbiBnZ2JlZXN3YXJtICAgICAgICAgICAgIDAuNi4wICAgIDIwMTctMDgtMDcgWzFdIENSQU4gKFIgNC4wLjIpXG4gZ2dmb3JjZSAgICAgICAgICAgICAgICAwLjMuMyAgICAyMDIxLTAzLTA1IFsxXSBDUkFOIChSIDQuMC4yKVxuIGdncGxvdDIgICAgICAgICAgICAgICogMy4zLjUgICAgMjAyMS0wNi0yNSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBnZ3JhcGggICAgICAgICAgICAgICAgIDIuMC41ICAgIDIwMjEtMDItMjMgWzFdIENSQU4gKFIgNC4wLjIpXG4gZ2dyZXBlbCAgICAgICAgICAgICAgICAwLjkuMSAgICAyMDIxLTAxLTE1IFsxXSBDUkFOIChSIDQuMC4yKVxuIGdsdWUgICAgICAgICAgICAgICAgICAgMS40LjIgICAgMjAyMC0wOC0yNyBbMV0gQ1JBTiAoUiA0LjAuMilcbiBHTy5kYiAgICAgICAgICAgICAgICAgIDMuMTIuMSAgIDIwMjEtMDctMjAgWzFdIEJpb2NvbmR1Y3RvciAgXG4gR09TZW1TaW0gICAgICAgICAgICAgICAyLjE2LjEgICAyMDIwLTEwLTI5IFsxXSBCaW9jb25kdWN0b3IgIFxuIGdyYXBobGF5b3V0cyAgICAgICAgICAgMC43LjEgICAgMjAyMC0xMC0yNiBbMV0gQ1JBTiAoUiA0LjAuMilcbiBncmlkRXh0cmEgICAgICAgICAgICAgIDIuMyAgICAgIDIwMTctMDktMDkgWzFdIENSQU4gKFIgNC4wLjIpXG4gZ3RhYmxlICAgICAgICAgICAgICAgICAwLjMuMCAgICAyMDE5LTAzLTI1IFsxXSBDUkFOIChSIDQuMC4yKVxuIGhlcmUgICAgICAgICAgICAgICAgICAgMS4wLjEgICAgMjAyMC0xMi0xMyBbMV0gQ1JBTiAoUiA0LjAuMilcbiBobXMgICAgICAgICAgICAgICAgICAgIDEuMS4wICAgIDIwMjEtMDUtMTcgWzFdIENSQU4gKFIgNC4wLjIpXG4gaHRtbHRvb2xzICAgICAgICAgICAgICAwLjUuMS4xICAyMDIxLTAxLTIyIFsxXSBDUkFOIChSIDQuMC4yKVxuIGlncmFwaCAgICAgICAgICAgICAgICAgMS4yLjYgICAgMjAyMC0xMC0wNiBbMV0gQ1JBTiAoUiA0LjAuMilcbiBJUmFuZ2VzICAgICAgICAgICAgICAqIDIuMjQuMSAgIDIwMjAtMTItMTIgWzFdIEJpb2NvbmR1Y3RvciAgXG4gaXJsYmEgICAgICAgICAgICAgICAgICAyLjMuMyAgICAyMDE5LTAyLTA1IFsxXSBDUkFOIChSIDQuMC4yKVxuIGpzb25saXRlICAgICAgICAgICAgICAgMS43LjIgICAgMjAyMC0xMi0wOSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBrbml0ciAgICAgICAgICAgICAgICAgIDEuMzMgICAgIDIwMjEtMDQtMjQgWzFdIENSQU4gKFIgNC4wLjIpXG4gbGFiZWxpbmcgICAgICAgICAgICAgICAwLjQuMiAgICAyMDIwLTEwLTIwIFsxXSBDUkFOIChSIDQuMC4yKVxuIGxhdHRpY2UgICAgICAgICAgICAgICAgMC4yMC00NCAgMjAyMS0wNS0wMiBbMV0gQ1JBTiAoUiA0LjAuMilcbiBsaWZlY3ljbGUgICAgICAgICAgICAgIDEuMC4wICAgIDIwMjEtMDItMTUgWzFdIENSQU4gKFIgNC4wLjIpXG4gbWFncml0dHIgICAgICAgICAgICAgKiAyLjAuMSAgICAyMDIwLTExLTE3IFsxXSBDUkFOIChSIDQuMC4yKVxuIE1BU1MgICAgICAgICAgICAgICAgICAgNy4zLTU0ICAgMjAyMS0wNS0wMyBbMV0gQ1JBTiAoUiA0LjAuMilcbiBNYXRyaXggICAgICAgICAgICAgICAgIDEuMy00ICAgIDIwMjEtMDYtMDEgWzFdIENSQU4gKFIgNC4wLjIpXG4gTWF0cml4R2VuZXJpY3MgICAgICAgKiAxLjIuMSAgICAyMDIxLTAxLTMwIFsxXSBCaW9jb25kdWN0b3IgIFxuIG1hdHJpeFN0YXRzICAgICAgICAgICogMC42MC4wICAgMjAyMS0wNy0yNiBbMV0gQ1JBTiAoUiA0LjAuNSlcbiBtZW1vaXNlICAgICAgICAgICAgICAgIDIuMC4wICAgIDIwMjEtMDEtMjYgWzFdIENSQU4gKFIgNC4wLjIpXG4gbXVuc2VsbCAgICAgICAgICAgICAgICAwLjUuMCAgICAyMDE4LTA2LTEyIFsxXSBDUkFOIChSIDQuMC4yKVxuIHBpbGxhciAgICAgICAgICAgICAgICAgMS42LjEgICAgMjAyMS0wNS0xNiBbMV0gQ1JBTiAoUiA0LjAuMilcbiBwa2djb25maWcgICAgICAgICAgICAgIDIuMC4zICAgIDIwMTktMDktMjIgWzFdIENSQU4gKFIgNC4wLjIpXG4gcGx5ciAgICAgICAgICAgICAgICAgICAxLjguNiAgICAyMDIwLTAzLTAzIFsxXSBDUkFOIChSIDQuMC4yKVxuIHBvbHljbGlwICAgICAgICAgICAgICAgMS4xMC0wICAgMjAxOS0wMy0xNCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBwdXJyciAgICAgICAgICAgICAgICAgIDAuMy40ICAgIDIwMjAtMDQtMTcgWzFdIENSQU4gKFIgNC4wLjIpXG4gcXZhbHVlICAgICAgICAgICAgICAgICAyLjIyLjAgICAyMDIwLTEwLTI3IFsxXSBCaW9jb25kdWN0b3IgIFxuIFI2ICAgICAgICAgICAgICAgICAgICAgMi41LjAgICAgMjAyMC0xMC0yOCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBSQ29sb3JCcmV3ZXIgICAgICAgICAgIDEuMS0yICAgIDIwMTQtMTItMDcgWzFdIENSQU4gKFIgNC4wLjIpXG4gUmNwcCAgICAgICAgICAgICAgICAgICAxLjAuNyAgICAyMDIxLTA3LTA3IFsxXSBDUkFOIChSIDQuMC4yKVxuIFJDdXJsICAgICAgICAgICAgICAgICAgMS45OC0xLjMgMjAyMS0wMy0xNiBbMV0gQ1JBTiAoUiA0LjAuMilcbiByZWFkciAgICAgICAgICAgICAgICAgIDIuMC4wICAgIDIwMjEtMDctMjAgWzFdIENSQU4gKFIgNC4wLjUpXG4gcmVzaGFwZTIgICAgICAgICAgICAgICAxLjQuNCAgICAyMDIwLTA0LTA5IFsxXSBDUkFOIChSIDQuMC4yKVxuIHJsYW5nICAgICAgICAgICAgICAgICAgMC40LjExICAgMjAyMS0wNC0zMCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBybWFya2Rvd24gICAgICAgICAgICAgIDIuOSAgICAgIDIwMjEtMDYtMTUgWzFdIENSQU4gKFIgNC4wLjIpXG4gcnByb2pyb290ICAgICAgICAgICAgICAyLjAuMiAgICAyMDIwLTExLTE1IFsxXSBDUkFOIChSIDQuMC4yKVxuIFJTUUxpdGUgICAgICAgICAgICAgICAgMi4yLjcgICAgMjAyMS0wNC0yMiBbMV0gQ1JBTiAoUiA0LjAuMilcbiByc3R1ZGlvYXBpICAgICAgICAgICAgIDAuMTMgICAgIDIwMjAtMTEtMTIgWzFdIENSQU4gKFIgNC4wLjIpXG4gcnN2ZCAgICAgICAgICAgICAgICAgICAxLjAuNSAgICAyMDIxLTA0LTE2IFsxXSBDUkFOIChSIDQuMC4yKVxuIHJ2Y2hlY2sgICAgICAgICAgICAgICAgMC4xLjggICAgMjAyMC0wMy0wMSBbMV0gQ1JBTiAoUiA0LjAuMilcbiBTNFZlY3RvcnMgICAgICAgICAgICAqIDAuMjguMSAgIDIwMjAtMTItMDkgWzFdIEJpb2NvbmR1Y3RvciAgXG4gc2NhbGVzICAgICAgICAgICAgICAgICAxLjEuMSAgICAyMDIwLTA1LTExIFsxXSBDUkFOIChSIDQuMC4yKVxuIHNjYXRlciAgICAgICAgICAgICAgICAgMS4xOC42ICAgMjAyMS0wMi0yNiBbMV0gQmlvY29uZHVjdG9yICBcbiBzY2F0dGVycGllICAgICAgICAgICAgIDAuMS42ICAgIDIwMjEtMDQtMjMgWzFdIENSQU4gKFIgNC4wLjIpXG4gc2NwY2FUb29scyAgICAgICAgICAgICAwLjEuMCAgICAyMDIxLTA3LTIwIFsxXSBsb2NhbCAgICAgICAgIFxuIHNjdXR0bGUgICAgICAgICAgICAgICAgMS4wLjQgICAgMjAyMC0xMi0xNyBbMV0gQmlvY29uZHVjdG9yICBcbiBzZXNzaW9uaW5mbyAgICAgICAgICAgIDEuMS4xICAgIDIwMTgtMTEtMDUgWzFdIENSQU4gKFIgNC4wLjIpXG4gc2hhZG93dGV4dCAgICAgICAgICAgICAwLjAuOCAgICAyMDIxLTA0LTIzIFsxXSBDUkFOIChSIDQuMC4yKVxuIFNpbmdsZUNlbGxFeHBlcmltZW50ICogMS4xMi4wICAgMjAyMC0xMC0yNyBbMV0gQmlvY29uZHVjdG9yICBcbiBzcGFyc2VNYXRyaXhTdGF0cyAgICAgIDEuMi4xICAgIDIwMjEtMDItMDIgWzFdIEJpb2NvbmR1Y3RvciAgXG4gc3RyaW5naSAgICAgICAgICAgICAgICAxLjcuMyAgICAyMDIxLTA3LTE2IFsxXSBDUkFOIChSIDQuMC4yKVxuIHN0cmluZ3IgICAgICAgICAgICAgICAgMS40LjAgICAgMjAxOS0wMi0xMCBbMV0gQ1JBTiAoUiA0LjAuMilcbiBTdW1tYXJpemVkRXhwZXJpbWVudCAqIDEuMjAuMCAgIDIwMjAtMTAtMjcgWzFdIEJpb2NvbmR1Y3RvciAgXG4gdGliYmxlICAgICAgICAgICAgICAgICAzLjEuMyAgICAyMDIxLTA3LTIzIFsxXSBDUkFOIChSIDQuMC4yKVxuIHRpZHlncmFwaCAgICAgICAgICAgICAgMS4yLjAgICAgMjAyMC0wNS0xMiBbMV0gQ1JBTiAoUiA0LjAuMilcbiB0aWR5ciAgICAgICAgICAgICAgICAgIDEuMS4zICAgIDIwMjEtMDMtMDMgWzFdIENSQU4gKFIgNC4wLjIpXG4gdGlkeXNlbGVjdCAgICAgICAgICAgICAxLjEuMSAgICAyMDIxLTA0LTMwIFsxXSBDUkFOIChSIDQuMC4yKVxuIHRpbnl0ZXggICAgICAgICAgICAgICAgMC4zMiAgICAgMjAyMS0wNS0yOSBbMV0gQ1JBTiAoUiA0LjAuMilcbiB0d2VlbnIgICAgICAgICAgICAgICAgIDEuMC4yICAgIDIwMjEtMDMtMjMgWzFdIENSQU4gKFIgNC4wLjIpXG4gdHpkYiAgICAgICAgICAgICAgICAgICAwLjEuMiAgICAyMDIxLTA3LTIwIFsxXSBDUkFOIChSIDQuMC41KVxuIHV0ZjggICAgICAgICAgICAgICAgICAgMS4yLjIgICAgMjAyMS0wNy0yNCBbMV0gQ1JBTiAoUiA0LjAuMilcbiB2Y3RycyAgICAgICAgICAgICAgICAgIDAuMy44ICAgIDIwMjEtMDQtMjkgWzFdIENSQU4gKFIgNC4wLjIpXG4gdmlwb3IgICAgICAgICAgICAgICAgICAwLjQuNSAgICAyMDE3LTAzLTIyIFsxXSBDUkFOIChSIDQuMC4yKVxuIHZpcmlkaXMgICAgICAgICAgICAgICAgMC42LjEgICAgMjAyMS0wNS0xMSBbMV0gQ1JBTiAoUiA0LjAuMilcbiB2aXJpZGlzTGl0ZSAgICAgICAgICAgIDAuNC4wICAgIDIwMjEtMDQtMTMgWzFdIENSQU4gKFIgNC4wLjIpXG4gdnJvb20gICAgICAgICAgICAgICAgICAxLjUuMyAgICAyMDIxLTA3LTE0IFsxXSBDUkFOIChSIDQuMC4yKVxuIHdpdGhyICAgICAgICAgICAgICAgICAgMi40LjIgICAgMjAyMS0wNC0xOCBbMV0gQ1JBTiAoUiA0LjAuNSlcbiB4ZnVuICAgICAgICAgICAgICAgICAgIDAuMjQgICAgIDIwMjEtMDYtMTUgWzFdIENSQU4gKFIgNC4wLjIpXG4gWFZlY3RvciAgICAgICAgICAgICAgICAwLjMwLjAgICAyMDIwLTEwLTI4IFsxXSBCaW9jb25kdWN0b3IgIFxuIHlhbWwgICAgICAgICAgICAgICAgICAgMi4yLjEgICAgMjAyMC0wMi0wMSBbMV0gQ1JBTiAoUiA0LjAuMilcbiB6bGliYmlvYyAgICAgICAgICAgICAgIDEuMzYuMCAgIDIwMjAtMTAtMjggWzFdIEJpb2NvbmR1Y3RvciAgXG5cblsxXSAvTGlicmFyeS9GcmFtZXdvcmtzL1IuZnJhbWV3b3JrL1ZlcnNpb25zLzQuMC9SZXNvdXJjZXMvbGlicmFyeVxuIn0= -->
+<pre><code>─ Session info ──────────────────────────────────────────────────────────────────────────────────────────
+
+─ Packages ──────────────────────────────────────────────────────────────────────────────────────────────
+ package              * version  date       lib source        
+ AnnotationDbi          1.52.0   2020-10-27 [1] Bioconductor  
+ assertthat             0.2.1    2019-03-21 [1] CRAN (R 4.0.2)
+ beachmat               2.6.4    2020-12-20 [1] Bioconductor  
+ beeswarm               0.4.0    2021-06-01 [1] CRAN (R 4.0.2)
+ Biobase              * 2.50.0   2020-10-27 [1] Bioconductor  
+ BiocGenerics         * 0.36.1   2021-04-16 [1] Bioconductor  
+ BiocManager            1.30.16  2021-06-15 [1] CRAN (R 4.0.2)
+ BiocNeighbors          1.8.2    2020-12-07 [1] Bioconductor  
+ BiocParallel           1.24.1   2020-11-06 [1] Bioconductor  
+ BiocSingular           1.6.0    2020-10-27 [1] Bioconductor  
+ bit                    4.0.4    2020-08-04 [1] CRAN (R 4.0.2)
+ bit64                  4.0.5    2020-08-30 [1] CRAN (R 4.0.2)
+ bitops                 1.0-7    2021-04-24 [1] CRAN (R 4.0.2)
+ blob                   1.2.2    2021-07-23 [1] CRAN (R 4.0.2)
+ cachem                 1.0.5    2021-05-15 [1] CRAN (R 4.0.2)
+ cli                    3.0.1    2021-07-17 [1] CRAN (R 4.0.2)
+ colorspace             2.0-2    2021-06-24 [1] CRAN (R 4.0.2)
+ cowplot                1.1.1    2020-12-30 [1] CRAN (R 4.0.2)
+ crayon                 1.4.1    2021-02-08 [1] CRAN (R 4.0.2)
+ data.table             1.14.0   2021-02-21 [1] CRAN (R 4.0.2)
+ DBI                    1.1.1    2021-01-15 [1] CRAN (R 4.0.2)
+ DelayedArray           0.16.3   2021-03-24 [1] Bioconductor  
+ DelayedMatrixStats     1.12.3   2021-02-03 [1] Bioconductor  
+ digest                 0.6.27   2020-10-24 [1] CRAN (R 4.0.2)
+ DO.db                  2.9      2021-07-20 [1] Bioconductor  
+ DOSE                   3.16.0   2020-10-27 [1] Bioconductor  
+ dplyr                  1.0.7    2021-06-18 [1] CRAN (R 4.0.2)
+ ellipsis               0.3.2    2021-04-29 [1] CRAN (R 4.0.2)
+ enrichplot             1.10.2   2021-01-28 [1] Bioconductor  
+ evaluate               0.14     2019-05-28 [1] CRAN (R 4.0.1)
+ fansi                  0.5.0    2021-05-25 [1] CRAN (R 4.0.2)
+ farver                 2.1.0    2021-02-28 [1] CRAN (R 4.0.2)
+ fastmap                1.1.0    2021-01-25 [1] CRAN (R 4.0.2)
+ fastmatch              1.1-3    2021-07-23 [1] CRAN (R 4.0.2)
+ fgsea                  1.16.0   2020-10-27 [1] Bioconductor  
+ generics               0.1.0    2020-10-31 [1] CRAN (R 4.0.2)
+ GenomeInfoDb         * 1.26.7   2021-04-08 [1] Bioconductor  
+ GenomeInfoDbData       1.2.4    2021-04-09 [1] Bioconductor  
+ GenomicRanges        * 1.42.0   2020-10-27 [1] Bioconductor  
+ ggbeeswarm             0.6.0    2017-08-07 [1] CRAN (R 4.0.2)
+ ggforce                0.3.3    2021-03-05 [1] CRAN (R 4.0.2)
+ ggplot2              * 3.3.5    2021-06-25 [1] CRAN (R 4.0.2)
+ ggraph                 2.0.5    2021-02-23 [1] CRAN (R 4.0.2)
+ ggrepel                0.9.1    2021-01-15 [1] CRAN (R 4.0.2)
+ glue                   1.4.2    2020-08-27 [1] CRAN (R 4.0.2)
+ GO.db                  3.12.1   2021-07-20 [1] Bioconductor  
+ GOSemSim               2.16.1   2020-10-29 [1] Bioconductor  
+ graphlayouts           0.7.1    2020-10-26 [1] CRAN (R 4.0.2)
+ gridExtra              2.3      2017-09-09 [1] CRAN (R 4.0.2)
+ gtable                 0.3.0    2019-03-25 [1] CRAN (R 4.0.2)
+ here                   1.0.1    2020-12-13 [1] CRAN (R 4.0.2)
+ hms                    1.1.0    2021-05-17 [1] CRAN (R 4.0.2)
+ htmltools              0.5.1.1  2021-01-22 [1] CRAN (R 4.0.2)
+ igraph                 1.2.6    2020-10-06 [1] CRAN (R 4.0.2)
+ IRanges              * 2.24.1   2020-12-12 [1] Bioconductor  
+ irlba                  2.3.3    2019-02-05 [1] CRAN (R 4.0.2)
+ jsonlite               1.7.2    2020-12-09 [1] CRAN (R 4.0.2)
+ knitr                  1.33     2021-04-24 [1] CRAN (R 4.0.2)
+ labeling               0.4.2    2020-10-20 [1] CRAN (R 4.0.2)
+ lattice                0.20-44  2021-05-02 [1] CRAN (R 4.0.2)
+ lifecycle              1.0.0    2021-02-15 [1] CRAN (R 4.0.2)
+ magrittr             * 2.0.1    2020-11-17 [1] CRAN (R 4.0.2)
+ MASS                   7.3-54   2021-05-03 [1] CRAN (R 4.0.2)
+ Matrix                 1.3-4    2021-06-01 [1] CRAN (R 4.0.2)
+ MatrixGenerics       * 1.2.1    2021-01-30 [1] Bioconductor  
+ matrixStats          * 0.60.0   2021-07-26 [1] CRAN (R 4.0.5)
+ memoise                2.0.0    2021-01-26 [1] CRAN (R 4.0.2)
+ munsell                0.5.0    2018-06-12 [1] CRAN (R 4.0.2)
+ pillar                 1.6.1    2021-05-16 [1] CRAN (R 4.0.2)
+ pkgconfig              2.0.3    2019-09-22 [1] CRAN (R 4.0.2)
+ plyr                   1.8.6    2020-03-03 [1] CRAN (R 4.0.2)
+ polyclip               1.10-0   2019-03-14 [1] CRAN (R 4.0.2)
+ purrr                  0.3.4    2020-04-17 [1] CRAN (R 4.0.2)
+ qvalue                 2.22.0   2020-10-27 [1] Bioconductor  
+ R6                     2.5.0    2020-10-28 [1] CRAN (R 4.0.2)
+ RColorBrewer           1.1-2    2014-12-07 [1] CRAN (R 4.0.2)
+ Rcpp                   1.0.7    2021-07-07 [1] CRAN (R 4.0.2)
+ RCurl                  1.98-1.3 2021-03-16 [1] CRAN (R 4.0.2)
+ readr                  2.0.0    2021-07-20 [1] CRAN (R 4.0.5)
+ reshape2               1.4.4    2020-04-09 [1] CRAN (R 4.0.2)
+ rlang                  0.4.11   2021-04-30 [1] CRAN (R 4.0.2)
+ rmarkdown              2.9      2021-06-15 [1] CRAN (R 4.0.2)
+ rprojroot              2.0.2    2020-11-15 [1] CRAN (R 4.0.2)
+ RSQLite                2.2.7    2021-04-22 [1] CRAN (R 4.0.2)
+ rstudioapi             0.13     2020-11-12 [1] CRAN (R 4.0.2)
+ rsvd                   1.0.5    2021-04-16 [1] CRAN (R 4.0.2)
+ rvcheck                0.1.8    2020-03-01 [1] CRAN (R 4.0.2)
+ S4Vectors            * 0.28.1   2020-12-09 [1] Bioconductor  
+ scales                 1.1.1    2020-05-11 [1] CRAN (R 4.0.2)
+ scater                 1.18.6   2021-02-26 [1] Bioconductor  
+ scatterpie             0.1.6    2021-04-23 [1] CRAN (R 4.0.2)
+ scpcaTools             0.1.0    2021-07-20 [1] local         
+ scuttle                1.0.4    2020-12-17 [1] Bioconductor  
+ sessioninfo            1.1.1    2018-11-05 [1] CRAN (R 4.0.2)
+ shadowtext             0.0.8    2021-04-23 [1] CRAN (R 4.0.2)
+ SingleCellExperiment * 1.12.0   2020-10-27 [1] Bioconductor  
+ sparseMatrixStats      1.2.1    2021-02-02 [1] Bioconductor  
+ stringi                1.7.3    2021-07-16 [1] CRAN (R 4.0.2)
+ stringr                1.4.0    2019-02-10 [1] CRAN (R 4.0.2)
+ SummarizedExperiment * 1.20.0   2020-10-27 [1] Bioconductor  
+ tibble                 3.1.3    2021-07-23 [1] CRAN (R 4.0.2)
+ tidygraph              1.2.0    2020-05-12 [1] CRAN (R 4.0.2)
+ tidyr                  1.1.3    2021-03-03 [1] CRAN (R 4.0.2)
+ tidyselect             1.1.1    2021-04-30 [1] CRAN (R 4.0.2)
+ tinytex                0.32     2021-05-29 [1] CRAN (R 4.0.2)
+ tweenr                 1.0.2    2021-03-23 [1] CRAN (R 4.0.2)
+ tzdb                   0.1.2    2021-07-20 [1] CRAN (R 4.0.5)
+ utf8                   1.2.2    2021-07-24 [1] CRAN (R 4.0.2)
+ vctrs                  0.3.8    2021-04-29 [1] CRAN (R 4.0.2)
+ vipor                  0.4.5    2017-03-22 [1] CRAN (R 4.0.2)
+ viridis                0.6.1    2021-05-11 [1] CRAN (R 4.0.2)
+ viridisLite            0.4.0    2021-04-13 [1] CRAN (R 4.0.2)
+ vroom                  1.5.3    2021-07-14 [1] CRAN (R 4.0.2)
+ withr                  2.4.2    2021-04-18 [1] CRAN (R 4.0.5)
+ xfun                   0.24     2021-06-15 [1] CRAN (R 4.0.2)
+ XVector                0.30.0   2020-10-28 [1] Bioconductor  
+ yaml                   2.2.1    2020-02-01 [1] CRAN (R 4.0.2)
+ zlibbioc               1.36.0   2020-10-28 [1] Bioconductor  
+
+[1] /Library/Frameworks/R.framework/Versions/4.0/Resources/library</code></pre>
+<!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
