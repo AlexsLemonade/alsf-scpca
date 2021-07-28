@@ -1,0 +1,301 @@
+---
+title: "Alevin-Fry Comparison of Resolution Modes"
+author: "Ally Hawkins for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+In this notebook we are comparing the use of the `cr-like` resolution in alevin-fry to the `cr-like-em` resolution. 
+Previously in our benchmarking analysis we made the decision to use alevin-fry with the `splici` index and selective alignment (`salign`) for all samples, single-nucleus and single-cell. 
+The one remaining question was about resolution. 
+Alevin-fry using the `splici` index is recommended to be used in USA mode which is compatible with both `cr-like` and `cr-like-em`, so we have chosen to use one of these two methods. 
+The difference between `cr-like` and `cr-like-em` is that the `cr-like-em` will use an expectation maximization algorithm to resolve multi-mapped reads, while `cr-like` will discard those reads. 
+
+Data in this notebook have been analyzed using alevin-fry 0.4.0 and salmon 1.5.1. 
+
+Here I am looking at comparisons of per cell QC metrics. 
+
+## Setup
+
+```{r}
+library(magrittr)
+library(ggplot2)
+library(SingleCellExperiment)
+```
+
+
+```{r}
+# path to results files with sces and qc dataframes from running benchrmarking_generate_qc_df.R
+base_dir <- here::here()
+file_dir <- file.path(base_dir, "data", "cr-like-test", "results")
+
+# qc files 
+quant_info_file <- file.path(file_dir, "quant_info.tsv")
+coldata_df_file <- file.path(file_dir, "coldata_qc.tsv")
+rowdata_df_file <- file.path(file_dir, "rowdata_qc.tsv")
+
+# sce objects
+cr_like_file <- file.path(file_dir, "splici_salign_cr-like_sces.rds")
+cr_like_em_file <- file.path(file_dir, "splici_salign_cr-like-em_sces.rds")
+cellranger_file <- file.path(file_dir, "cellranger_sces.rds")
+```
+
+```{r}
+# read in dataframes needed for plotting
+quant_info <- readr::read_tsv(quant_info_file)
+coldata_df <- readr::read_tsv(coldata_df_file)
+rowdata_df <- readr::read_tsv(rowdata_df_file)
+```
+
+```{r}
+# read in sces
+cr_like_sce <- readr::read_rds(cr_like_file)
+cr_like_em_sce <- readr::read_rds(cr_like_em_file)
+cellranger_sce <- readr::read_rds(cellranger_file)
+```
+
+
+```{r}
+alevin_fry_tools <- c("splici_salign_cr-like", "splici_salign_cr-like-em")
+
+# merge coldata df with quant_info
+coldata_info_df <- coldata_df %>%
+  # rename tool to be either cellranger or alevin-fry
+  dplyr::mutate(tool = ifelse(tool %in% alevin_fry_tools, "alevin-fry", "cellranger")) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir")) %>%
+  # rename the not_alevin to cellranger for plotting purposes
+  dplyr::mutate(alevin_resolution = ifelse(alevin_resolution == "not_alevin", "cellranger", alevin_resolution))
+```
+
+
+```{r}
+# split into cell and nucleus coldata
+cell_coldata_qc <- coldata_info_df %>%
+  dplyr::filter(seq_unit == "cell")
+
+nucleus_coldata_qc <- coldata_info_df %>%
+  dplyr::filter(seq_unit == "nucleus") %>%
+  dplyr::filter(index_type == "splici")
+```
+
+## Per Cell QC Metrics
+
+### All Cells 
+
+Let's briefly look at the UMI/cell and genes detected/cell when looking at all cells with these methods. 
+
+```{r}
+ggplot(nucleus_coldata_qc, aes(x = tool, y = sum, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,30000))
+```
+
+```{r}
+ggplot(cell_coldata_qc, aes(x = tool, y = sum, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  coord_cartesian(ylim = c(0,50000))
+```
+
+```{r}
+ggplot(nucleus_coldata_qc, aes(x = tool, y = detected, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,10000))
+```
+
+```{r}
+ggplot(cell_coldata_qc, aes(x = tool, y = detected, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") + 
+  coord_cartesian(ylim = c(0,10000))
+```
+As seen previously, when looking at all cells across all tools, we see that alevin-fry appears to detect lower UMI/cell and genes detected/cell than cellranger regardless of resolution. 
+This is most likely due to the fact that alevin-fry detects more cells than cellranger and is an artifact of the filtering methods. 
+There is a population of cells passing filtering in alevin-fry with lower UMI/cell and genes detected/cell that should probably be filtered out. 
+
+### Shared cells only 
+
+To be sure that is the case, let's look at the shared cells only. 
+Here we also want to compare the differences between the two resolution modes of alevin-fry. 
+
+```{r}
+# filter for cells that are found in all configurations of alevin + cellranger
+cell_counts <- cell_coldata_qc %>%  
+  dplyr::count(cell_id, sample)
+
+common_cells <- cell_counts %>%
+  dplyr::filter(n == 3) %>%
+  dplyr::pull(cell_id)
+
+cell_qc_common <- cell_coldata_qc %>%
+  dplyr::filter(cell_id %in% common_cells) 
+```
+
+```{r}
+# filter for cells that are found in all configurations of alevin + cellranger
+nuclei_counts <- nucleus_coldata_qc %>%
+  dplyr::count(cell_id, sample)
+
+common_nuclei <- nuclei_counts %>%
+  dplyr::filter(n == 3) %>%
+  dplyr::pull(cell_id)
+
+nucleus_qc_common <- nucleus_coldata_qc %>%
+  dplyr::filter(
+    (cell_id %in% common_nuclei)
+  )
+```
+
+
+```{r}
+ggplot(nucleus_qc_common, aes(x = tool, y = sum, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_wrap(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,30000))
+```
+
+```{r}
+ggplot(cell_qc_common, aes(x = tool, y = sum, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_wrap(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,50000))
+```
+```{r}
+ggplot(nucleus_qc_common, aes(x = tool, y = detected, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_wrap(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,10000))
+```
+```{r}
+ggplot(cell_qc_common, aes(x = tool, y = detected, fill = alevin_resolution)) + 
+  geom_boxplot() + 
+  facet_wrap(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") +
+  coord_cartesian(ylim = c(0,10000))
+```
+The `cr-like-em` resolution actually looks more similar to cellranger than the `cr-like` when looking at UMI/cell, but when looking at genes/cell you do see a shift upwards in the `cr-like-em`. 
+Cellranger appears to be somewhere in the middle with overall no major differences between these resolutions and cellranger so I would be inclined to use `cr-like-em` to resolve multi-mapped reads. 
+
+### Gene overlap 
+
+Let's look at if there is a difference in the actual genes that are detected overall between using `cr-like` and `cr-like-em` or if we are just picking up more genes/cell 
+
+```{r}
+# make a function to filter sces by subset of cells and re-calculate feature stats
+filter_sce <- function(sce, cells){
+  cells_to_keep <- colnames(sce) %in% cells
+  rowData(sce) <- NULL
+  sce[, cells_to_keep] %>%
+    scater::addPerFeatureQC()
+}
+```
+
+
+```{r}
+# split into cell and nucleus 
+resolution <- c('cr-like', 'cr-like-em')
+cell_sces <- list(cr_like_sce[1:2],
+                  cr_like_em_sce[1:2])
+nucleus_sces <- list(cr_like_sce[3:4],
+                     cr_like_em_sce[3:4])
+
+names(cell_sces) <- resolution
+names(nucleus_sces) <- resolution
+
+# filter list of sces based on common cells 
+cell_sces_filtered <- cell_sces %>%
+  purrr::map(
+    ~ purrr::map(.x, filter_sce, cells = common_cells)
+  )
+
+nucleus_sces_filtered <- nucleus_sces %>%
+  purrr::map(
+    ~ purrr::map(.x, filter_sce, cells = common_nuclei)
+  )
+
+# grab rowdata and combine into dataframe to be used for plotting
+cell_rowdata_filtered <- cell_sces %>% 
+  purrr::map_df(
+    ~ purrr::map_df(.x, scpcaTools::rowdata_to_df, .id = "quant_dir"),
+    .id = "alevin_resolution"
+  )
+
+nucleus_rowdata_filtered <- nucleus_sces %>% 
+  purrr::map_df(
+    ~ purrr::map_df(.x, scpcaTools::rowdata_to_df, .id = "quant_dir"),
+    .id = "alevin_resolution"
+  )
+# merge into one dataframe 
+all_rowdata_filtered <- rbind(cell_rowdata_filtered, nucleus_rowdata_filtered)
+
+# join with quant info to get sample names 
+all_rowdata_filtered <- all_rowdata_filtered %>%
+  dplyr::left_join(quant_info) %>%
+  dplyr::filter(mean > 0 & detected > 0)
+```
+
+```{r}
+# get list of cr_like and cr_like_em genes
+cr_like_genes <- all_rowdata_filtered %>%
+  dplyr::filter(alevin_resolution == "cr-like") %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+
+cr_like_em_genes <- all_rowdata_filtered %>%
+  dplyr::filter(alevin_resolution == "cr-like-em") %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+```
+
+```{r}
+gene_overlap <- intersect(cr_like_genes, cr_like_em_genes)
+glue::glue("Number of genes in cr-like {length(cr_like_genes)}")
+glue::glue("Number of genes in cr-like-em {length(cr_like_em_genes)}")
+glue::glue("Number of genes found in both {length(gene_overlap)}")
+```
+
+When you look at shared cells only and genes with expression > 0 and detected in at least 1 cell, `cr-like` and `cr-like-em`, 2,056 genes are not found to intersect.
+
+I'm going to look at gene expression and how this actually affects individual genes in another notebook. 
+
+```{r}
+sessioninfo::session_info()
+```
+
