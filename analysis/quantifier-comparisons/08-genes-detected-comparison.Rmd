@@ -121,21 +121,38 @@ As another comparison, let's look at the actual genes that are identified in eac
 Let's see how many are lost when we use alevin-fry over cellranger and what types of genes they are. 
 Here, we will consider all genes that have the capability to be detected in alevin-fry and cellranger, regardless of if they are expressed or not. 
 
+```{r}
+# get genes common in all tools
+common_genes <- rowdata_filtered %>%
+  dplyr::select(gene_id, tool) %>%
+  dplyr::distinct() %>%
+  dplyr::group_by(gene_id) %>%
+  dplyr::tally() %>%
+  # filter for genes found in both cellranger and alevin-fry
+  dplyr::filter(n == 2) %>%
+  dplyr::pull(gene_id)
+
+# filter rowdata_df to only include genes found in all tools 
+rowdata_filtered <- rowdata_filtered %>% 
+  dplyr::filter(gene_id %in% common_genes)
+  
+```
+
 
 ```{r}
 # pull out genes that are detected and expressed in each of the tools
 cellranger_genes <- rowdata_filtered %>%
-  dplyr::filter(tool == "cellranger") %>%
+  dplyr::filter(tool == "cellranger" & mean > 0 & detected > 0) %>%
   dplyr::pull(gene_id) %>%
   unique()
 
 cr_like_genes <- rowdata_filtered %>%
-  dplyr::filter(alevin_resolution == "cr-like") %>%
+  dplyr::filter(alevin_resolution == "cr-like" & mean > 0 & detected > 0) %>%
   dplyr::pull(gene_id) %>%
   unique()
 
 cr_em_genes <- rowdata_filtered %>%
-  dplyr::filter(alevin_resolution == "cr-like-em") %>%
+  dplyr::filter(alevin_resolution == "cr-like-em" & mean > 0 & detected > 0) %>%
   dplyr::pull(gene_id) %>%
   unique()
 ```
@@ -152,6 +169,13 @@ cellranger_cr_em_intersect <- intersect(cellranger_genes, cr_em_genes)
 # look at intersection between alevin-fry cr-like and alevin-fry cr-like-em
 cr_cr_em_intersect <- intersect(cr_like_genes, cr_em_genes)
 ```
+
+```{r}
+# filter rowdata to only include genes with mean > 0 and detected > 0 for rest of comparisons
+rowdata_filtered <- rowdata_filtered %>%
+  dplyr::filter(mean > 0 & detected > 0)
+```
+
 
 ```{r}
 # get unique gene lists by getting genes that overlap with all other tools first and then the set difference with the list of genes for that tool
@@ -187,10 +211,8 @@ ggplot(gene_detect_df, aes(x = tools_detected)) +
   scale_x_upset(n_intersections = 6)
 ```
 
-When looking at shared cells only, we see that alevin-fry detects more genes than cellranger in both methods. 
-Almost every gene that is found in cellranger is also being found in Alevin-fry so we are probably not losing much.
-
-There are only 40 genes that cellranger can detect that alevin-fry cannot.
+When looking at shared cells only and limiting to only genes that are found in both indices, we see that the majority of genes are shared across all tools. 
+Alevin-fry `cr-like-em` contains the most unique genes with cellranger the second most unique genes although the numbers here are quite small at 318 and 117 genes respectively. 
 
 Perhaps the genes that are different are lowly expressed genes and it wouldn't matter anyway. 
 
@@ -225,15 +247,15 @@ mean_exp_df <- mean_exp_list %>%
 
 
 Now, we want to classify each gene as being shared by all of the tools or unique. 
-Because the alevin-fry tools are sharing the same index and therefore the same set of genes, we can say that genes are shared among all tools if they are found in an alevin-fry tool and cellranger. 
-On the other hand, we are specifically interested in the difference between alevin-fry and cellranger and because we have no unique genes between `cr-like` and `cr-like-em`, we will look at genes that are not found in cellranger and call those unique. 
+We will label genes found in all tools as shared, genes found in 2 of 3 tools as shared and then genes found in only that one tool as unique. 
 ```{r}
-# prove that cr-like-em and cr-like have the same gene list so the intersect between cellranger and these tools is the same
-all.equal(cellranger_cr_em_intersect, cellranger_cr_intersect)
-
 # add a column to classify as shared or unique to that tool
 mean_exp_df <- mean_exp_df %>%
-  dplyr::mutate(gene_status = ifelse(gene_id %in% c(cellranger_cr_intersect), "shared", "unique")) 
+  # filter to only include genes that are common and have mean > 0 and detected > 0 
+  dplyr::filter(gene_id %in% rowdata_filtered$gene_id) %>%
+  dplyr::mutate(gene_status = dplyr::case_when(gene_id %in% intersect(cellranger_cr_intersect, cellranger_cr_em_intersect) ~ "common",
+  gene_id %in% c(cellranger_cr_intersect, cellranger_cr_em_intersect, cr_cr_em_intersect) ~ "shared", 
+  TRUE ~ "unique")) 
 ```
 
 
@@ -248,25 +270,25 @@ ggplot(mean_exp_df, aes(x = alevin_resolution, y =mean_log_expression , fill = g
 As expected, across the board, it looks like the unique genes are those with lower mean gene expression than those genes that are shared across all tools. 
 The genes that are lost are probably not contributing very much to downstream results. 
 
-Let's look at the few unique genes in alevin-fry and cellranger that are higher expressed. 
+Let's look at the few unique genes in alevin-fry that are higher expressed. 
+There don't appear to be any in cellranger. 
  
 ```{r}
 cellranger_unique_high <- mean_exp_df %>%
   dplyr::filter(alevin_resolution == "cellranger" & 
                   gene_status == "unique" & 
-                  mean_log_expression > 0.25) %>%
+                  mean_log_expression > 0.1) %>%
   dplyr::pull(gene_id)
 
 rowdata_filtered %>%
   dplyr::filter(gene_id %in% cellranger_unique_high)
 ```
- All of the points that are high in cellranger are from PRRC2B, or proline-rich coiled-coil 2B. 
  
 ```{r}
 cr_like_em_unique_high <- mean_exp_df %>%
   dplyr::filter(alevin_resolution == "cr-like-em" & 
                   gene_status == "unique" & 
-                  mean_log_expression > 0.50) %>%
+                  mean_log_expression > 0.10) %>%
   dplyr::pull(gene_id)
 
 rowdata_filtered %>%
@@ -276,11 +298,11 @@ rowdata_filtered %>%
 
 These genes that are found in cr-like-em include the following: 
 
-ENSG00000210082 - MT-RNR2
-ENSG00000251562 - MALAT1
-ENSG00000211459 - MT-RNR1
+- ENSG00000214736 - TOMM6
+- ENSG00000285839 - KTI12
+- ENSG00000248167 - TRIM39-RPP21
+- ENSG00000285508 - ALO34330.1
 
-Two of the top three expressed genes identified in only alevin-fry are mitochondrial genes and the other is a long non-coding RNA that is commonly found expressed across tissues. 
 
 ### Gene Ontology
 
@@ -301,13 +323,13 @@ cellranger_lost <- rowdata_filtered %>%
   dplyr::select(gene_id, mean, Symbol, detected, sample) %>%
   unique()
 
-alevin_fry_rowdata <- rowdata_df %>%
+cr_em_rowdata <- rowdata_df %>%
   dplyr::filter(tool == "splici_salign_cr-like-em") %>%
   dplyr::select(gene_id, Symbol)
 
-alevin_fry_lost <- rowdata_filtered %>%
+cr_em_lost <- rowdata_filtered %>%
   dplyr::filter(!(gene_id %in% cellranger_cr_em_intersect)) %>%
-  dplyr::left_join(alevin_fry_rowdata) %>%
+  dplyr::left_join(cr_em_rowdata) %>%
   dplyr::arrange(desc(mean)) %>%
   dplyr::select(tool, gene_id, Symbol, mean, detected, sample) %>%
   unique()
@@ -360,19 +382,24 @@ go_results <- go_ora_results@result %>%
 go_results
 ```
 
-It looks like we don't get enrichment of any particular pathway that is lost with the 40 genes not able to be detected in alevin-fry. 
+```{r fig.width = 5}
+enrichplot::dotplot(go_ora_results)
+```
 
-What about the type of genes that are unique to alevin-fry. 
+
+It looks like we are getting enrichment all of the same similar pathways involved in sensory perception and chemical stimulus. 
+
+What about the type of genes that are unique to alevin-fry `cr-like-em`. 
 
 ```{r}
-alevin_fry_lost <- cr_em_lost$gene_id %>%
+cr_em_lost_genes <- cr_em_lost$gene_id %>%
   unique()
 background_genes <- rowdata_df$gene_id %>%
   unique()
 ```
 
 ```{r}
-go_ora_results <- enrichGO(gene = alevin_fry_lost,
+go_ora_results <- enrichGO(gene = cr_em_lost_genes,
                            universe = background_genes,
                            keyType = "ENSEMBL",
                            OrgDb = org.Hs.eg.db,
@@ -394,7 +421,7 @@ go_results
 enrichplot::dotplot(go_ora_results)
 ```
 
-Now if we look at the types of genes that are identified uniquely in Alevin-fry as opposed to Alevin we see a lot of immune related pathways and pathways related to micro RNA and non coding RNAs.
+Now if we look at the types of genes that are identified uniquely in Alevin-fry `cr-like-em` as opposed to Cellranger or Alevin-fry `cr-like`, we see similar sensory and chemical stimulus pathways as well as some snRNA processing. 
 
 ```{r}
 sessioninfo::session_info()
