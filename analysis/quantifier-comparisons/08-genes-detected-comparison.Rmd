@@ -13,9 +13,11 @@ Here, we have alevin-fry that has been run in two different resolution modes, `c
 ## Setup
 
 ```{r}
+set.seed(1234)
 library(magrittr)
 library(ggplot2)
 library(ggupset)
+library(ggrepel)
 library(SingleCellExperiment)
 library(clusterProfiler)
 library(org.Hs.eg.db)
@@ -120,6 +122,7 @@ rowdata_filtered <- sces_filtered %>%
 As another comparison, let's look at the actual genes that are identified in each of the tools. 
 Let's see how many are lost when we use alevin-fry over cellranger and what types of genes they are. 
 Here, we will consider all genes that have the capability to be detected in alevin-fry and cellranger, regardless of if they are expressed or not. 
+We want to restrict the analysis to only genes detected in both tools to avoid any differences based on ensembl versions as we used ensembl v100 with cellranger and v103 with alevin-fry.
 
 ```{r}
 # get genes common in all tools
@@ -303,6 +306,66 @@ These genes that are found in cr-like-em include the following:
 - ENSG00000248167 - TRIM39-RPP21
 - ENSG00000285508 - ALO34330.1
 
+### Correlation of gene expression between Cellranger and Alevin-fry
+
+We can also look at the correlation of gene expression across these tools and use a linear regression model to see how similar the mean gene expression determined by cellranger is to each of the alevin-fry methods. 
+Here, I am using a linear regression model for each sample and grabbing the residuals for each gene. 
+The residuals will help show us if alevin-fry is over or underestimating gene counts in comparison to cellranger.
+
+```{r}
+# create separate columns for mean log expression for each tool
+mean_exp_df_spread <- mean_exp_df %>%
+  tidyr::pivot_wider(id_cols = c(gene_id, sample),
+                     names_from = alevin_resolution,
+                     values_from = mean_log_expression)
+
+# use a linear regression model to compare gene expression across tools 
+# grab the residuals for each gene and add to the original dataframe
+residuals_df <- mean_exp_df_spread %>%
+  dplyr::group_by(sample) %>%
+  dplyr::mutate(
+    cellranger_cr_like = lm(cellranger ~ `cr-like`)$residuals,
+    cellranger_cr_like_em = lm(cellranger ~ `cr-like-em`)$residuals
+  ) %>%
+  dplyr::left_join(mean_exp_df_spread) %>%
+  # condense all residuals for each tool comparison into one column for easy plotting
+  tidyr::pivot_longer(cols = c("cellranger_cr_like", "cellranger_cr_like_em"),
+                      names_to = "tool_comparisons", 
+                      values_to = "residuals") %>%
+  tidyr::pivot_longer(cols = c("cellranger", "cr-like", "cr-like-em"),
+                      names_to = "tool", 
+                      values_to = "mean_log_expression")
+```
+
+```{r fig.height=10, fig.width=10}
+ggplot(residuals_df, aes(x = mean_log_expression, y = residuals)) + 
+  geom_point(size = 0.5) + 
+  facet_wrap(tool ~ sample, nrow = 3)+ 
+  # label genes that have abs(residual) > 1 to see which genes are consistently labeled across samples
+  geom_text_repel(data = residuals_df %>%
+              dplyr::filter(abs(residuals) > 1), 
+            mapping = aes(x = mean_log_expression, y = residuals, label = gene_id),
+            size = 3, max.overlaps = 20)
+```
+
+Interestingly it looks like the single-nuclei samples (220 and 221) have fewer differences between the two tools and show a lot more consistency between the resolution modes. 
+It also looks like regardless of alevin-fry resolution strategy, the same genes will be under or over represented. 
+And finally, the residuals appear to move closer to 0 as gene expression increases.  
+
+```{r}
+# print out a table with all the gene names shown above 
+gene_symbols_df <- rowdata_df %>%
+  dplyr::select(gene_id, Symbol)
+
+
+residuals_df %>%
+  dplyr::left_join(gene_symbols_df) %>%
+  dplyr::distinct() %>%
+  dplyr::filter(abs(residuals) > 1) %>%
+  dplyr::arrange(desc(residuals)) %>%
+  dplyr::select(Symbol, gene_id, residuals, `cr-like`, `cr-like-em`, cellranger)
+```
+If you scroll through the list of genes that have abs(residuals) > 1 the gene list is mostly made up of ribosomal genes.
 
 ### Gene Ontology
 
