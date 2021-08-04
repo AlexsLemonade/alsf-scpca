@@ -324,23 +324,23 @@ mean_exp_df_spread <- mean_exp_df %>%
 residuals_df <- mean_exp_df_spread %>%
   dplyr::group_by(sample) %>%
   dplyr::mutate(
-    cellranger_cr_like = lm(cellranger ~ `cr-like`)$residuals,
-    cellranger_cr_like_em = lm(cellranger ~ `cr-like-em`)$residuals
+    cellranger_cr_like = lm(`cr-like` ~ cellranger )$residuals,
+    cellranger_cr_like_em = lm(`cr-like-em` ~ cellranger)$residuals
   ) %>%
   dplyr::left_join(mean_exp_df_spread) %>%
   # condense all residuals for each tool comparison into one column for easy plotting
   tidyr::pivot_longer(cols = c("cellranger_cr_like", "cellranger_cr_like_em"),
                       names_to = "tool_comparisons", 
                       values_to = "residuals") %>%
-  tidyr::pivot_longer(cols = c("cellranger", "cr-like", "cr-like-em"),
-                      names_to = "tool", 
-                      values_to = "mean_log_expression")
+ dplyr::rename("cr_mean_log_expression" = "cellranger",
+               "crlike_mean_log_expression" = "cr-like",
+               "crlikeEM_mean_log_expression" = "cr-like-em")
 ```
 
 ```{r fig.height=10, fig.width=10}
-ggplot(residuals_df, aes(x = mean_log_expression, y = residuals)) + 
+ggplot(residuals_df, aes(x = cr_mean_log_expression, y = residuals)) + 
   geom_point(size = 0.5) + 
-  facet_wrap(tool ~ sample, nrow = 3)+ 
+  facet_grid(sample ~ tool_comparisons)+ 
   # label genes that have abs(residual) > 1 to see which genes are consistently labeled across samples
   geom_text_repel(data = residuals_df %>%
               dplyr::filter(abs(residuals) > 1), 
