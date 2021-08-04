@@ -328,7 +328,6 @@ residuals_df <- mean_exp_df_spread %>%
     cellranger_cr_like_em = lm(`cr-like-em` ~ cellranger)$residuals,
     cr_cr_like_em = lm(`cr-like-em` ~ `cr-like`)$residuals
   ) %>%
-  dplyr::left_join(mean_exp_df_spread) %>%
   # condense all residuals for each tool comparison into one column for easy plotting
   tidyr::pivot_longer(cols = c("cellranger_cr_like", "cellranger_cr_like_em", "cr_cr_like_em"),
                       names_to = "tool_comparisons", 
