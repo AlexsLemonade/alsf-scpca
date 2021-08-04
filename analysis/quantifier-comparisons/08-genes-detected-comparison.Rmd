@@ -369,11 +369,12 @@ cellranger_comparisons %>%
   tidyr::drop_na() %>%
   dplyr::filter(abs(residuals) > 1) %>%
   dplyr::arrange(desc(residuals)) %>%
-  dplyr::select(sample, Symbol, gene_id, residuals, cr_mean_log_expression, crlike_mean_log_expression, crlikeEM_mean_log_expression)
+  dplyr::select(sample, Symbol, gene_id, residuals, tool_comparisons, cr_mean_log_expression, crlike_mean_log_expression, crlikeEM_mean_log_expression)
 ```
 
 If you scroll through the list of genes that have abs(residuals) > 1 there are a lot of ribosomal genes that tend to be under counted by alevin-fry. 
 The genes that are over counted by alevin-fry are a mix of coding genes and pseudogenes. 
+We also see that `cr-like-em` tends to have positive residuals and over count and `cr-like` has more negative residuals and undercount.
 
 Let's look at the comparison of `cr-like` to `cr-like-em`. 
 
@@ -400,7 +401,7 @@ crlike_comparisons %>%
   tidyr::drop_na() %>%
   dplyr::filter(abs(residuals) > 1) %>%
   dplyr::arrange(desc(residuals)) %>%
-  dplyr::select(sample, Symbol, gene_id, residuals, cr_mean_log_expression, crlike_mean_log_expression, crlikeEM_mean_log_expression)
+  dplyr::select(sample, Symbol, gene_id, residuals, tool_comparisons, cr_mean_log_expression, crlike_mean_log_expression, crlikeEM_mean_log_expression)
 ```
 Here you can see that most of the genes are over counted rather than undercounted by `cr-like-em` in comparison to `cr-like` which makes sense given `cr-like-em` resolves multi mapped genes. 
 Again, we see mostly ribosomal genes are affected. 
