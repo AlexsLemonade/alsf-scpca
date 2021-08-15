@@ -41,8 +41,11 @@ RUN Rscript -e "BiocManager::install(c( \
     'ensembldb', \
     'fishpond', \
     'GenomicFeatures', \
+    'LoomExperiment', \
     'scran', \
     'scater', \
+    'SingleCellExperiment', \
+    'SummarizedExperiment', \
     'tximport'), \
     update = FALSE)"
 
