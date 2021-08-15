@@ -34,6 +34,7 @@ RUN Rscript -e "install.packages(c( \
 RUN Rscript -e "BiocManager::install(c( \
     'AnnotationHub', \
     'Biostrings', \
+    'bluster', \
     'BSgenome', \
     'DropletUtils', \
     'eisaR', \
@@ -44,6 +45,10 @@ RUN Rscript -e "BiocManager::install(c( \
     'scater', \
     'tximport'), \
     update = FALSE)"
+
+##########################
+# Install scpcaTools package
+RUN Rscript -e "remotes::install_github('AlexsLemonade/scpcaTools')"
 
 # set final workdir for commands
 WORKDIR /home/rstudio
