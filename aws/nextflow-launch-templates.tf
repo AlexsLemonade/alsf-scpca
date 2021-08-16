@@ -6,11 +6,12 @@ resource "aws_launch_template" "nf_lt_standard" {
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
-      volume_size = 64
+      volume_size = 128
       encrypted = true
       delete_on_termination = true
     }
   }
+  update_default_version = true
 }
 
 resource "aws_launch_template" "nf_lt_bigdisk" {
@@ -26,4 +27,5 @@ resource "aws_launch_template" "nf_lt_bigdisk" {
       delete_on_termination = true
     }
   }
+  update_default_version = true
 }
