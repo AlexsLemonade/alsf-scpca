@@ -34,16 +34,24 @@ RUN Rscript -e "install.packages(c( \
 RUN Rscript -e "BiocManager::install(c( \
     'AnnotationHub', \
     'Biostrings', \
+    'bluster', \
     'BSgenome', \
     'DropletUtils', \
     'eisaR', \
     'ensembldb', \
     'fishpond', \
     'GenomicFeatures', \
+    'LoomExperiment', \
     'scran', \
     'scater', \
+    'SingleCellExperiment', \
+    'SummarizedExperiment', \
     'tximport'), \
     update = FALSE)"
+
+##########################
+# Install scpcaTools package
+RUN Rscript -e "remotes::install_github('AlexsLemonade/scpcaTools')"
 
 # set final workdir for commands
 WORKDIR /home/rstudio
