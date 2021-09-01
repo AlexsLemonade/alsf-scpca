@@ -1,0 +1,272 @@
+---
+title: "MiQC Exploration for ScPCA"
+author: "Ally Hawkins for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+In this notebook, we are interested in exploring the use of [miQC](https://github.com/greenelab/miQC) as an additional approach to filtering cells to remove any remaining cells that may not be viable or have low sequencing information. 
+
+Here, I am particularly comparing the use of miQC to using hard thresholds, in particular removing cells with greater than 20% mitochondrial content, less than 500 genes detected per cell, and less than 1000 total counts per cell. 
+
+For the most part, I followed the instructions in the [miQC vignette](https://github.com/greenelab/miQC/blob/main/vignettes/miQC.Rmd) for plotting and filtering. 
+
+I'm choosing to compare 2 single-cell samples (SCPCR000126, SCPCR000127) and 2 single-nuclei samples (SCPCR000118, SCPCR000119). We are particularly interested in how miQC will handle single-nuclei samples, as they should not contain many reads corresponding to mitochondrial genes. 
+
+## Setup
+
+```{r}
+library(magrittr)
+library(ggplot2)
+library(SingleCellExperiment)
+library(scpcaTools)
+library(gridExtra)
+```
+
+
+```{r}
+# file paths to emptyDrops filtered sces from Alevin-fry 
+base_dir <- here::here()
+cr_like_results_dir <- file.path(base_dir, "data", "results")
+
+cr_like_sce_file <- file.path(cr_like_results_dir, "alevin-fry-cr-like-em-emptydrops-200-sces.rds")
+
+cr_like_sce <- readr::read_rds(cr_like_sce_file)
+```
+
+
+
+```{r}
+# read in mito gene list
+sample_info_dir <- file.path(base_dir, "sample-info")
+mito_file <- file.path(sample_info_dir, "Homo_sapiens.GRCh38.103.mitogenes.txt")
+mito_genes <- readr::read_tsv(mito_file, col_names = "gene_id")
+mito_genes <- mito_genes %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+```
+
+
+## Plot Metrics 
+
+Before we can do any modeling and perform any filtering, let's look at the distribution of mitochondrial fraction per cell and unique genes detected per cell. 
+The assumptions of miQC rely on having a distribution of mitochondrial reads and unique genes found. 
+It uses a joint model to look at the proportion of reads mapping to mitochondrial DNA and the number of detected genes and determines the probability of a cell being compromised based on this proportion. 
+
+To start we have to calculate the per cell statistics using `addPerCellQC()`. 
+```{r}
+# add per cell qc 
+cr_like_sce <- cr_like_sce %>%
+  purrr::map(scater::addPerCellQC, subsets = list(mito = mito_genes))
+```
+
+```{r}
+cr_like_sce %>%
+  purrr::map(miQC::plotMetrics)
+```
+Already you can see that the plot shows a distribution of mitochondrial reads from 0-100% for the two single cell samples, but not for the single-nuclei samples. 
+This could affect the ability of the model to distinguish compromised cells. 
+
+## Plot Model 
+
+Now we can actually look at the miQC model and what cells will be considered compromised and filtered out. 
+Here, I'm plotting the probabilities that each cell is compromised as calculated by miQC, which cells would be filtered out using a given cutoff, and then comparing it to if we were to filter our cells using a pre determind threshold. 
+
+```{r}
+# function to test miQC modeling with different parameters on sce objects and show plots
+model_sce <- function(sce, title, model_type = "linear", posterior_cutoff = 0.75){
+  
+  # plot distributions of total counts/cell, genes detected/cell and mito content
+  coldata_df <- data.frame(colData(sce))
+  manual_filter_plot <- ggplot(coldata_df, aes(x = sum, y = detected, color = subsets_mito_percent)) + 
+    geom_point(alpha = 0.5) +
+    scale_color_viridis_c() + 
+    labs(x = "Total Count",
+         y = "Number of Genes Expressed",
+         color = "Mitochondrial\nFraction") + 
+    geom_vline(xintercept = 500) +
+    geom_hline(yintercept = 1000) +
+    ggtitle(title) +
+    theme_classic()
+  
+  # create model
+  sce_model <- miQC::mixtureModel(sce, model_type)
+  
+  # plot cells colored by probability of cell being compromised or not
+  model_plot <- miQC::plotModel(sce, sce_model) +
+    theme_classic()
+  
+  # plot cells that would be filtered using model vs cells that would be filtered using manual QC cutoffs
+  miQC_filter_plot <- miQC::plotFiltering(sce, sce_model, posterior_cutoff) + 
+    geom_hline(yintercept = 20) +
+    geom_vline(xintercept = 500) + 
+    theme_classic()
+  
+  # arrange plots
+  grid.arrange(manual_filter_plot, model_plot, miQC_filter_plot, nrow = 2)
+}
+```
+
+
+```{r fig.height=5, fig.width=10}
+purrr::map2(cr_like_sce, names(cr_like_sce), model_sce)
+```
+Using the suggested parameters from miQC we see that it does a fairly good job of keeping cells with low mito content and high number of genes detected for the single-cell samples. 
+For the single-nuclei samples however, it looks like the model is throwing away a lot more cells than we may want to probably due to the low range in mitochondrial percentages to begin with. 
+Let's see if we alter some of the parameters used, like the cutoff for filtering, or the model used to compute the probability of compromised cells, and if that impacts the output. 
+
+```{r}
+# change the posterior cutoff for miQC to keep throw away cells with > 0.9 probability of being compromised
+purrr::map2(cr_like_sce, names(cr_like_sce), model_sce, posterior_cutoff = 0.9)
+```
+
+```{r}
+# test spline mixture model rather than linear 
+purrr::map2(cr_like_sce, names(cr_like_sce), model_sce, model_type = "spline")
+```
+
+```{r}
+# test polynomial mixture model rather than linear
+purrr::map2(cr_like_sce, names(cr_like_sce), model_sce, model_type = "polynomial")
+```
+
+It looks like the change in model or different posterior cutoff doesn't have a drastic change in the cells that get included or excluded for this set of single-cell or single-nuclei samples. 
+
+## Filter Cells
+
+Now we can compare filtering using miQC vs. using the pre-determined cutoffs to see how the different filtering effects the overall number of cells that are removed. 
+We can also look at the distribution of each of the metrics used for filtering, UMI/cell, genes detected/cell, and mito content/cell to see how filtering affects the population of cells. 
+
+```{r}
+# function to filter sce using miQC 
+miQC_filter <- function(sce, model_type = "linear", posterior_cutoff = 0.75){
+  sce_model <- miQC::mixtureModel(sce, model_type)
+  filtered_sce <- miQC::filterCells(sce, sce_model)
+}
+
+# filter using manual 
+manual_filter <- function(sce, 
+                          mito_cutoff = 20, 
+                          genes_detected_cutoff = 500, 
+                          total_count_cutoff = 1000) {
+  
+  # get vector of cells to keep 
+  cells_keep <- sce$detected > genes_detected_cutoff & 
+    sce$sum > total_count_cutoff &
+    sce$subsets_mito_percent < mito_cutoff
+  
+  # filter sce
+  filtered_sce <- sce[,cells_keep]
+}
+
+manual_filtered_sce <- purrr::map(cr_like_sce, manual_filter)
+miQC_filtered_sce <- purrr::map(cr_like_sce, miQC_filter)
+```
+
+
+```{r}
+# function to grab number of cells from sce
+get_num_cells <- function(sce){
+  num_cells <- dim(sce)[2]
+}
+
+manual_cell_num <- manual_filtered_sce %>%
+  purrr::map(get_num_cells) %>%
+  as.data.frame()
+rownames(manual_cell_num) <- c("manual")
+
+miQC_cell_num <- miQC_filtered_sce %>%
+  purrr::map(get_num_cells) %>%
+  as.data.frame()
+rownames(miQC_cell_num) <- c("miQC")
+
+pre_filter_cell_num <- cr_like_sce %>%
+  purrr::map(get_num_cells) %>%
+  as.data.frame()
+rownames(pre_filter_cell_num) <- c("pre_filtering")
+
+# create dataframe for plotting with number of cells per sce 
+combined_cell_num_df <- dplyr::bind_rows(manual_cell_num,
+                                         miQC_cell_num,
+                                         pre_filter_cell_num) %>%
+  tibble::rownames_to_column("filtering_method") %>%
+  tidyr::pivot_longer(cols = starts_with("SCPCR"),
+                      names_to = "sample", 
+                      values_to = "number_cells")
+```
+
+```{r}
+ggplot(combined_cell_num_df, aes(x = sample, y = number_cells, color = filtering_method)) + 
+  geom_point(size = 3)
+```
+
+
+It looks like manual filtering is mostly removing more cells than miQC. 
+Let's look at how the per cell statistics are altered before and after each filtering method. 
+
+```{r}
+# convert coldata for all sces to dataframe 
+manual_filtered_df <- purrr::map(manual_filtered_sce, coldata_to_df) %>%
+  dplyr::bind_rows(.id = "sample")
+
+miQC_filtered_df <- purrr::map(miQC_filtered_sce, coldata_to_df) %>%
+  dplyr::bind_rows(.id = "sample")
+
+pre_filtered_df <- purrr::map(cr_like_sce, coldata_to_df) %>%
+  dplyr::bind_rows(.id = "sample")
+
+# create a list of named filtered dataframes
+list_df <- list(manual_filtered_df,
+                miQC_filtered_df,
+                pre_filtered_df)
+names(list_df) <- c("manual", "miQC", "pre_filtered")
+
+# one combined dataframe with coldata and filtering method as a column 
+filtered_df <- dplyr::bind_rows(list_df, .id = "filtering_method")
+```
+
+
+```{r}
+ggplot(filtered_df, aes(x = filtering_method, y = sum, fill = filtering_method)) +
+  geom_boxplot() +
+  facet_wrap(~ sample) + 
+  coord_cartesian(ylim = c(0,25000))
+```
+
+```{r}
+ggplot(filtered_df, aes(x = filtering_method, y = detected, fill = filtering_method)) +
+  geom_boxplot() +
+  facet_wrap(~ sample) + 
+  coord_cartesian(ylim = c(0,7500))
+```
+Based on the above plots, it appears that manual filtering is going to remove more of the cells with lower counts and genes detected than filtering with miQC is but keeping some of those may not be a bad thing. 
+It does look like manual on a whole will be more stringent than using miQC. 
+
+```{r}
+# just look at single cell samples 
+ggplot(filtered_df %>%
+         dplyr::filter(sample %in% c("SCPCR000126", "SCPCR000127")), aes(x = filtering_method, y = subsets_mito_percent, fill = filtering_method)) +
+  geom_boxplot() +
+  facet_wrap(~ sample) + 
+  coord_cartesian(ylim = c(0,100))
+```
+```{r}
+# just look at single nuclei samples
+ggplot(filtered_df %>%
+         dplyr::filter(sample %in% c("SCPCR000220", "SCPCR000221")), aes(x = filtering_method, y = subsets_mito_percent, fill = filtering_method)) +
+  geom_boxplot() +
+  facet_wrap(~ sample) + 
+  coord_cartesian(ylim = c(0,20))
+```
+
+When looking at mito content, for single-cell samples miQC also appears to keep a few cells that are higher than if we were to use manual thresholds. 
+For single-nuclei samples, miQC is more stringent with the mito content cutoff being much lower than the manual cutoff. 
+This is most likely due to the lower mito content expected in single-nuclei samples and could lead to exclusion of cells that don't need to be excluded. 
+
+## Session Info
+```{r}
+sessioninfo::session_info()
+```
+
