@@ -64,7 +64,7 @@ cr_like_sce <- cr_like_sce %>%
 
 ```{r}
 cr_like_sce %>%
-  purrr::map(miQC::plotMetrics)
+  purrr::iwalk(~miQC::plotMetrics(.x) + ggtitle(.y))
 ```
 Already you can see that the plot shows a distribution of mitochondrial reads from 0-100% for the two single cell samples, but not for the single-nuclei samples. 
 This could affect the ability of the model to distinguish compromised cells. 
