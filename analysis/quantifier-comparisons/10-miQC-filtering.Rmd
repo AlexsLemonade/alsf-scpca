@@ -63,8 +63,13 @@ cr_like_sce <- cr_like_sce %>%
 ```
 
 ```{r}
-cr_like_sce %>%
-  purrr::iwalk(~miQC::plotMetrics(.x) + ggtitle(.y))
+plot_miQC_metrics <- function(sce, sample_name){
+  p <- miQC::plotMetrics(sce) +
+    ggtitle(sample_name)
+  print(p)
+}
+
+purrr::iwalk(cr_like_sce, plot_miQC_metrics)
 ```
 Already you can see that the plot shows a distribution of mitochondrial reads from 0-100% for the two single cell samples, but not for the single-nuclei samples. 
 This could affect the ability of the model to distinguish compromised cells. 
@@ -111,33 +116,50 @@ model_sce <- function(sce, title, model_type = "linear", posterior_cutoff = 0.75
 
 
 ```{r fig.height=5, fig.width=10}
-purrr::map2(cr_like_sce, names(cr_like_sce), model_sce)
+purrr::iwalk(cr_like_sce, model_sce)
 ```
-Using the suggested parameters from miQC we see that it does a fairly good job of keeping cells with low mito content and high number of genes detected for the single-cell samples. 
+Using the suggested parameters from miQC we see that it does a fairly good job of keeping cells with low mito content and high number of genes detected for the single-cell samples, except for a few cases in 126 and 127 where cells with low mito and high unique genes are being thrown out.
 For the single-nuclei samples however, it looks like the model is throwing away a lot more cells than we may want to probably due to the low range in mitochondrial percentages to begin with. 
 Let's see if we alter some of the parameters used, like the cutoff for filtering, or the model used to compute the probability of compromised cells, and if that impacts the output. 
 
+### Testing Posterior Probability Cutoffs
+
+miQC will remove any cells that have a high probability of being compromised, by default these are cells with higher than 0.75 posterior probability. 
+We can increase that threshold, which means that more cells will be kept and see if we are able to recover some of the cells that were being thrown out previously that we think should have been included (ie. cells with low mito that are being thrown out). 
+
 ```{r}
 # change the posterior cutoff for miQC to keep throw away cells with > 0.9 probability of being compromised
-purrr::map2(cr_like_sce, names(cr_like_sce), model_sce, posterior_cutoff = 0.9)
+purrr::iwalk(cr_like_sce, model_sce, posterior_cutoff = 0.9)
 ```
+It doesn't appear that increasing the probability threshold rescues very many more cells with low mito content in SCPCR000126 and SCPCR000127 that are being filtered out. 
+
+### Testing different mixture models 
+
+In addition to altering the threshold used for filtering, we can also test the use of different mixture models to calculate the posterior probability of a cell being compromised. 
+We will test use of both the spline and polynomial modes rather than the default linear model. 
+The polynomial model uses a single polynomial to model the entire datset, while spline uses a piecewise continuous function of many polynomials to model the data set. 
 
 ```{r}
 # test spline mixture model rather than linear 
-purrr::map2(cr_like_sce, names(cr_like_sce), model_sce, model_type = "spline")
+purrr::iwalk(cr_like_sce, model_sce, model_type = "spline")
 ```
+
+Use of the spline model definitely doesn't seem ideal with one sample, SCPCR000126, showing the reverse of what we would expect and only keeping cells with low mito content. 
+For the other samples we see a similar trend that we had observed in the linear model. 
 
 ```{r}
 # test polynomial mixture model rather than linear
-purrr::map2(cr_like_sce, names(cr_like_sce), model_sce, model_type = "polynomial")
+purrr::iwalk(cr_like_sce, model_sce, model_type = "polynomial")
 ```
 
-It looks like the change in model or different posterior cutoff doesn't have a drastic change in the cells that get included or excluded for this set of single-cell or single-nuclei samples. 
+For the linear model, we still see that cells with low mito are getting excluded from SCPCR000118 and SCPCR000119, but now see that same trend in SCPCR000220 and SCPCR000221 as well. 
+It appears to model the cells with very high number of unique genes and low mito content as cells to exclude when we would rather keep those. 
 
 ## Filter Cells
 
 Now we can compare filtering using miQC vs. using the pre-determined cutoffs to see how the different filtering effects the overall number of cells that are removed. 
-We can also look at the distribution of each of the metrics used for filtering, UMI/cell, genes detected/cell, and mito content/cell to see how filtering affects the population of cells. 
+We can also look at the distribution of each of the metrics used for filtering, genes detected/cell, and mito content/cell to see how filtering affects the population of cells. 
+Here we are using a threshold of 500 genes detected per cell and 10% mitochondrial reads.
 
 ```{r}
 # function to filter sce using miQC 
@@ -148,13 +170,11 @@ miQC_filter <- function(sce, model_type = "linear", posterior_cutoff = 0.75){
 
 # filter using manual 
 manual_filter <- function(sce, 
-                          mito_cutoff = 20, 
-                          genes_detected_cutoff = 500, 
-                          total_count_cutoff = 1000) {
+                          mito_cutoff = 10, 
+                          genes_detected_cutoff = 500) {
   
   # get vector of cells to keep 
   cells_keep <- sce$detected > genes_detected_cutoff & 
-    sce$sum > total_count_cutoff &
     sce$subsets_mito_percent < mito_cutoff
   
   # filter sce
@@ -199,71 +219,13 @@ combined_cell_num_df <- dplyr::bind_rows(manual_cell_num,
 
 ```{r}
 ggplot(combined_cell_num_df, aes(x = sample, y = number_cells, color = filtering_method)) + 
-  geom_point(size = 3)
+  geom_point(size = 3) + 
+  theme(axis.text.x = element_text(angle = 90))
 ```
 
 
-It looks like manual filtering is mostly removing more cells than miQC. 
-Let's look at how the per cell statistics are altered before and after each filtering method. 
+It looks like manual filtering is removing more cells than miQC for single-cell, but similar cell numbers are removed in single-nuclei samples with either manual or miQC. 
 
-```{r}
-# convert coldata for all sces to dataframe 
-manual_filtered_df <- purrr::map(manual_filtered_sce, coldata_to_df) %>%
-  dplyr::bind_rows(.id = "sample")
-
-miQC_filtered_df <- purrr::map(miQC_filtered_sce, coldata_to_df) %>%
-  dplyr::bind_rows(.id = "sample")
-
-pre_filtered_df <- purrr::map(cr_like_sce, coldata_to_df) %>%
-  dplyr::bind_rows(.id = "sample")
-
-# create a list of named filtered dataframes
-list_df <- list(manual_filtered_df,
-                miQC_filtered_df,
-                pre_filtered_df)
-names(list_df) <- c("manual", "miQC", "pre_filtered")
-
-# one combined dataframe with coldata and filtering method as a column 
-filtered_df <- dplyr::bind_rows(list_df, .id = "filtering_method")
-```
-
-
-```{r}
-ggplot(filtered_df, aes(x = filtering_method, y = sum, fill = filtering_method)) +
-  geom_boxplot() +
-  facet_wrap(~ sample) + 
-  coord_cartesian(ylim = c(0,25000))
-```
-
-```{r}
-ggplot(filtered_df, aes(x = filtering_method, y = detected, fill = filtering_method)) +
-  geom_boxplot() +
-  facet_wrap(~ sample) + 
-  coord_cartesian(ylim = c(0,7500))
-```
-Based on the above plots, it appears that manual filtering is going to remove more of the cells with lower counts and genes detected than filtering with miQC is but keeping some of those may not be a bad thing. 
-It does look like manual on a whole will be more stringent than using miQC. 
-
-```{r}
-# just look at single cell samples 
-ggplot(filtered_df %>%
-         dplyr::filter(sample %in% c("SCPCR000126", "SCPCR000127")), aes(x = filtering_method, y = subsets_mito_percent, fill = filtering_method)) +
-  geom_boxplot() +
-  facet_wrap(~ sample) + 
-  coord_cartesian(ylim = c(0,100))
-```
-```{r}
-# just look at single nuclei samples
-ggplot(filtered_df %>%
-         dplyr::filter(sample %in% c("SCPCR000220", "SCPCR000221")), aes(x = filtering_method, y = subsets_mito_percent, fill = filtering_method)) +
-  geom_boxplot() +
-  facet_wrap(~ sample) + 
-  coord_cartesian(ylim = c(0,20))
-```
-
-When looking at mito content, for single-cell samples miQC also appears to keep a few cells that are higher than if we were to use manual thresholds. 
-For single-nuclei samples, miQC is more stringent with the mito content cutoff being much lower than the manual cutoff. 
-This is most likely due to the lower mito content expected in single-nuclei samples and could lead to exclusion of cells that don't need to be excluded. 
 
 ## Session Info
 ```{r}
