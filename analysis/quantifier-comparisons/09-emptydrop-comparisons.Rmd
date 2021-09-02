@@ -21,6 +21,7 @@ library(magrittr)
 library(ggplot2)
 library(SingleCellExperiment)
 library(scpcaTools)
+library(ggforce)
 set.seed(1234)
 ```
 
@@ -90,6 +91,10 @@ mito_genes <- mito_genes %>%
 cellranger_sces_file <- file.path(results_dir, "cellranger_sces.rds")
 cellranger_sces <- readr::read_rds(cellranger_sces_file)
 
+# read in cellranger sces with bad nuclei samples 
+cellranger_nuclei_sces_file <- file.path(results_dir, "cellranger_all_sces.rds")
+cellranger_nuclei_sces <- readr::read_rds(cellranger_nuclei_sces_file)
+
 # read in coldata file from previous benchmarking to grab cellranger data from 
 coldata_file <- file.path(results_dir, "coldata_qc.tsv")
 coldata_cellranger <- readr::read_tsv(coldata_file) %>%
@@ -119,14 +124,26 @@ aws_copy_samples(local_dir = file_dir,
 
 ```
 
+```{r}
+s3_dir <- 's3://nextflow-ccdl-results/scpca/alevin-fry-unfiltered-quant/v0.3.0'
+local_dir <- file.path(file_dir, "alevin-fry-unfiltered")
+
+sync_call <- paste('aws s3 cp', s3_dir, local_dir, 
+                         '--exclude "*"', '--include "SCPCR000119-spliced_intron_txome_k31-salign-cr-like/alevin/quants_mat.mtx"', '--exclude "*.rad"',
+                         '--recursive')
+system(sync_call, ignore.stdout = TRUE)
+```
+
 
 ```{r}
 # create quant_info_table to be used as input to make a list of sce objects 
 quant_info <- quant_info_table(data_dir = file_dir,
                  tools = c("alevin-fry-unfiltered"),
-                 samples = c('SCPCR000126','SCPCR000127','SCPCR000220','SCPCR000221')) %>%
+                 samples = c('SCPCR000118', 'SCPCR000119', 'SCPCR000126','SCPCR000127','SCPCR000220','SCPCR000221')) %>%
   # filter to only include samples we are interested in comparing
-  dplyr::filter(alevin_resolution == "cr-like-em") %>%
+  dplyr::filter(alevin_resolution == "cr-like-em" | 
+                  # keep single nuclei samples from previous run with cr-like, salign for comparison
+                  (alevin_resolution == "cr-like" & alevin_alignment == "salign" & sample %in% c('SCPCR000118', 'SCPCR000119'))) %>%
   # change filter to be FALSE for all since we want the unfiltered sce object
   dplyr::mutate(filter = FALSE) %>%
   dplyr::left_join(select_metadata_df, by = c("sample" = "scpca_run_id")) %>%
@@ -149,7 +166,7 @@ fry_sces <- mapply(read_alevin,
        fry_df$usa_mode,
        fry_df$which_counts)
 
-sample_names <- c('SCPCR000126','SCPCR000127', 'SCPCR000220', 'SCPCR000221')
+sample_names <- c('SCPCR000118-nuclei', 'SCPCR000119-nuclei', 'SCPCR000126-cell','SCPCR000127-cell', 'SCPCR000220-nuclei', 'SCPCR000221-nuclei')
 names(fry_sces) <- sample_names
 
 # save rds
@@ -167,10 +184,13 @@ Using this ambient RNA pool, the `emptyDrops()` function tests whether the expre
 ```{r}
 # use scpcaTools::filter_counts() to filter sces 
 emptydrops_filter_sces <- purrr::map(fry_sces, ~ filter_counts(sce = .x, lower = 100))
-readr::write_rds(filtered_sces, file.path(results_dir, "alevin-fry-cr-like-em-emptydrops-100-sces.rds"))
+readr::write_rds(emptydrops_filter_sces, file.path(results_dir, "alevin-fry-cr-like-em-emptydrops-100-sces.rds"))
 
 emptydrops_filter_sces_200 <- purrr::map(fry_sces, ~ filter_counts(sce = .x, lower = 200))
-readr::write_rds(filtered_sces, file.path(results_dir, "alevin-fry-cr-like-em-emptydrops-200-sces.rds"))
+readr::write_rds(emptydrops_filter_sces_200, file.path(results_dir, "alevin-fry-cr-like-em-emptydrops-200-sces.rds"))
+
+emptydrops_filter_sces_500 <- purrr::map(fry_sces, ~ filter_counts(sce = .x, lower = 500))
+readr::write_rds(emptydrops_filter_sces_500, file.path(results_dir, "alevin-fry-cr-like-em-emptydrops-500-sces.rds"))
 ```
 
 
@@ -202,7 +222,7 @@ It's likely that this may discard more cells than we anticipate and result in fi
 
 ```{r}
 # make a knee plot, plotting the inflection point for each sample in Alevin-fry
-plot_knee <- function(sce) {
+plot_knee <- function(sce, sample) {
   ranks <- DropletUtils::barcodeRanks(counts(sce))
   ranks_df <- ranks %>%
     as.data.frame()
@@ -211,11 +231,11 @@ plot_knee <- function(sce) {
     geom_point() +
     geom_hline(yintercept = metadata(ranks)$inflection, color = "red") +
     scale_y_log10() +
-    scale_x_log10()
+    scale_x_log10() + 
+    ggtitle(sample)
 }
 
-fry_sces %>%
-  purrr::map(plot_knee)
+purrr::map2(fry_sces, names(fry_sces), plot_knee)
 ```
 
 
@@ -262,7 +282,12 @@ emptydrops_200_cell_num <- emptydrops_filter_sces_200 %>%
   as.data.frame()
 rownames(emptydrops_200_cell_num) <- c("emptyDrops200")
 
-cr_filter_cell_num <- crlike_filtered_sces %>%
+emptydrops_500_cell_num <- emptydrops_filter_sces_500 %>%
+  purrr::map(get_num_cells) %>%
+  as.data.frame()
+rownames(emptydrops_500_cell_num) <- c("emptyDrops500")
+
+cr_filter_cell_num <- crlike_filter_sces %>%
   purrr::map(get_num_cells) %>%
   as.data.frame()
 rownames(cr_filter_cell_num) <- c("emptyDropsCellRanger")
@@ -272,7 +297,11 @@ knee_filter_cell_num <- knee_filtered_sces %>%
   as.data.frame() 
 rownames(knee_filter_cell_num) <- c("knee")
 
-names(cellranger_sces) <- sample_names
+names(cellranger_sces) <- sample_names[3:6]
+# add additional nuclei samples from previous benchmarking 
+cellranger_sces[["SCPCR000118-nuclei"]] <- cellranger_nuclei_sces[["SCPCR000118-cdnapre_mRNA"]]
+cellranger_sces[["SCPCR000119-nuclei"]] <- cellranger_nuclei_sces[["SCPCR000119-cdnapre_mRNA"]]
+                                                                  
 cellranger_cell_num <- cellranger_sces %>%
   purrr::map(get_num_cells) %>%
   as.data.frame()
@@ -283,7 +312,8 @@ combined_cell_num_df <- dplyr::bind_rows(emptydrops_cell_num,
                                          emptydrops_200_cell_num,
                                          cr_filter_cell_num, 
                                          knee_filter_cell_num,
-                                         cellranger_cell_num) %>%
+                                         cellranger_cell_num,
+                                         emptydrops_500_cell_num) %>%
   tibble::rownames_to_column("filtering_method") %>%
   tidyr::pivot_longer(cols = starts_with("SCPCR"),
                       names_to = "sample", 
@@ -291,13 +321,15 @@ combined_cell_num_df <- dplyr::bind_rows(emptydrops_cell_num,
 ```
 
 
-```{r fig.height=3, fig.width=5}
+```{r fig.height=7, fig.width=10}
 ggplot(combined_cell_num_df, aes(x = sample, y = number_cells, color = filtering_method)) + 
-  geom_point(size = 3)
+  geom_jitter() +
+  geom_sina(size = 4) + 
+  theme(axis.text.x = element_text(angle = 90))
 ```
-Here you can see that `emptyDropsCellRanger()` doesn't appear much better than just `emptyDrops()` and they both are still reporting higher cell numbers than Cell Ranger. 
+Here you can see that `emptyDropsCellRanger()` actually does appear to give more comprable cell numbers to Cell Ranger than `emptyDrops()`.
 Additionally, as expected, using the knee-based method decreases the numbers of cells across the board. 
-It appears that `emptyDrops()` with `lower=200` is the most comparable to Cell Ranger for all samples and we see that those cell numbers tend to be fairly similar. 
+It appears that `emptyDrops()` with `lower=200` or `lower=500` is the most comparable to Cell Ranger for all samples and we see that those cell numbers tend to be fairly similar. 
 
 
 ### Per Cell QC Metrics
@@ -313,7 +345,10 @@ emptydrops_filter_sces <- emptydrops_filter_sces %>%
 emptydrops_filter_sces_200 <- emptydrops_filter_sces_200 %>%
   purrr::map(~ add_cell_mito_qc(.x, mito = mito_genes))
 
-crlike_filtered_sces <- crlike_filtered_sces %>%
+emptydrops_filter_sces_500 <- emptydrops_filter_sces_500 %>%
+  purrr::map(~ add_cell_mito_qc(.x, mito = mito_genes))
+
+crlike_filter_sces <- crlike_filter_sces %>%
   purrr::map(~ add_cell_mito_qc(.x, mito = mito_genes))
 
 knee_filtered_sces <- knee_filtered_sces %>%
@@ -322,10 +357,12 @@ knee_filtered_sces <- knee_filtered_sces %>%
 # combine into one list 
 fry_filtered_sces <- list(emptydrops_filter_sces, 
                           emptydrops_filter_sces_200, 
-                          crlike_filtered_sces,
-                          knee_filtered_sces)
+                          crlike_filter_sces,
+                          knee_filtered_sces,
+                          emptydrops_filter_sces_500)
 names(fry_filtered_sces) <- c("emptyDrops", 
                               "emptyDrops200",
+                              "emptyDrops500",
                               "emptyDropsCellRanger",
                               "knee")
 
@@ -337,10 +374,24 @@ fry_coldata_df <- purrr::map_df(
 ) %>%
   dplyr::mutate(tool = "alevin-fry")
 
+# grab coldata from extra nuclei samples from cellranger 
+nuclei_names <- c("SCPCR000118-cdnapre_mRNA", "SCPCR000119-cdnapre_mRNA")
+nuclei_df <- dplyr::bind_rows(cellranger_nuclei_sces[nuclei_names] %>% 
+purrr::map(scpcaTools::coldata_to_df), .id = "quant_id") %>% 
+  dplyr::mutate(tool = "cellranger")
+
+coldata_cellranger <- dplyr::bind_rows(coldata_cellranger, nuclei_df)
+
 # merge with cellranger coldata
 coldata_cellranger <- coldata_cellranger %>%
   dplyr::mutate(filtering_method = "CellRanger") %>%
-  dplyr::mutate(quant_id = gsub("-.*", "", quant_id))
+  dplyr::mutate(quant_id = gsub("-.*", "", quant_id)) %>%
+  dplyr::mutate(quant_id = dplyr::case_when(quant_id == "SCPCR000118" ~ "SCPCR000118-nuclei",
+                                            quant_id == "SCPCR000119" ~ "SCPCR000119-nuclei",
+                                            quant_id == "SCPCR000126" ~ "SCPCR000126-cell",
+                                            quant_id == "SCPCR000127" ~ "SCPCR000127-cell",
+                                            quant_id == "SCPCR000220" ~ "SCPCR000220-nuclei",
+                                            quant_id == "SCPCR000221" ~ "SCPCR000221-nuclei"))
 # rename mito column names to match current version of scpcaTools::add_cell_mito_qc output
 colnames(coldata_cellranger) <- stringr::str_replace(colnames(coldata_cellranger), "^subsets_mito_", "mito_")
 
@@ -349,22 +400,23 @@ coldata_df <- dplyr::bind_rows(fry_coldata_df, coldata_cellranger)
 ```
 
 
-```{r fig.height=5, fig.width=5}
+```{r fig.height=10, fig.width=10}
 ggplot(coldata_df, aes(x = tool, y = sum, fill = filtering_method)) + 
   geom_boxplot() + 
   facet_wrap(~quant_id, nrow = 2) + 
   coord_cartesian(ylim = c(0,25000)) + 
   ylab("UMI/cell")
 ```
-```{r fig.height=5, fig.width=5}
+
+```{r fig.height=10, fig.width=10}
 ggplot(coldata_df, aes(x = tool, y = detected, fill = filtering_method)) + 
   geom_boxplot() + 
   facet_wrap(~quant_id, nrow = 2) + 
-  coord_cartesian(ylim = c(0,10000)) + 
+  coord_cartesian(ylim = c(0,7500)) + 
   ylab("Genes detected/cell")
 ```
-Here you can see that the median UMI/cell and genes detected/cell look lower for Alevin-fry with `emptyDrops` and `emptyDropsCellRanger` than Cell Ranger, which is consistent with the previous finding that they are reporting more cells than Cell Ranger. 
-However, if we use that threshold of `lower=200` for `emptyDrops`, we see a much more similar distribution and median of UMI/cell and genes detected/cell. 
+Here you can see that the median UMI/cell and genes detected/cell look lower for Alevin-fry with `emptyDrops` than Cell Ranger, which is consistent with the previous finding that they are reporting more cells than Cell Ranger. 
+However, if we use that threshold of `lower=200` or `lower=500` for `emptyDrops`, we see a much more similar distribution and median of UMI/cell and genes detected/cell. 
 
 The last check that we'll do is see how many of the cell barcodes are overlapping between the `emptyDrops` `lower=200` filtered sces and the Cell Ranger sces. 
 
@@ -379,16 +431,23 @@ percent_filter_overlap <- function(filter_sce, cellranger_sce){
   glue::glue("Percent of filtered cell barcodes also in Cell Ranger {percent_filter} \nPercent of Cell Ranger cell barcodes also in filtered {percent_cellranger}")
 }
 
-purrr::map2(emptydrops_filter_sces_200, 
-            cellranger_sces, 
+purrr::map2(emptydrops_filter_sces_500, 
+            cellranger_sces[names(emptydrops_filter_sces_500)], 
             percent_filter_overlap)
 ```
-It appears that the majority if the cell barcodes in Cell Ranger are also found in our filtered sces (which is a good sign), and over 75% of the cell barcodes that we see in the filtered sce are also found in Cell Ranger. 
+
+```{r}
+purrr::map2(emptydrops_filter_sces_200, 
+            cellranger_sces[names(emptydrops_filter_sces_200)], 
+            percent_filter_overlap)
+```
+
+It appears that the majority if the cell barcodes in Cell Ranger are also found in our filtered sces (which is a good sign), and over 75% of the cell barcodes that we see in the filtered sce are also found in Cell Ranger for both `lower=200` and `lower=500`. 
 
 ```{r}
 # Do the same test but with the emptyDrops lower = 100
 purrr::map2(emptydrops_filter_sces, 
-            cellranger_sces, 
+            cellranger_sces[names(emptydrops_filter_sces)], 
             percent_filter_overlap)
 ```
 In contrast, only 50% of the barcodes that are output from Alevin-fry filtered by `emptyDrops` with `lower=100` are found in Cell Ranger. 
