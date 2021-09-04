@@ -1,10 +1,13 @@
 ---
 title: "Comparison of EmptyDrops to CRLikeEmptyDrops"
 author: "Ally Hawkins for CCDL"
-output: 
+output:
+  html_document:
+    toc: yes
+    df_print: paged
   html_notebook:
-    toc: true
-    toc_float: true
+    toc: yes
+    toc_float: yes
 ---
 
 In this notebook, we are exploring different methods of filtering the output of Alevin-fry when using the `--unfiltered-pl` option, meaning all identified cell barcodes are included in the output. 
@@ -124,15 +127,6 @@ aws_copy_samples(local_dir = file_dir,
 
 ```
 
-```{r}
-s3_dir <- 's3://nextflow-ccdl-results/scpca/alevin-fry-unfiltered-quant/v0.3.0'
-local_dir <- file.path(file_dir, "alevin-fry-unfiltered")
-
-sync_call <- paste('aws s3 cp', s3_dir, local_dir, 
-                         '--exclude "*"', '--include "SCPCR000119-spliced_intron_txome_k31-salign-cr-like/alevin/quants_mat.mtx"', '--exclude "*.rad"',
-                         '--recursive')
-system(sync_call, ignore.stdout = TRUE)
-```
 
 
 ```{r}
@@ -322,9 +316,8 @@ combined_cell_num_df <- dplyr::bind_rows(emptydrops_cell_num,
 
 
 ```{r fig.height=7, fig.width=10}
-ggplot(combined_cell_num_df, aes(x = sample, y = number_cells, color = filtering_method)) + 
-  geom_jitter() +
-  geom_sina(size = 4) + 
+ggplot(combined_cell_num_df, aes(x = sample, y = number_cells, fill = filtering_method)) + 
+  geom_col(position = "dodge") +
   theme(axis.text.x = element_text(angle = 90))
 ```
 Here you can see that `emptyDropsCellRanger()` actually does appear to give more comprable cell numbers to Cell Ranger than `emptyDrops()`.
@@ -451,7 +444,7 @@ purrr::map2(emptydrops_filter_sces,
             percent_filter_overlap)
 ```
 In contrast, only 50% of the barcodes that are output from Alevin-fry filtered by `emptyDrops` with `lower=100` are found in Cell Ranger. 
-It appears that lowering the threshold of minimum UMI count helps retain a more similar group of cells to Cell Ranger. 
+It appears that increasing the threshold of minimum UMI count helps retain a more similar group of cells to Cell Ranger. 
 
 
 ## Session Info 
