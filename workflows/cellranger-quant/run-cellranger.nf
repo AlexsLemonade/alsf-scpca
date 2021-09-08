@@ -13,7 +13,7 @@ params.run_ids = "SCPCR000001,SCPCR000002"
 params.outdir = 's3://nextflow-ccdl-results/scpca/cellranger-quant'
 
 // technology options
-tech_list = ["10Xv2", "10Xv3", "10Xv3.1"]
+tech_list = ["10Xv2", "10Xv3", "10Xv3.1", "10Xv2_5prime"]
 
 // build full paths
 params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
