@@ -59,5 +59,6 @@ images/cellranger/bcl2fastq*.tar.gz
 # Ignore nextflow logs
 workflows/nextflow_logs/
 
-# Ignore results
+# Ignore results and sample-info
 /results
+/sample-info/

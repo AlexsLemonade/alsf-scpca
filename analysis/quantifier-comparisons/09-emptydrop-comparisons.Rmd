@@ -1,0 +1,463 @@
+---
+title: "Comparison of EmptyDrops to CRLikeEmptyDrops"
+author: "Ally Hawkins for CCDL"
+output:
+  html_document:
+    toc: yes
+    df_print: paged
+  html_notebook:
+    toc: yes
+    toc_float: yes
+---
+
+In this notebook, we are exploring different methods of filtering the output of Alevin-fry when using the `--unfiltered-pl` option, meaning all identified cell barcodes are included in the output. 
+
+The filtering techniques we are interested in exploring are `DropletUtils::emptyDrops()` and `DropletUtils::emptyDropsCellRanger()`. 
+Use of `DropletUtils::emptyDrops()` is in an attempt to more closely mirror the filtering performed in Cell Ranger and [StarSolo's emptyDrop like filtering.](https://github.com/alexdobin/STAR/blob/master/docs/STARsolo.md#cell-filtering-calling) 
+
+Previously, use of `DropletUtils::emptyDrops()` with default parameters resulted in much higher numbers of cells being kept in the filtered sce and of the cells that are identified in Alevin-fry and not in Cell Ranger, those cells have lower counts and genes/cell. 
+
+## Setup
+
+```{r}
+library(magrittr)
+library(ggplot2)
+library(SingleCellExperiment)
+library(scpcaTools)
+library(ggforce)
+set.seed(1234)
+```
+
+```{r}
+# import aws_copy_samples, make_sce_list, and quant_info_table functions
+function_path <- file.path(".." ,"benchmarking-functions", "R")
+file.path(function_path, list.files(function_path, pattern = "*.R$")) %>%
+  purrr::walk(source)
+```
+
+```{r}
+# set up file paths 
+base_dir <- here::here()
+file_dir <- file.path(base_dir, "data", "quants")
+results_dir <- file.path(base_dir, "data", "results")
+
+if(!dir.exists(file_dir)){
+  dir.create(file_dir, recursive = TRUE)
+}
+
+if(!dir.exists(results_dir)){
+  dir.create(results_dir)
+}
+
+```
+
+
+```{r}
+# grab metadata and mito genes from AWS 
+library_data_dir <- file.path(base_dir, 'sample-info')
+dir.create(library_data_dir, recursive = TRUE, showWarnings = FALSE)
+library_data_s3 <- 's3://ccdl-scpca-data/sample_info'
+annotation_files_s3 <- 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103/annotation/'
+
+# grab library metadata from location in s3
+sync_call <- paste('aws s3 sync', library_data_s3, library_data_dir,
+                   '--exclude "*"',
+                   '--include "*scpca-library-metadata.tsv"')
+system(sync_call, ignore.stdout = TRUE)
+
+# get mitochondrial gene list from s3
+sync_call <- paste('aws s3 sync', annotation_files_s3, library_data_dir,
+                   '--exclude "*"',
+                   '--include "*.mitogenes.txt"')
+system(sync_call, ignore.stdout = TRUE)
+```
+
+```{r}
+# read in mito genes and library metadata
+library_df <- readr::read_tsv(file.path(library_data_dir, "scpca-library-metadata.tsv"))
+select_metadata_df <- library_df %>%
+  dplyr::select(scpca_run_id, seq_unit)
+
+
+
+# read in mito gene list
+mito_file <- file.path(library_data_dir, "Homo_sapiens.GRCh38.103.mitogenes.txt")
+mito_genes <- readr::read_tsv(mito_file, col_names = "gene_id")
+mito_genes <- mito_genes %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+```
+
+
+```{r}
+#read in cellranger sces from previous benchmarking to use for comparisons
+cellranger_sces_file <- file.path(results_dir, "cellranger_sces.rds")
+cellranger_sces <- readr::read_rds(cellranger_sces_file)
+
+# read in cellranger sces with bad nuclei samples 
+cellranger_nuclei_sces_file <- file.path(results_dir, "cellranger_all_sces.rds")
+cellranger_nuclei_sces <- readr::read_rds(cellranger_nuclei_sces_file)
+
+# read in coldata file from previous benchmarking to grab cellranger data from 
+coldata_file <- file.path(results_dir, "coldata_qc.tsv")
+coldata_cellranger <- readr::read_tsv(coldata_file) %>%
+  dplyr::filter(tool == "cellranger")
+```
+
+## Create unfiltered SingleCellExperiments
+
+Here we are interested in testing the filtering techniques after pre-processing with Alevin-fry using our chosen parameters: selective alignment to the `splici` index and `cr-like-em` resolution
+
+We will grab just the files from S3 just for the configurations we are interested in. 
+
+```{r}
+s3_dir <- 's3://nextflow-ccdl-results/scpca'
+
+# copy fry samples 
+fry_samples <- c('SCPCR000126-spliced_intron_txome_k31-salign-cr-like-em',
+                 'SCPCR000127-spliced_intron_txome_k31-salign-cr-like-em',
+                 'SCPCR000220-spliced_intron_txome_k31-salign-cr-like-em',
+                 'SCPCR000221-spliced_intron_txome_k31-salign-cr-like-em')
+
+aws_copy_samples(local_dir = file_dir, 
+                 s3_dir,
+                 samples = fry_samples,
+                 tools = "alevin-fry-unfiltered")
+
+
+```
+
+
+
+```{r}
+# create quant_info_table to be used as input to make a list of sce objects 
+quant_info <- quant_info_table(data_dir = file_dir,
+                 tools = c("alevin-fry-unfiltered"),
+                 samples = c('SCPCR000118', 'SCPCR000119', 'SCPCR000126','SCPCR000127','SCPCR000220','SCPCR000221')) %>%
+  # filter to only include samples we are interested in comparing
+  dplyr::filter(alevin_resolution == "cr-like-em" | 
+                  # keep single nuclei samples from previous run with cr-like, salign for comparison
+                  (alevin_resolution == "cr-like" & alevin_alignment == "salign" & sample %in% c('SCPCR000118', 'SCPCR000119'))) %>%
+  # change filter to be FALSE for all since we want the unfiltered sce object
+  dplyr::mutate(filter = FALSE) %>%
+  dplyr::left_join(select_metadata_df, by = c("sample" = "scpca_run_id")) %>%
+  # get which_counts column based on seq_unit to be used to import quants data into R
+  dplyr::mutate(which_counts = dplyr::case_when(seq_unit == "cell" ~ "spliced",
+                                                seq_unit == "nucleus" ~ "unspliced"))
+```
+
+
+```{r}
+# create a list of sces 
+fry_df <- quant_info %>%
+  dplyr::filter(tool == "alevin-fry")
+
+# import alevin-fry data as sce
+fry_sces <- mapply(read_alevin,
+       fry_df$data_dir,
+       FALSE,
+       fry_df$intron_mode,
+       fry_df$usa_mode,
+       fry_df$which_counts)
+
+sample_names <- c('SCPCR000118-nuclei', 'SCPCR000119-nuclei', 'SCPCR000126-cell','SCPCR000127-cell', 'SCPCR000220-nuclei', 'SCPCR000221-nuclei')
+names(fry_sces) <- sample_names
+
+# save rds
+readr::write_rds(fry_sces, file.path(results_dir, "alevin-fry-cr-like-em-sces.rds"))
+```
+
+## Perform Filtering 
+
+### EmptyDrops 
+
+Here we are going to use `DropletUtils::emptyDrops()` to perform filtering using the default threshold of `lower=100` and testing the threshold of `lower=200`. 
+The `lower` parameter is used to dictate which cells are chosen to create the ambient profile and represents the lower bound on the total UMI count at which all barcodes are assumed to correspond to empty droplets.
+Using this ambient RNA pool, the `emptyDrops()` function tests whether the expression profile of each cell barcode is significantly different from the ambient RNA pool or not. 
+
+```{r}
+# use scpcaTools::filter_counts() to filter sces 
+emptydrops_filter_sces <- purrr::map(fry_sces, ~ filter_counts(sce = .x, lower = 100))
+readr::write_rds(emptydrops_filter_sces, file.path(results_dir, "alevin-fry-cr-like-em-emptydrops-100-sces.rds"))
+
+emptydrops_filter_sces_200 <- purrr::map(fry_sces, ~ filter_counts(sce = .x, lower = 200))
+readr::write_rds(emptydrops_filter_sces_200, file.path(results_dir, "alevin-fry-cr-like-em-emptydrops-200-sces.rds"))
+
+emptydrops_filter_sces_500 <- purrr::map(fry_sces, ~ filter_counts(sce = .x, lower = 500))
+readr::write_rds(emptydrops_filter_sces_500, file.path(results_dir, "alevin-fry-cr-like-em-emptydrops-500-sces.rds"))
+```
+
+
+### cellRangerLikeEmptyDrops
+
+Next, we will create a list of filtered sces using the `DropletUtils::emptyDropsCellRanger()` function with the default settings. 
+Currently, this function is not supported in the `DropletUtils()` package avaliable from Bioconductor. 
+The version that I am using can be found at [MarioniLab/DropletUtils#cellranger](https://github.com/MarioniLab/DropletUtils/pull/66) and was installed by cloning the repo and locally building the package. 
+
+```{r}
+# custom function for filtering using emptyDropsCellRanger
+filter_counts_crlike <- function(sce, fdr_cutoff = 0.01){
+  # round needed before emptyDropsCellRanger as a non-round matrix doesn't work right now 
+  counts <- round(counts(sce))
+  empty_df <- DropletUtils::emptyDropsCellRanger(m = counts)
+  cells <- rownames(empty_df)[which(empty_df$FDR <= fdr_cutoff)]
+  sce <- sce[, cells]
+}
+
+crlike_filter_sces <- purrr::map(fry_sces, ~ filter_counts_crlike(sce = .x))
+readr::write_rds(crlike_filter_sces, file.path(results_dir, "alevin-fry-cr-like-em-cr-filtering-sces.rds"))
+```
+
+
+## Knee Filtering
+
+Let's also see what would happen if we were to perform knee based filtering on these samples and how that would compare to the cells found in CellRanger. 
+It's likely that this may discard more cells than we anticipate and result in filtering that is too stringent, but it is worth taking a look at the knee plots for reference. 
+
+```{r}
+# make a knee plot, plotting the inflection point for each sample in Alevin-fry
+plot_knee <- function(sce, sample) {
+  ranks <- DropletUtils::barcodeRanks(counts(sce))
+  ranks_df <- ranks %>%
+    as.data.frame()
+  
+  ggplot(ranks_df, aes(x = rank, y = total)) +
+    geom_point() +
+    geom_hline(yintercept = metadata(ranks)$inflection, color = "red") +
+    scale_y_log10() +
+    scale_x_log10() + 
+    ggtitle(sample)
+}
+
+purrr::map2(fry_sces, names(fry_sces), plot_knee)
+```
+
+
+
+```{r}
+# filter using the inflection point 
+knee_filter <- function(sce) {
+  ranks <- DropletUtils::barcodeRanks(counts(sce))
+  cells <- rownames(ranks[which(ranks$total > metadata(ranks)$inflection),])
+  sce <- sce[,cells]
+}
+
+knee_filtered_sces <- fry_sces %>%
+  purrr::map(knee_filter)
+
+readr::write_rds(knee_filtered_sces, file.path(results_dir, "alevin-fry-cr-like-em-knee-filtering-sces.rds"))
+```
+
+
+## Compare Cells between EmptyDrops and cellRangerLikeEmptyDrops
+
+Now that we have performed the different filtering strategies we are ready to compare the cells that remain after filtering. 
+We will first take a look at the number of cells that remain post filtering and compare those numbers to the Cell Ranger results. 
+Then we will look at the distribution of UMI/cell and genes/cell with different filtering strategies in comparison to Cell Ranger. 
+
+### Number of Cells Filtered
+
+```{r}
+# function to grab the number of cells from an sce object 
+get_num_cells <- function(sce){
+  num_cells <- dim(sce)[2]
+}
+```
+
+
+```{r}
+emptydrops_cell_num <- emptydrops_filter_sces %>%
+  purrr::map(get_num_cells) %>%
+  as.data.frame()
+rownames(emptydrops_cell_num) <- c("emptyDrops")
+
+emptydrops_200_cell_num <- emptydrops_filter_sces_200 %>%
+  purrr::map(get_num_cells) %>%
+  as.data.frame()
+rownames(emptydrops_200_cell_num) <- c("emptyDrops200")
+
+emptydrops_500_cell_num <- emptydrops_filter_sces_500 %>%
+  purrr::map(get_num_cells) %>%
+  as.data.frame()
+rownames(emptydrops_500_cell_num) <- c("emptyDrops500")
+
+cr_filter_cell_num <- crlike_filter_sces %>%
+  purrr::map(get_num_cells) %>%
+  as.data.frame()
+rownames(cr_filter_cell_num) <- c("emptyDropsCellRanger")
+
+knee_filter_cell_num <- knee_filtered_sces %>%
+  purrr::map(get_num_cells) %>%
+  as.data.frame() 
+rownames(knee_filter_cell_num) <- c("knee")
+
+names(cellranger_sces) <- sample_names[3:6]
+# add additional nuclei samples from previous benchmarking 
+cellranger_sces[["SCPCR000118-nuclei"]] <- cellranger_nuclei_sces[["SCPCR000118-cdnapre_mRNA"]]
+cellranger_sces[["SCPCR000119-nuclei"]] <- cellranger_nuclei_sces[["SCPCR000119-cdnapre_mRNA"]]
+                                                                  
+cellranger_cell_num <- cellranger_sces %>%
+  purrr::map(get_num_cells) %>%
+  as.data.frame()
+rownames(cellranger_cell_num) <- c("CellRanger")
+
+# create combined dataframe with number of cells and filtering method 
+combined_cell_num_df <- dplyr::bind_rows(emptydrops_cell_num,
+                                         emptydrops_200_cell_num,
+                                         cr_filter_cell_num, 
+                                         knee_filter_cell_num,
+                                         cellranger_cell_num,
+                                         emptydrops_500_cell_num) %>%
+  tibble::rownames_to_column("filtering_method") %>%
+  tidyr::pivot_longer(cols = starts_with("SCPCR"),
+                      names_to = "sample", 
+                      values_to = "number_cells")
+```
+
+
+```{r fig.height=7, fig.width=10}
+ggplot(combined_cell_num_df, aes(x = sample, y = number_cells, fill = filtering_method)) + 
+  geom_col(position = "dodge") +
+  theme(axis.text.x = element_text(angle = 90))
+```
+Here you can see that `emptyDropsCellRanger()` actually does appear to give more comprable cell numbers to Cell Ranger than `emptyDrops()`.
+Additionally, as expected, using the knee-based method decreases the numbers of cells across the board. 
+It appears that `emptyDrops()` with `lower=200` or `lower=500` is the most comparable to Cell Ranger for all samples and we see that those cell numbers tend to be fairly similar. 
+
+
+### Per Cell QC Metrics
+
+Previously we had seen that cells identified in Alevin-fry, but not in Cell Ranger, led to a decrease in the median UMI/cell and genes detected/cell. 
+However, if we now filter our cells to begin with a more similar population to Cell Ranger, do we see that the distribution of UMI/cell and genes detected/cell is on par with Cell Ranger, or is it still lower across the board? 
+
+```{r}
+# calculate per cell QC stats 
+emptydrops_filter_sces <- emptydrops_filter_sces %>%
+  purrr::map(~ add_cell_mito_qc(.x, mito = mito_genes))
+
+emptydrops_filter_sces_200 <- emptydrops_filter_sces_200 %>%
+  purrr::map(~ add_cell_mito_qc(.x, mito = mito_genes))
+
+emptydrops_filter_sces_500 <- emptydrops_filter_sces_500 %>%
+  purrr::map(~ add_cell_mito_qc(.x, mito = mito_genes))
+
+crlike_filter_sces <- crlike_filter_sces %>%
+  purrr::map(~ add_cell_mito_qc(.x, mito = mito_genes))
+
+knee_filtered_sces <- knee_filtered_sces %>%
+  purrr::map(~ add_cell_mito_qc(.x, mito= mito_genes))
+
+# combine into one list 
+fry_filtered_sces <- list(emptydrops_filter_sces, 
+                          emptydrops_filter_sces_200, 
+                          crlike_filter_sces,
+                          knee_filtered_sces,
+                          emptydrops_filter_sces_500)
+names(fry_filtered_sces) <- c("emptyDrops", 
+                              "emptyDrops200",
+                              "emptyDrops500",
+                              "emptyDropsCellRanger",
+                              "knee")
+
+# convert coldata into dataframe for all alevin-fry filtering methods 
+fry_coldata_df <- purrr::map_df(
+  fry_filtered_sces,
+  ~ purrr::map_df(.x, scpcaTools::coldata_to_df, .id = "quant_id"),
+  .id = "filtering_method"
+) %>%
+  dplyr::mutate(tool = "alevin-fry")
+
+# grab coldata from extra nuclei samples from cellranger 
+nuclei_names <- c("SCPCR000118-cdnapre_mRNA", "SCPCR000119-cdnapre_mRNA")
+nuclei_df <- dplyr::bind_rows(cellranger_nuclei_sces[nuclei_names] %>% 
+purrr::map(scpcaTools::coldata_to_df), .id = "quant_id") %>% 
+  dplyr::mutate(tool = "cellranger")
+
+coldata_cellranger <- dplyr::bind_rows(coldata_cellranger, nuclei_df)
+
+# merge with cellranger coldata
+coldata_cellranger <- coldata_cellranger %>%
+  dplyr::mutate(filtering_method = "CellRanger") %>%
+  dplyr::mutate(quant_id = gsub("-.*", "", quant_id)) %>%
+  dplyr::mutate(quant_id = dplyr::case_when(quant_id == "SCPCR000118" ~ "SCPCR000118-nuclei",
+                                            quant_id == "SCPCR000119" ~ "SCPCR000119-nuclei",
+                                            quant_id == "SCPCR000126" ~ "SCPCR000126-cell",
+                                            quant_id == "SCPCR000127" ~ "SCPCR000127-cell",
+                                            quant_id == "SCPCR000220" ~ "SCPCR000220-nuclei",
+                                            quant_id == "SCPCR000221" ~ "SCPCR000221-nuclei"))
+# rename mito column names to match current version of scpcaTools::add_cell_mito_qc output
+colnames(coldata_cellranger) <- stringr::str_replace(colnames(coldata_cellranger), "^subsets_mito_", "mito_")
+
+# create one coldata df with both alevin fry and cellranger, all filtering methods
+coldata_df <- dplyr::bind_rows(fry_coldata_df, coldata_cellranger)
+```
+
+
+```{r fig.height=10, fig.width=10}
+ggplot(coldata_df, aes(x = tool, y = sum, fill = filtering_method)) + 
+  geom_boxplot() + 
+  facet_wrap(~quant_id, nrow = 2) + 
+  coord_cartesian(ylim = c(0,25000)) + 
+  ylab("UMI/cell")
+```
+
+```{r fig.height=10, fig.width=10}
+ggplot(coldata_df, aes(x = tool, y = detected, fill = filtering_method)) + 
+  geom_boxplot() + 
+  facet_wrap(~quant_id, nrow = 2) + 
+  coord_cartesian(ylim = c(0,7500)) + 
+  ylab("Genes detected/cell")
+```
+Here you can see that the median UMI/cell and genes detected/cell look lower for Alevin-fry with `emptyDrops` than Cell Ranger, which is consistent with the previous finding that they are reporting more cells than Cell Ranger. 
+However, if we use that threshold of `lower=200` or `lower=500` for `emptyDrops`, we see a much more similar distribution and median of UMI/cell and genes detected/cell. 
+
+The last check that we'll do is see how many of the cell barcodes are overlapping between the `emptyDrops` `lower=200` filtered sces and the Cell Ranger sces. 
+
+```{r}
+percent_filter_overlap <- function(filter_sce, cellranger_sce){
+  overlap <- length(intersect(colnames(filter_sce), 
+                              colnames(cellranger_sce)))
+  total_filter <- length(colnames(filter_sce))
+  total_cellranger <- length(colnames(cellranger_sce))
+  percent_filter <- round(overlap/total_filter * 100,2)
+  percent_cellranger <- round(overlap/total_cellranger * 100,2)
+  glue::glue("Percent of filtered cell barcodes also in Cell Ranger {percent_filter} \nPercent of Cell Ranger cell barcodes also in filtered {percent_cellranger}")
+}
+
+purrr::map2(emptydrops_filter_sces_500, 
+            cellranger_sces[names(emptydrops_filter_sces_500)], 
+            percent_filter_overlap)
+```
+
+```{r}
+purrr::map2(emptydrops_filter_sces_200, 
+            cellranger_sces[names(emptydrops_filter_sces_200)], 
+            percent_filter_overlap)
+```
+
+It appears that the majority if the cell barcodes in Cell Ranger are also found in our filtered sces (which is a good sign), and over 75% of the cell barcodes that we see in the filtered sce are also found in Cell Ranger for both `lower=200` and `lower=500`. 
+
+```{r}
+# Do the same test but with the emptyDrops lower = 100
+purrr::map2(emptydrops_filter_sces, 
+            cellranger_sces[names(emptydrops_filter_sces)], 
+            percent_filter_overlap)
+```
+In contrast, only 50% of the barcodes that are output from Alevin-fry filtered by `emptyDrops` with `lower=100` are found in Cell Ranger. 
+It appears that increasing the threshold of minimum UMI count helps retain a more similar group of cells to Cell Ranger. 
+
+## Conclusions
+
+Overall, it appears that `emptyDrops` with `lower=200` tends to give a cell number equal to Cell Ranger or a little bit higher, while `lower=500` results in a cell number that is either equal to Cell Ranger or a little bit lower. 
+Use of `lower=200` appears to be more lenient, but `lower=500` is what is suggested in the Alevin-fry preprint. 
+
+Use of `emptyDropsCellRanger` also looks promising with numbers more consistent to Cell Ranger, however at this point this is under developed and we are not inclined to use it until it is more stable and released. 
+This might be worth revisiting at a later point if it changes before we process everything. 
+
+
+
+## Session Info 
+```{r}
+sessionInfo()
+```
+
