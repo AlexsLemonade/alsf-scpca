@@ -446,6 +446,15 @@ purrr::map2(emptydrops_filter_sces,
 In contrast, only 50% of the barcodes that are output from Alevin-fry filtered by `emptyDrops` with `lower=100` are found in Cell Ranger. 
 It appears that increasing the threshold of minimum UMI count helps retain a more similar group of cells to Cell Ranger. 
 
+## Conclusions
+
+Overall, it appears that `emptyDrops` with `lower=200` tends to give a cell number equal to Cell Ranger or a little bit higher, while `lower=500` results in a cell number that is either equal to Cell Ranger or a little bit lower. 
+Use of `lower=200` appears to be more lenient, but `lower=500` is what is suggested in the Alevin-fry preprint. 
+
+Use of `emptyDropsCellRanger` also looks promising with numbers more consistent to Cell Ranger, however at this point this is under developed and we are not inclined to use it until it is more stable and released. 
+This might be worth revisiting at a later point if it changes before we process everything. 
+
+
 
 ## Session Info 
 ```{r}
