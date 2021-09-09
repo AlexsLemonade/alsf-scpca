@@ -170,7 +170,7 @@ miQC_filter <- function(sce, model_type = "linear", posterior_cutoff = 0.75){
 
 # filter using manual 
 manual_filter <- function(sce, 
-                          mito_cutoff = 10, 
+                          mito_cutoff = 20, 
                           genes_detected_cutoff = 500) {
   
   # get vector of cells to keep 
@@ -183,6 +183,8 @@ manual_filter <- function(sce,
 
 manual_filtered_sce <- purrr::map(cr_like_sce, manual_filter)
 miQC_filtered_sce <- purrr::map(cr_like_sce, miQC_filter)
+manual_filtered_sce_10 <- purrr::map(cr_like_sce, manual_filter, mito_cutoff = 10)
+manual_filtered_sce_mito_only <- purrr::map(cr_like_sce, manual_filter, genes_detected_cutoff = 0)
 ```
 
 
@@ -195,7 +197,17 @@ get_num_cells <- function(sce){
 manual_cell_num <- manual_filtered_sce %>%
   purrr::map(get_num_cells) %>%
   as.data.frame()
-rownames(manual_cell_num) <- c("manual")
+rownames(manual_cell_num) <- c("manual_mito_20")
+
+manual_cell_num_10 <- manual_filtered_sce_10 %>%
+  purrr::map(get_num_cells) %>%
+  as.data.frame()
+rownames(manual_cell_num_10) <- c("manual_mito_10")
+
+manual_cell_num_mito_only <- manual_filtered_sce_mito_only %>%
+  purrr::map(get_num_cells) %>%
+  as.data.frame()
+rownames(manual_cell_num_mito_only) <- c("manual_mito_only")
 
 miQC_cell_num <- miQC_filtered_sce %>%
   purrr::map(get_num_cells) %>%
@@ -210,6 +222,8 @@ rownames(pre_filter_cell_num) <- c("pre_filtering")
 # create dataframe for plotting with number of cells per sce 
 combined_cell_num_df <- dplyr::bind_rows(manual_cell_num,
                                          miQC_cell_num,
+                                         manual_cell_num_10,
+                                         manual_cell_num_mito_only,
                                          pre_filter_cell_num) %>%
   tibble::rownames_to_column("filtering_method") %>%
   tidyr::pivot_longer(cols = starts_with("SCPCR"),
@@ -218,14 +232,23 @@ combined_cell_num_df <- dplyr::bind_rows(manual_cell_num,
 ```
 
 ```{r}
-ggplot(combined_cell_num_df, aes(x = sample, y = number_cells, color = filtering_method)) + 
-  geom_point(size = 3) + 
+ggplot(combined_cell_num_df, aes(x = sample, y = number_cells, fill = filtering_method)) + 
+  geom_col(position = "dodge") +
   theme(axis.text.x = element_text(angle = 90))
 ```
 
 
-It looks like manual filtering is removing more cells than miQC for single-cell, but similar cell numbers are removed in single-nuclei samples with either manual or miQC. 
+It looks like manual filtering (with these specific cutoff combinations) are removing more cells than miQC for single-cell, but more cells are removed in single-nuclei samples with either miQC than manual. 
 
+
+## Conclusions
+
+1. Using the default parameters for miQC with the linear mixture model gives the most consistent and reliable results where the majority of cells with low mito and high unique genes are classified as cells to keep, there are still some caveats.
+2. Cells from single-nuclei samples do not show as high a range of mito content and therefore the mixture model suggests a cutoff that leads to cells with a lower mito content than in single-cell being classified as compromised. This however is slightly expected considering single-nuclei samples should have little to no mito reads.
+3. From these results we decided that we would not actually perform any further filtering ourselves, but rather apply miQC to each sample using the linear mixture model to obtain the posterior probability of a cell being compromised. Then we would create a ccdl_suggests column to identify which cells we would suggest filtering.
+
+Suggested next steps include comparing PCA or UMAP results using the different filtering thresholds to identify if any clusters corresponding to "bad cells" remain. 
+Additionally, we will need to identify if we want to add any additional criteria besides the posterior probability computed by miQC to be included as a "keep" cell in the `ccdl_suggests` column that will be appended to the `colData` for every filtered sce object. 
 
 ## Session Info
 ```{r}
