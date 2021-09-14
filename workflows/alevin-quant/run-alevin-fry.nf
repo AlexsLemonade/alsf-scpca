@@ -34,7 +34,8 @@ t2g_map = ['cdna': 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv',
 // 10X barcode files
 barcodes = ['10Xv2': '737K-august-2016.txt',
             '10Xv3': '3M-february-2018.txt',
-            '10Xv3.1': '3M-february-2018.txt']
+            '10Xv3.1': '3M-february-2018.txt',
+            '10Xv2_5prime': '737K-august-2016.txt']
 
 // supported single cell technologies
 tech_list = barcodes.keySet()
@@ -72,14 +73,15 @@ process alevin{
     // choose flag by technology
     tech_flag = ['10Xv2': '--chromium',
                  '10Xv3': '--chromiumV3',
-                 '10Xv3.1': '--chromiumV3']
+                 '10Xv3.1': '--chromiumV3',
+                 '10Xv2_5prime': '--chromium']
     // run alevin like normal with the --rad flag 
     // creates output directory with RAD file needed for alevin-fry
     // uses sketch mode if --sketch was included at invocation
     """
     mkdir -p ${run_dir}
     salmon alevin \
-      -l ISR \
+      -l ${tech == '10Xv2_5prime' ? 'ISF' : 'ISR'} \
       ${tech_flag[tech]} \
       -1 ${read1} \
       -2 ${read2} \
