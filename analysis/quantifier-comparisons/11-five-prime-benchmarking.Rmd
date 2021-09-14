@@ -122,7 +122,7 @@ Interestingly we see that alevin-fry shows higher mito content per cell and lowe
 
 ### Shared Cells, Minimum Gene Coverage
 
-We can also restrict the comparisons to only include genes that are found in at least 5% of cells to see if that low covered genes are affecting the distributions at all. 
+We can also restrict the comparisons to only include genes that are found in at least 5% of cells to see if low covered genes are affecting the distributions at all. 
 To do that we will need to recalculate the per cell metrics using only genes found in > 5% of cells. 
 
 ```{r}
