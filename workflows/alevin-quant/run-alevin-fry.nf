@@ -81,7 +81,7 @@ process alevin{
     """
     mkdir -p ${run_dir}
     salmon alevin \
-      -l ${tech == '10Xv2_5prime' ? 'lISF' : 'lISR'} \
+      -l ${tech == '10Xv2_5prime' ? 'ISF' : 'ISR'} \
       ${tech_flag[tech]} \
       -1 ${read1} \
       -2 ${read2} \
