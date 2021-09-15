@@ -58,18 +58,62 @@ cellranger_sce <- readr::read_rds(cellranger_file)
 ```
 
 ```{r}
-alevin_fry_tools <- c("splici_salign_cr-like", "splici_salign_cr-like-em")
+fry_filtering <- c("knee", "unfiltered")
 
 # merge coldata df with quant_info
 coldata_info_df <- coldata_df %>%
   # rename tool to be either cellranger or alevin-fry
-  dplyr::mutate(tool = ifelse(tool %in% alevin_fry_tools, "alevin-fry", "cellranger")) %>%
+  dplyr::mutate(tool = ifelse(tool == "splici_salign_cr-like-em", "alevin-fry", "cellranger")) %>%
   dplyr::left_join(quant_info,
                    by = c("tool" = "tool", 
-                          "quant_id" = "quant_dir"))
+                          "quant_id" = "quant_dir")) %>%
+  dplyr::mutate(filter_strategy = ifelse(filter_strategy %in% fry_filtering, filter_strategy, "cellranger"))
 ```
 
-We are only interested in looking at cells that are found in both tools, so we restrict our analysis to cells that are present in both.  
+## Per Cell Comparisons
+
+### All Cells
+
+In order to see if there are any differences between the two Alevin-fry filtering strategies in the ability to assign reads to each cell barcode, we first are looking at all cells before restricting to shared cells only. 
+
+```{r}
+# mito content in shared cells
+ggplot(coldata_info_df, aes(x = tool, y = subsets_mito_percent, fill = filter_strategy)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Mito Percent") + 
+  xlab("")
+```
+
+```{r}
+ggplot(coldata_info_df, aes(x = tool, y = sum, fill = filter_strategy)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  ylim(c(0,30000))
+```
+
+```{r}
+ggplot(coldata_info_df, aes(x = tool, y = detected, fill = filter_strategy)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") + 
+  ylim(c(0,6000))
+```
+Here, we see that the knee filtering doesn't provide an advantage over use of the unfiltered permit list, and regardless of filtering the counts and genes detected/cell are lower than with Cell Ranger. 
+It appears that these differences are due to an issue with alignment and mapping in Alevin-fry and not with cell barcode assignment.
+
+### Shared Cells
+
+We are also interested in looking at cells that are found in both tools, so we restrict our analysis to cells that are present in both.  
 
 ```{r}
 # filter for cells that are found in both alevin + cellranger
@@ -77,20 +121,18 @@ cell_counts <- coldata_info_df %>%
   dplyr::count(cell_id, sample)
 
 common_cells <- cell_counts %>%
-  dplyr::filter(n == 2) %>%
+  dplyr::filter(n == 3) %>%
   dplyr::pull(cell_id)
 
 coldata_qc_common <- coldata_info_df %>%
   dplyr::filter(cell_id %in% common_cells) 
 ```
 
-## Per Cell Comparisons
-
 Here we are looking at the per cell metrics in just the shared cells across both alevin-fry and Cell Ranger.
 
 ```{r}
 # mito content in shared cells
-ggplot(coldata_qc_common, aes(x = tool, y = subsets_mito_percent, fill = tool)) + 
+ggplot(coldata_qc_common, aes(x = tool, y = subsets_mito_percent, fill = filter_strategy)) + 
   geom_boxplot() + 
   facet_grid(~ sample) +
   theme_classic() + 
@@ -99,26 +141,26 @@ ggplot(coldata_qc_common, aes(x = tool, y = subsets_mito_percent, fill = tool)) 
   xlab("")
 ```
 ```{r}
-ggplot(coldata_qc_common, aes(x = tool, y = sum, fill = tool)) + 
+ggplot(coldata_qc_common, aes(x = tool, y = sum, fill = filter_strategy)) + 
   geom_boxplot() + 
   facet_grid(~ sample) +
   theme_classic() + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   ylab("UMI/cell") + 
   xlab("") + 
-  ylim(c(0,40000))
+  ylim(c(0,30000))
 ```
 ```{r}
-ggplot(coldata_qc_common, aes(x = tool, y = detected, fill = tool)) + 
+ggplot(coldata_qc_common, aes(x = tool, y = detected, fill = filter_strategy)) + 
   geom_boxplot() + 
   facet_grid(~ sample) +
   theme_classic() + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   ylab("Genes detected/cell") + 
   xlab("") + 
-  ylim(c(0,7500))
+  ylim(c(0,6000))
 ```
-Interestingly we see that alevin-fry shows higher mito content per cell and lower overall counts and number of genes detected per cell than Cell Ranger. 
+Interestingly we see that alevin-fry shows higher mito content per cell and lower overall counts and number of genes detected per cell than Cell Ranger even in shared cells. 
 
 ### Shared Cells, Minimum Gene Coverage
 
@@ -147,7 +189,8 @@ sce_threshold_list <- sce_list %>%
 coldata_threshold <- sce_threshold_list %>%
   purrr::map_df(scpcaTools::coldata_to_df, .id = "quant_id") %>%
   # join with quant info to get sample and tool information 
-  dplyr::left_join(quant_info, by = c("quant_id" = "quant_dir"))
+  dplyr::left_join(quant_info, by = c("quant_id" = "quant_dir")) %>%
+  dplyr::mutate(filter_strategy = ifelse(filter_strategy %in% fry_filtering, filter_strategy, "cellranger"))
 ```
 
 ```{r}
@@ -156,7 +199,7 @@ cell_counts_threshold <- coldata_threshold %>%
   dplyr::count(cell_id, sample)
 
 common_cells_threshold <- cell_counts_threshold %>%
-  dplyr::filter(n == 2) %>%
+  dplyr::filter(n == 3) %>%
   dplyr::pull(cell_id)
 
 qc_common_threshold <- coldata_threshold %>%
@@ -166,17 +209,17 @@ qc_common_threshold <- coldata_threshold %>%
 ```
 
 ```{r}
-ggplot(qc_common_threshold, aes(x = tool, y = sum, fill = tool)) + 
+ggplot(qc_common_threshold, aes(x = tool, y = sum, fill = filter_strategy)) + 
   geom_boxplot() + 
   facet_grid(~ sample) +
   theme_classic() + 
   theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
   ylab("UMI/cell") + 
   xlab("") + 
-  ylim(c(0,40000))
+  ylim(c(0,30000))
 ```
 ```{r}
-ggplot(qc_common_threshold, aes(x = tool, y = detected, fill = tool)) + 
+ggplot(qc_common_threshold, aes(x = tool, y = detected, fill = filter_strategy)) + 
   geom_boxplot() + 
   facet_grid(~ sample) +
   theme_classic() + 
@@ -199,7 +242,8 @@ rowdata_info_df <- rowdata_df %>%
                                         tool == "cellranger" ~ "cellranger")) %>%
   dplyr::left_join(quant_info,
                    by = c("tool" = "tool", 
-                          "quant_id" = "quant_dir"))
+                          "quant_id" = "quant_dir")) %>%
+  dplyr::mutate(filter_strategy = ifelse(filter_strategy %in% fry_filtering, filter_strategy, "cellranger"))
 
 
 gene_counts <- rowdata_info_df %>% 
@@ -209,7 +253,7 @@ gene_counts <- rowdata_info_df %>%
 
 # restrict to only common genes 
 common_genes <- gene_counts %>%
-  dplyr::filter(n == 2) %>%
+  dplyr::filter(n == 3) %>%
   dplyr::pull(gene_id)
 
 rowdata_qc_common <- rowdata_info_df %>%
@@ -221,10 +265,10 @@ rowdata_qc_common <- rowdata_info_df %>%
 ```{r}
 # spread table for comparisons
 rowdata_cor <- rowdata_qc_common %>%
-  dplyr::select(tool, gene_id, sample, mean) %>%
+  dplyr::select(tool, gene_id, sample, mean, filter_strategy) %>%
   # spread the mean expression stats to one column per caller
   tidyr::pivot_wider(id_cols = c(gene_id, sample),
-                     names_from = c("tool"),
+                     names_from = c("tool", "filter_strategy"),
                      values_from = mean) %>%
   # drop rows with NA values to ease correlation calculation
   tidyr::drop_na()
@@ -236,19 +280,32 @@ rowdata_cor <- rowdata_qc_common %>%
 rowdata_cor %>% 
   dplyr::group_by(sample) %>%
   dplyr::summarize(
-    alevin_fry_cellranger_cor = cor(`cellranger`, `alevin-fry`, method = "spearman")
+    alevin_fry_knee_cellranger_cor = cor(`cellranger_cellranger`, `alevin-fry_knee`, method = "spearman"),
+    alevin_fry_unfiltered_cellranger_cor = cor(`cellranger_cellranger`, `alevin-fry_unfiltered`, method = "spearman")
   )
 ```
 ```{r}
-ggplot(rowdata_cor, aes(x = `cellranger`, y = `alevin-fry`)) +
+ggplot(rowdata_cor, aes(x = `cellranger_cellranger`, y = `alevin-fry_unfiltered`)) +
   geom_point(size = 0.5, alpha = 0.1) + 
   facet_wrap(~ sample) + 
   scale_x_log10() + 
   scale_y_log10() + 
-  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry Mean gene expression") + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry, unfiltered permit list, Mean gene expression") + 
   theme_classic()
 ```
-Unlike with the 3' libraries, the 5' libraries have fairly poor correlation between Alevin-fry and Cell Ranger. 
+
+```{r}
+ggplot(rowdata_cor, aes(x = `cellranger_cellranger`, y = `alevin-fry_knee`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry, Knee filtering, Mean gene expression") + 
+  theme_classic()
+```
+
+
+Unlike with the 3' libraries, the 5' libraries have fairly poor correlation between Alevin-fry and Cell Ranger, regardless of using knee or the permit list option. 
 It looks like there is more of a blob shape rather than correlation along the diagonal, and for SCPCR000287, Cell Ranger tends to give a higher gene expression for most genes than with Alevin-fry. 
 
 
