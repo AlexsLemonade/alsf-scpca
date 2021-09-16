@@ -48,8 +48,9 @@ mito_genes <- mito_genes %>%
   unique()
 ```
 
+## MiQC Exploration
 
-## Plot Metrics 
+### Plot Metrics 
 
 Before we can do any modeling and perform any filtering, let's look at the distribution of mitochondrial fraction per cell and unique genes detected per cell. 
 The assumptions of miQC rely on having a distribution of mitochondrial reads and unique genes found. 
@@ -74,7 +75,7 @@ purrr::iwalk(cr_like_sce, plot_miQC_metrics)
 Already you can see that the plot shows a distribution of mitochondrial reads from 0-100% for the two single cell samples, but not for the single-nuclei samples. 
 This could affect the ability of the model to distinguish compromised cells. 
 
-## Plot Model 
+### Plot Model 
 
 Now we can actually look at the miQC model and what cells will be considered compromised and filtered out. 
 Here, I'm plotting the probabilities that each cell is compromised as calculated by miQC, which cells would be filtered out using a given cutoff, and then comparing it to if we were to filter our cells using a pre determind threshold. 
@@ -122,7 +123,7 @@ Using the suggested parameters from miQC we see that it does a fairly good job o
 For the single-nuclei samples however, it looks like the model is throwing away a lot more cells than we may want to probably due to the low range in mitochondrial percentages to begin with. 
 Let's see if we alter some of the parameters used, like the cutoff for filtering, or the model used to compute the probability of compromised cells, and if that impacts the output. 
 
-### Testing Posterior Probability Cutoffs
+#### Testing Posterior Probability Cutoffs
 
 miQC will remove any cells that have a high probability of being compromised, by default these are cells with higher than 0.75 posterior probability. 
 We can increase that threshold, which means that more cells will be kept and see if we are able to recover some of the cells that were being thrown out previously that we think should have been included (ie. cells with low mito that are being thrown out). 
@@ -133,7 +134,7 @@ purrr::iwalk(cr_like_sce, model_sce, posterior_cutoff = 0.9)
 ```
 It doesn't appear that increasing the probability threshold rescues very many more cells with low mito content in SCPCR000126 and SCPCR000127 that are being filtered out. 
 
-### Testing different mixture models 
+#### Testing different mixture models 
 
 In addition to altering the threshold used for filtering, we can also test the use of different mixture models to calculate the posterior probability of a cell being compromised. 
 We will test use of both the spline and polynomial modes rather than the default linear model. 
@@ -155,7 +156,7 @@ purrr::iwalk(cr_like_sce, model_sce, model_type = "polynomial")
 For the linear model, we still see that cells with low mito are getting excluded from SCPCR000118 and SCPCR000119, but now see that same trend in SCPCR000220 and SCPCR000221 as well. 
 It appears to model the cells with very high number of unique genes and low mito content as cells to exclude when we would rather keep those. 
 
-## Filter Cells
+### Filter Cells
 
 Now we can compare filtering using miQC vs. using the pre-determined cutoffs to see how the different filtering effects the overall number of cells that are removed. 
 We can also look at the distribution of each of the metrics used for filtering, genes detected/cell, and mito content/cell to see how filtering affects the population of cells. 
@@ -241,7 +242,7 @@ ggplot(combined_cell_num_df, aes(x = sample, y = number_cells, fill = filtering_
 It looks like manual filtering (with these specific cutoff combinations) are removing more cells than miQC for single-cell, but more cells are removed in single-nuclei samples with either miQC than manual. 
 
 
-## Conclusions
+### MiQC Conclusions
 
 1. Using the default parameters for miQC with the linear mixture model gives the most consistent and reliable results where the majority of cells with low mito and high unique genes are classified as cells to keep, there are still some caveats.
 2. Cells from single-nuclei samples do not show as high a range of mito content and therefore the mixture model suggests a cutoff that leads to cells with a lower mito content than in single-cell being classified as compromised. This however is slightly expected considering single-nuclei samples should have little to no mito reads.
@@ -249,6 +250,90 @@ It looks like manual filtering (with these specific cutoff combinations) are rem
 
 Suggested next steps include comparing PCA or UMAP results using the different filtering thresholds to identify if any clusters corresponding to "bad cells" remain. 
 Additionally, we will need to identify if we want to add any additional criteria besides the posterior probability computed by miQC to be included as a "keep" cell in the `ccdl_suggests` column that will be appended to the `colData` for every filtered sce object. 
+
+## Combining miQC with manual thresholds 
+
+Since we are interested in providing a `ccdl_suggests` column, we need to identify the optimal criteria to be included in that filtering. 
+Here, we will first add the posterior probability column to the sce and then filter the sce using the following combinations: 
+
+1. miQC pass only 
+2. miQC pass or below 10% mitochondrial reads 
+3. (miQC pass or below 10% mitochondrial reads) and above 100 genes detected/cell
+4. (miQC pass or below 10% mitochondrial reads)  and above 200 genes detected/cell
+5. (miQC pass or below 10% mitochondrial reads) and above 500 genes detected/cell 
+
+For these tests we are using the default posterior probability for 
+
+To test whether or not we have removed compromised cells, we will look at two types of plots: 
+
+1. The plot showing UMI/cell on the x-axis, genes detected/cell on the y-axis, and colored by mitochondrial content. 
+2. A PCA plot colored by number of genes detected 
+3. A PCA plot colored by mitochondrial content 
+
+We anticipate that if we have removed cells that are compromised then the PCA plots should not show any clustering based on technical artifacts, i.e. number of genes detected or mitochondrial content. 
+
+```{r}
+## add posterior probability to colData of sces
+add_probability <- function(sce) {
+  # remove colData that was previously calculated
+  model <- miQC::mixtureModel(sce)
+  sce <- miQC::filterCells(sce, model, posterior_cutoff = 0.9999, verbose = FALSE)
+}
+
+cr_like_sce <- cr_like_sce %>% 
+  purrr::map(add_probability)
+```
+
+
+```{r}
+# function to test different combinations of miQC with/without mito cutoff and genes detected cutoff
+# outputs PCA plots colored by genes detected and mito content and plot showing distributions of UMI/cell, genes/cell after filtering 
+test_filtering <- function(sce, mito_cutoff = 100, genes_detected_cutoff = 0){
+  
+  # filter sce 
+  cells <- sce$prob_compromised < 0.75 &
+    sce$subsets_mito_percent < mito_cutoff &
+    sce$detected > genes_detected_cutoff
+  sce <- sce[,cells]
+  
+  # plot distribution of UMI vs. genes detected 
+  coldata_df <- data.frame(colData(sce))
+  distribution_plot <- ggplot(coldata_df, aes(x = sum, y = detected, color = subsets_mito_percent)) + 
+    geom_point(alpha = 0.5) +
+    scale_color_viridis_c() + 
+    labs(x = "Total Count",
+         y = "Number of Genes Expressed",
+         color = "Mitochondrial\nFraction") + 
+    ggtitle(title) +
+    theme_classic()
+  
+  # normalize and transform counts 
+  qclust <- scran::quickCluster(sce)
+  sce <- scran::computeSumFactors(sce, clusters = qclust)
+  sce <- scater::logNormCounts(sce)
+  
+  # model gene variance and select highly variable genes
+  gene_variance <- scran::modelGeneVar(sce)
+  subset_genes <- scran::getTopHVGs(gene_variance, n = 2000)
+  
+  # run PCA using those genes
+  sce <- scater::runPCA(sce, subset_row = subset_genes)
+  
+  # make PCA plots 
+  gene_detected_pca <- scater::plotReducedDim(sce, dimred = "PCA", colour_by = "detected")
+  mito_pca <- scater::plotReducedDim(sce, dimred = "PCA", colour_by = "subsets_mito_percent")
+  
+  # arrange plots 
+  #grid.arrange(distribution_plot, gene_detected_pca, mito_pca, nrow = 2)
+}
+```
+
+
+```{r}
+scater::plotReducedDim(sce, dimred = "PCA", colour_by = "subsets_mito_percent")
+
+purrr::walk(cr_like_sce, test_filtering)
+```
 
 ## Session Info
 ```{r}
