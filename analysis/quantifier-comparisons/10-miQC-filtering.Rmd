@@ -22,7 +22,7 @@ library(magrittr)
 library(ggplot2)
 library(SingleCellExperiment)
 library(scpcaTools)
-library(gridExtra)
+library(ggpubr)
 ```
 
 
@@ -275,9 +275,8 @@ We anticipate that if we have removed cells that are compromised then the PCA pl
 ```{r}
 ## add posterior probability to colData of sces
 add_probability <- function(sce) {
-  # remove colData that was previously calculated
   model <- miQC::mixtureModel(sce)
-  sce <- miQC::filterCells(sce, model, posterior_cutoff = 0.9999, verbose = FALSE)
+  sce <- miQC::filterCells(sce, model, posterior_cutoff = 1, enforce_left_cutoff = FALSE, verbose = FALSE)
 }
 
 cr_like_sce <- cr_like_sce %>% 
@@ -288,11 +287,10 @@ cr_like_sce <- cr_like_sce %>%
 ```{r}
 # function to test different combinations of miQC with/without mito cutoff and genes detected cutoff
 # outputs PCA plots colored by genes detected and mito content and plot showing distributions of UMI/cell, genes/cell after filtering 
-test_filtering <- function(sce, mito_cutoff = 100, genes_detected_cutoff = 0){
+test_filtering <- function(sce,title, mito_cutoff = 100, genes_detected_cutoff = 0 ){
   
   # filter sce 
-  cells <- sce$prob_compromised < 0.75 &
-    sce$subsets_mito_percent < mito_cutoff &
+  cells <- (sce$prob_compromised < 0.75 | sce$subsets_mito_percent < mito_cutoff) &
     sce$detected > genes_detected_cutoff
   sce <- sce[,cells]
   
@@ -303,7 +301,7 @@ test_filtering <- function(sce, mito_cutoff = 100, genes_detected_cutoff = 0){
     scale_color_viridis_c() + 
     labs(x = "Total Count",
          y = "Number of Genes Expressed",
-         color = "Mitochondrial\nFraction") + 
+         color = "Mitochondrial\nFraction") +
     ggtitle(title) +
     theme_classic()
   
@@ -324,15 +322,34 @@ test_filtering <- function(sce, mito_cutoff = 100, genes_detected_cutoff = 0){
   mito_pca <- scater::plotReducedDim(sce, dimred = "PCA", colour_by = "subsets_mito_percent")
   
   # arrange plots 
-  #grid.arrange(distribution_plot, gene_detected_pca, mito_pca, nrow = 2)
+  grid.arrange(distribution_plot, gene_detected_pca, mito_pca, nrow = 2)
 }
 ```
 
 
 ```{r}
-scater::plotReducedDim(sce, dimred = "PCA", colour_by = "subsets_mito_percent")
+# miQC pass only, set mito cutoff to 0 so only miQC pass is considered
+purrr::iwalk(cr_like_sce, test_filtering, mito_cutoff = 0)
+```
+```{r}
+# miQC pass or below 10 %  mito 
+purrr::iwalk(cr_like_sce, test_filtering, mito_cutoff = 10)
+```
 
-purrr::walk(cr_like_sce, test_filtering)
+```{r}
+# miQC pass or below 10 %  mito or above 100 genes detected 
+purrr::iwalk(cr_like_sce, test_filtering, mito_cutoff = 10, genes_detected_cutoff = 100)
+```
+
+
+```{r}
+# miQC pass or below 10 %  mito or above 200 genes detected 
+purrr::iwalk(cr_like_sce, test_filtering, mito_cutoff = 10, genes_detected_cutoff = 200)
+```
+
+```{r}
+# miQC pass or below 10 %  mito or above 500 genes detected 
+purrr::iwalk(cr_like_sce, test_filtering, mito_cutoff = 10, genes_detected_cutoff = 500)
 ```
 
 ## Session Info
