@@ -63,7 +63,7 @@ process alevin{
     tuple val(id), val(tech), path(read1), path(read2)
     path index
   output:
-    path run_dir
+    tuple val(id), val(tech), path(run_dir) 
   script:
     // label the run directory by id, index, and mapping mode
     run_dir = "${id}-${index}-${params.sketch ? 'sketch' : 'salign'}-${params.resolution}"
@@ -81,7 +81,7 @@ process alevin{
     """
     mkdir -p ${run_dir}
     salmon alevin \
-      -l ${tech == '10Xv2_5prime' ? 'ISF' : 'ISR'} \
+      -l ISR \
       ${tech_flag[tech]} \
       -1 ${read1} \
       -2 ${read2} \
@@ -99,7 +99,7 @@ process generate_permit{
   container ALEVINFRY_CONTAINER
   publishDir "${params.outdir}"
   input:
-    path run_dir
+    tuple val(id), val(tech), path(run_dir)
     path barcode_file
   output:
     path run_dir
@@ -109,7 +109,7 @@ process generate_permit{
     """
     alevin-fry generate-permit-list \
       -i ${run_dir} \
-      --expected-ori fw \
+      --expected-ori ${tech == '10Xv2_5prime' ? 'rc' : 'fw'}  \
       -o ${run_dir} \
       ${filter_map[params.filter]}
     """
