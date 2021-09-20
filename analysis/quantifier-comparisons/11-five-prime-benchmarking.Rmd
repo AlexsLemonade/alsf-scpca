@@ -42,6 +42,10 @@ rowdata_df_file <- file.path(file_dir, "rowdata_qc.tsv")
 # sce objects
 fry_file <- file.path(file_dir, "splici_salign_cr-like-em_sces.rds")
 cellranger_file <- file.path(file_dir, "cellranger_sces.rds")
+
+# mito file 
+mito_file <- file.path(base_dir, "sample-info", "Homo_sapiens.GRCh38.103.mitogenes.txt")
+
 ```
 
 ```{r}
@@ -50,6 +54,15 @@ quant_info <- readr::read_tsv(quant_info_file)
 coldata_df <- readr::read_tsv(coldata_df_file)
 rowdata_df <- readr::read_tsv(rowdata_df_file)
 ```
+
+```{r}
+# read in mito genes 
+mito_genes <- readr::read_tsv(mito_file, col_names = "gene_id")
+mito_genes <- mito_genes %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+```
+
 
 ```{r}
 # read in sces
@@ -158,6 +171,7 @@ ggplot(coldata_qc_common, aes(x = tool, y = detected, fill = tool)) +
   ylim(c(0,6000))
 ```
 Again, when restricting to shared cells, the distributions are mostly similar although it looks like Alevin-fry might be giving slightly higher counts and genes detected/cell than Cell Ranger. 
+We can also see that the increase in mito content per cell with Alevin-fry remains higher than in Cell Ranger, even after filtering to shared cells only. 
 
 ### Shared Cells, Minimum Gene Coverage
 
