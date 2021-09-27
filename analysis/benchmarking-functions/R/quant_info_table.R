@@ -118,7 +118,9 @@ quant_info_table <- function(data_dir, tools, samples){
         dplyr::mutate(filter_strategy = dplyr::case_when(tool == "alevin-fry-unfiltered" ~ "unfiltered",
                                                          tool == "alevin-fry-knee" ~ "knee"),
                       tool = stringr::str_extract(tool, "alevin-fry"), 
-                      data_dir = file.path(tool_data_dir, quant_dir))
+                      data_dir = file.path(tool_data_dir, quant_dir)) %>%
+        # remove extra -knee at the end of resolution if present
+        dplyr::mutate(alevin_resolution = stringr::str_remove(alevin_resolution,"-knee$"))
 
     }
     # add each smaller metadata to named list of metadata tables 
@@ -132,7 +134,7 @@ quant_info_table <- function(data_dir, tools, samples){
     dplyr::mutate(index_type = dplyr::case_when(index_type %in% splici_types ~ 'splici',
                                                 index_type %in% cdna_types ~ 'cDNA'),
                   # create columns with information about each parameter used for each run 
-                  filter = ifelse(alevin_alignment == "knee" | tool %in% knee_tools, FALSE, TRUE), 
+                  filter = ifelse(filter_strategy == "knee" | tool %in% knee_tools, FALSE, TRUE), 
                   alevin_alignment = tidyr::replace_na(alevin_alignment, "not_alevin"),
                   alevin_resolution = tidyr::replace_na(alevin_resolution, "not_alevin"),
                   usa_mode = index_type == "splici" & alevin_resolution %in% usa_tools,

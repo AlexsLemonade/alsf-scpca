@@ -19,6 +19,7 @@ make_sce_list <- function(info_df, mito, filename = NULL){
                      info_df$data_dir,
                      info_df$tool,
                      info_df$which_counts,
+                     FALSE,
                      info_df$intron_mode,
                      info_df$usa_mode,
                      info_df$filter) 

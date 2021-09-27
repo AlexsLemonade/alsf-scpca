@@ -1,0 +1,386 @@
+---
+title: "Alevin-Fry Five Prime"
+author: "Ally Hawkins for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+This notebook compares using Alevin-fry to pre process samples captured using the 5' kit from 10X rather than the usual 3' approach. 
+I am comparing Alevin-fry, using the decided upon parameters we have chosen for analyzing the 3' libraries, to Cell Ranger for 2 5' samples. 
+
+Alevin-fry is run using selective alignment to the splici index using the `cr-like-em` resolution for UMI deduplication. 
+Additionally, to signify that we are aligning a 5' library, the read orientation was switched from forward to reverse during the `generate-permit-list` step. 
+
+In contrast, Cell Ranger is able to automatically detect the library type based on how many of the reads are in the antisense direction. 
+
+Here, we are testing how well Alevin-fry using the `rc` option with 5' library performs in comparison to using Cell Ranger's automatic detection. 
+To do this we will look at the distribution of UMI/cell, genes/cell, correlation of mean gene expression, and number of detected genes that overlap, similar to previous benchmarking comparisons. 
+
+## Set Up
+ 
+
+```{r}
+library(magrittr)
+library(ggplot2)
+library(SingleCellExperiment)
+library(ggupset)
+```
+
+
+```{r}
+# path to results files with sces and qc dataframes from running benchrmarking_generate_qc_df.R
+base_dir <- here::here()
+file_dir <- file.path(base_dir, "data", "five-prime-rc", "results")
+
+# qc files 
+quant_info_file <- file.path(file_dir, "quant_info.tsv")
+coldata_df_file <- file.path(file_dir, "coldata_qc.tsv")
+rowdata_df_file <- file.path(file_dir, "rowdata_qc.tsv")
+
+# sce objects
+fry_file <- file.path(file_dir, "splici_salign_cr-like-em_sces.rds")
+cellranger_file <- file.path(file_dir, "cellranger_sces.rds")
+
+# mito file 
+mito_file <- file.path(base_dir, "sample-info", "Homo_sapiens.GRCh38.103.mitogenes.txt")
+
+```
+
+```{r}
+# read in dataframes needed for plotting
+quant_info <- readr::read_tsv(quant_info_file)
+coldata_df <- readr::read_tsv(coldata_df_file)
+rowdata_df <- readr::read_tsv(rowdata_df_file)
+```
+
+```{r}
+# read in mito genes 
+mito_genes <- readr::read_tsv(mito_file, col_names = "gene_id")
+mito_genes <- mito_genes %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+```
+
+
+```{r}
+# read in sces
+fry_sce <- readr::read_rds(fry_file)
+cellranger_sce <- readr::read_rds(cellranger_file)
+```
+
+```{r}
+# merge coldata df with quant_info
+coldata_info_df <- coldata_df %>%
+  # rename tool to be either cellranger or alevin-fry
+  dplyr::mutate(tool = ifelse(tool == "splici_salign_cr-like-em", "alevin-fry", "cellranger")) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir"))
+```
+
+## Per Cell Comparisons
+
+### All Cells
+
+In order to see if there are any differences between Alevin-fry and Cell Ranger in the ability to assign reads to each cell barcode, we first are looking at all cells before restricting to shared cells only. 
+
+```{r}
+# mito content in shared cells
+ggplot(coldata_info_df, aes(x = tool, y = subsets_mito_percent, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Mito Percent") + 
+  xlab("")
+```
+
+```{r}
+ggplot(coldata_info_df, aes(x = tool, y = sum, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  ylim(c(0,30000))
+```
+
+```{r}
+ggplot(coldata_info_df, aes(x = tool, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") + 
+  ylim(c(0,6000))
+```
+Here, we see that for the most part Alevin-fry and Cell Ranger are showing very similar distributions in regards to UMI/cell and genes detected/cell. 
+It does appear that the percent mito might be slightly higher in both samples with Alevin-fry than in Cell Ranger. 
+
+### Shared Cells
+
+We are also interested in looking at cells that are found in both tools, so we restrict our analysis to cells that are present in both.  
+
+```{r}
+# filter for cells that are found in both alevin + cellranger
+cell_counts <- coldata_info_df %>%  
+  dplyr::count(cell_id, sample)
+
+common_cells <- cell_counts %>%
+  dplyr::filter(n == 2) %>%
+  dplyr::pull(cell_id)
+
+coldata_qc_common <- coldata_info_df %>%
+  dplyr::filter(cell_id %in% common_cells) 
+```
+
+Here we are looking at the per cell metrics in just the shared cells across both alevin-fry and Cell Ranger.
+
+```{r}
+# mito content in shared cells
+ggplot(coldata_qc_common, aes(x = tool, y = subsets_mito_percent, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Mito Percent") + 
+  xlab("")
+```
+```{r}
+ggplot(coldata_qc_common, aes(x = tool, y = sum, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  ylim(c(0,30000))
+```
+```{r}
+ggplot(coldata_qc_common, aes(x = tool, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") + 
+  ylim(c(0,6000))
+```
+Again, when restricting to shared cells, the distributions are mostly similar although it looks like Alevin-fry might be giving slightly higher counts and genes detected/cell than Cell Ranger. 
+We can also see that the increase in mito content per cell with Alevin-fry remains higher than in Cell Ranger, even after filtering to shared cells only. 
+
+### Shared Cells, Minimum Gene Coverage
+
+We can also restrict the comparisons to only include genes that are found in at least 5% of cells to see if low covered genes are affecting the distributions at all. 
+To do that we will need to recalculate the per cell metrics using only genes found in > 5% of cells. 
+
+```{r}
+# combine all tools into one list
+sce_list <- append(fry_sce, cellranger_sce)
+
+# use addPerCellQC with gene detection threshold
+# only genes with detection in > 5% of cells will be included in the QC calculations
+add_qc_threshold <- function(sce, mito = mito_genes, threshold = 5){
+  # remove previous colData first 
+  colData(sce) <- NULL
+  scpcaTools::add_cell_mito_qc(sce, mito = mito_genes, threshold = threshold)
+}
+
+# apply above function to all sces 
+sce_threshold_list <- sce_list %>%
+    purrr::map(add_qc_threshold)
+```
+
+```{r}
+# merge back into a dataframe for plotting 
+coldata_threshold <- sce_threshold_list %>%
+  purrr::map_df(scpcaTools::coldata_to_df, .id = "quant_id") %>%
+  # join with quant info to get sample and tool information 
+  dplyr::left_join(quant_info, by = c("quant_id" = "quant_dir"))
+```
+
+```{r}
+# look for shared cells only 
+cell_counts_threshold <- coldata_threshold %>%  
+  dplyr::count(cell_id, sample)
+
+common_cells_threshold <- cell_counts_threshold %>%
+  dplyr::filter(n == 2) %>%
+  dplyr::pull(cell_id)
+
+qc_common_threshold <- coldata_threshold %>%
+  dplyr::filter(
+    (cell_id %in% common_cells_threshold) 
+  )
+```
+
+```{r}
+ggplot(qc_common_threshold, aes(x = tool, y = sum, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/cell") + 
+  xlab("") + 
+  ylim(c(0,30000))
+```
+```{r}
+ggplot(qc_common_threshold, aes(x = tool, y = detected, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/cell") + 
+  xlab("") + 
+  ylim(c(0,1000))
+```
+It appears that restricting to highly covered genes minimizes the differences in distribution at least in genes detected/cell. 
+As with Alevin-fry with the 3' libraries it is possible that there are some more genes that are being detected at a lower level and when restricting to only genes found in > 5% of cells that difference decreases. 
+
+## Per Gene Comparison
+
+Next, we will compare the mean gene expression of shared genes. 
+Here we calculate the correlation coefficient of mean gene expression and we can plot the relationship of mean gene expression between the two tools. 
+
+```{r}
+# combine rowdata with quant info
+rowdata_info_df <- rowdata_df %>%
+  dplyr::mutate(tool = dplyr::case_when(tool == "splici_salign_cr-like-em" ~ "alevin-fry",
+                                        tool == "cellranger" ~ "cellranger")) %>%
+  dplyr::left_join(quant_info,
+                   by = c("tool" = "tool", 
+                          "quant_id" = "quant_dir"))
+
+
+gene_counts <- rowdata_info_df %>% 
+  # remove genes that have a low frequency of being detected
+  dplyr::filter(detected >= 5.0) %>%
+  dplyr::count(gene_id, sample)
+
+# restrict to only common genes 
+common_genes <- gene_counts %>%
+  dplyr::filter(n == 2) %>%
+  dplyr::pull(gene_id)
+
+rowdata_qc_common <- rowdata_info_df %>%
+  dplyr::filter(
+    (gene_id %in% common_genes) 
+  )
+```
+
+```{r}
+# spread table for comparisons
+rowdata_cor <- rowdata_qc_common %>%
+  dplyr::select(tool, gene_id, sample, mean) %>%
+  # spread the mean expression stats to one column per caller
+  tidyr::pivot_wider(id_cols = c(gene_id, sample),
+                     names_from = c("tool"),
+                     values_from = mean) %>%
+  # drop rows with NA values to ease correlation calculation
+  tidyr::drop_na()
+```
+
+
+```{r}
+# calculate spearman correlation for alevin fry vs. cellranger for each sample
+rowdata_cor %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    alevin_fry_knee_cellranger_cor = cor(`cellranger`, `alevin-fry`, method = "spearman")
+  )
+```
+```{r}
+ggplot(rowdata_cor, aes(x = `cellranger`, y = `alevin-fry`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Cell Ranger mean gene expression", y = "Alevin Fry Mean gene expression") + 
+  theme_classic()
+```
+
+Similar to the 3' libraries, the 5' libraries have fairly high correlation between Alevin-fry and Cell Ranger.
+
+## Overlapping Genes 
+
+In addition to looking at mean gene expression, we can also look at the actual genes that are detected in Cell Ranger and Alevin-fry and identify how much of the gene sets are overlapping or not. 
+Because they are using different ensembl assemblies for their indices, we will need to first restrict the analysis to only genes that are able to be detected in both tools. 
+
+
+```{r}
+# make a function to filter sces by subset of cells and re-calculate feature stats
+filter_sce <- function(sce, cells){
+  cells_to_keep <- colnames(sce) %in% cells
+  SummarizedExperiment::rowData(sce) <- NULL
+  sce[, cells_to_keep] %>%
+    scater::addPerFeatureQC()
+}
+```
+
+```{r}
+# filter all sces together 
+all_sces <- list(fry_sce,
+                 cellranger_sce)
+names(all_sces) <- c('alevin-fry', 'cellranger')
+
+sces_filtered <- all_sces %>%
+  purrr::map(
+    ~ purrr::map(.x, filter_sce, cells = common_cells)
+  )
+
+# grab rowdata from filtered sces 
+rowdata_filtered <- sces_filtered %>% 
+  purrr::map_df(
+    ~ purrr::map_df(.x, scpcaTools::rowdata_to_df, .id = "quant_dir"),
+    .id = "tool"
+  ) %>%
+  dplyr::left_join(quant_info)
+```
+```{r}
+# get genes common in all tools
+common_genes <- rowdata_filtered %>%
+  dplyr::select(gene_id, tool) %>%
+  dplyr::distinct() %>%
+  dplyr::group_by(gene_id) %>%
+  dplyr::tally() %>%
+  # filter for genes found in both cellranger and alevin-fry
+  dplyr::filter(n == 2) %>%
+  dplyr::pull(gene_id)
+
+# filter rowdata_df to only include genes found in all tools 
+rowdata_filtered <- rowdata_filtered %>% 
+  dplyr::filter(gene_id %in% common_genes)
+```
+
+
+Now that we have restricted to only common genes, we can then compare genes that were detected in one tool but not the other. 
+To do this, we only want to include genes that have a mean > 0 and are detected in more than 0 cells. 
+
+```{r}
+# filter
+rowdata_filtered <- rowdata_filtered %>%
+  dplyr::filter(mean > 0 & detected > 0)
+```
+
+```{r}
+gene_detect_df <- rowdata_filtered %>%
+  dplyr::group_by(gene_id) %>%
+  dplyr::summarise(tools_detected = list(unique(tool)))
+
+ggplot(gene_detect_df, aes(x = tools_detected)) +
+  geom_bar() +
+  scale_x_upset(n_intersections = 3)
+```
+It appears that the number of overlapping detected genes between Alevin-fry and Cell Ranger is quite high. 
+With the majority of genes being found in both tool, showing similar distributions of UMI and genes detected/cell, and high correlation between mean gene expression across the two tools it looks like use of the `rc` option for 5' libraries is a good alternative to Cell Ranger. 
+
+## Session Info 
+
+```{r}
+sessioninfo::session_info()
+```
+
