@@ -43,15 +43,15 @@ library_df <- readr::read_tsv(file.path(library_data_dir, "scpca-library-metadat
 select_metadata_df <- library_df %>%
   dplyr::select(scpca_run_id, scpca_library_id)
 
-# read in cr_like_em_sce and add colData and rowData QC
+# read in cr_like_sce
 cr_like_sce <- readr::read_rds(cr_like_file) 
 
-# remove 118 and 119
+# remove 006, 118, and 119
 cr_like_sce <- cr_like_sce[!(names(cr_like_sce) %in% c("SCPCR000006-spliced_intron_txome_k31-salign-cr-like", 
                                                                 "SCPCR000118-spliced_intron_txome_k31-salign-cr-like",
                                                                 "SCPCR000119-spliced_intron_txome_k31-salign-cr-like"))]
 
-# colData/rowData has already been added to cellranger sces 
+# read in cellranger 
 cellranger_sce <- readr::read_rds(cellranger_file)
 
 # make combined list of all sces 
