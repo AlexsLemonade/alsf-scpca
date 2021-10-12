@@ -13,7 +13,7 @@ base_dir <- here::here()
 sces_dir <- file.path(base_dir, "data", "results")
 
 # sce objects
-cr_like_em_file <- file.path(sces_dir, "alevin-fry-cr-like-em-emptydrops-200-sces.rds")
+cr_like_file <- file.path(sces_dir, "splici_salign_cr_sces.rds")
 cellranger_file <- file.path(sces_dir, "cellranger_sces.rds")
 
 # plots to save
@@ -44,18 +44,18 @@ select_metadata_df <- library_df %>%
   dplyr::select(scpca_run_id, scpca_library_id)
 
 # read in cr_like_em_sce and add colData and rowData QC
-cr_like_em_sce <- readr::read_rds(cr_like_em_file) %>%
-  purrr::map(scpcaTools::add_cell_mito_qc, mito = mito_genes) %>%
-  purrr::map(scuttle::addPerFeatureQCMetrics)
+cr_like_sce <- readr::read_rds(cr_like_file) 
 
 # remove 118 and 119
-cr_like_em_sce <- cr_like_em_sce[!(names(cr_like_em_sce) %in% c("SCPCR000118-nuclei", "SCPCR000119-nuclei"))]
+cr_like_sce <- cr_like_sce[!(names(cr_like_sce) %in% c("SCPCR000006-spliced_intron_txome_k31-salign-cr-like", 
+                                                                "SCPCR000118-spliced_intron_txome_k31-salign-cr-like",
+                                                                "SCPCR000119-spliced_intron_txome_k31-salign-cr-like"))]
 
 # colData/rowData has already been added to cellranger sces 
 cellranger_sce <- readr::read_rds(cellranger_file)
 
 # make combined list of all sces 
-all_sces_list <- list(cr_like_em_sce,cellranger_sce)
+all_sces_list <- list(cr_like_sce,cellranger_sce)
 names(all_sces_list) <- c("Alevin-fry", "Cell Ranger")
 
 # make list of samples to use for assigning samples to cell or nuclei 
