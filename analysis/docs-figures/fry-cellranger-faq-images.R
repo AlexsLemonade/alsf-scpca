@@ -5,7 +5,6 @@
 library(magrittr)
 library(ggplot2)
 library(SingleCellExperiment)
-library(patchwork)
 library(ggpubr)
 
 # path to results files with sces and qc dataframes from running benchmarking_generate_qc_df.R
@@ -165,4 +164,4 @@ ggplot(rowdata_cor, aes(x = `Alevin-fry`, y = `Cell Ranger`)) +
         strip.background = element_rect())+
   stat_cor(aes(label = ..r.label..), method = "pearson", size = 2)
   
-ggsave(gene_exp_correlation)
+ggsave(gene_exp_correlation, width = 8, height = 5)
