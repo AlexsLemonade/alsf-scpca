@@ -1,0 +1,159 @@
+---
+title: "Exploring cellhash data"
+author: "Josh Shapiro for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+This notebook explores processing cellhash data, separating samples by hashed barcodes.
+
+
+# Set Up
+ 
+Libraries:
+
+```{r setup}
+library(SingleCellExperiment)
+library(ggplot2)
+```
+
+File paths:
+
+```{r}
+file_dir <- file.path("data", "cellhash")
+
+# test sce files
+unfiltered_file <- file.path(file_dir, "SCPCL000551_unfiltered.rds")
+filtered_file   <- file.path(file_dir, "SCPCL000551_filtered.rds")
+```
+
+# Inital look at SCE objects 
+
+```{r}
+sce_unfiltered <- readRDS(unfiltered_file)
+sce_filtered <- readRDS(filtered_file)
+
+```
+
+How many cells are in each of these files?
+
+```{r}
+ncol(sce_unfiltered)
+ncol(sce_filtered)
+```
+
+Both of these files have an `altExp` named `"cellhash"`.
+
+When we merge in feature data as part of `scpca-nf` workflow, we add zeros for any cells which do appear in the expression data, but do not appear in cellhash data.
+While in the case of CITE-seq this may make sense, in the case of cell hashing, a cell with no hash data is going to be impossible to assign.
+
+Let's see how often that happened here, by looking at the distribution of cell read counts:
+
+```{r}
+cell_metrics <- data.frame(colData(sce_unfiltered)) |>
+  tibble::rownames_to_column("cell_barcode") |>
+  dplyr::mutate(filter_status = ifelse(
+    cell_barcode %in% colnames(sce_filtered),
+    "cell", 
+    "empty"))
+```
+
+```{r}
+ggplot(cell_metrics, aes(x = altexps_cellhash_sum))+ 
+  geom_histogram(bins = 100) +
+  facet_grid(filter_status ~ .) +
+  coord_cartesian(xlim = c(0, 1000))
+```
+
+Cool, most of the empty drips that we filtered out don't have any cellhash data, and most of the cells we keep do!
+
+We'll proceed with just filtered data for now, but we might want to consider how we handle the unfiltered data in these cases... 
+It doesn't make sense to keep the zero-cellhash cells (unless we add an "unassigned" class which we might have to come back to), but that will filter out most of the empty drops anyway (so the resulting `_unfiltered` but split library will probably not have many empty cells...)
+
+
+# The cellhash data
+
+Let's start looking at the cellhash data.
+```{r}
+hash_data <- rowData(altExp(sce_filtered, "cellhash")) |>
+  as.data.frame() |>
+  tibble::rownames_to_column("HTO")
+hash_data
+```
+This sample seems to use barcodes 1-4, and all are found in every cell.
+
+
+### Try `hashedDrops`
+
+First we will run `hashedDrops` with default settings, on the filtered data.
+```{r}
+hash_result <- DropletUtils::hashedDrops(
+  altExp(sce_filtered, "cellhash")[1:4,] #only first 4 HTOs
+)
+
+metadata(hash_result)
+```
+
+How many calls were confidently made?
+```{r}
+sum(hash_result$Confident)
+```
+
+Let's look at the confident calls in a bit more depth
+```{r}
+confident_calls <- hash_result |>
+  as.data.frame() |>
+  dplyr::filter(Confident)
+
+dplyr::count(confident_calls, Best)
+```
+
+That isn't so good. It really looks like the background level of all HTOs is too high, or something else is wrong.
+
+### Expression data
+
+Let's just look quickly at the expression data to see if that looks as we would expect:
+
+```{r}
+cell_metrics <- colData(sce_filtered)|>
+  as.data.frame()|>
+  tibble::rownames_to_column("barcode")
+ggplot(cell_metrics, aes(x = sum, y = detected, color = prob_compromised)) +
+  geom_point() +
+  theme_bw() +
+  scale_x_log10() + 
+  scale_y_log10() +
+  scale_color_viridis_c()
+```
+Let's add some more aggressive filtering for now.
+```{r}
+pass_barcodes <- cell_metrics |>
+  dplyr::filter(detected > 500,
+                prob_compromised < 0.8 | subsets_mito_percent < 10) |>
+  dplyr::pull(barcode)
+sce_filtered <- sce_filtered[, pass_barcodes]
+```
+
+
+Now normalize:
+```{r}
+qclust <- scran::quickCluster(sce_filtered)
+sce_filtered <- sce_filtered |> 
+  scran::computeSumFactors(clusters = qclust) |>
+  scater::logNormCounts()
+```
+
+Calculate PCA & UMAP
+```{r}
+sce_filtered <- sce_filtered |>
+  scater::runPCA() |>
+  scater::runUMAP()
+```
+
+Plot the UMAP results
+```{r}
+scater::plotUMAP(sce_filtered)
+```
+
