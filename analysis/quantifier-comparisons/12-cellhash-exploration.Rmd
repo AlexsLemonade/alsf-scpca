@@ -15,8 +15,15 @@ This notebook explores processing cellhash data, separating samples by hashed ba
 Libraries:
 
 ```{r setup}
-library(SingleCellExperiment)
-library(ggplot2)
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(SingleCellExperiment)
+  library(scater)
+  library(bluster)
+  library(Seurat)
+})
+
+theme_set(theme_bw())
 ```
 
 File paths:
@@ -25,16 +32,23 @@ File paths:
 file_dir <- file.path("data", "cellhash")
 
 # test sce files
-unfiltered_file <- file.path(file_dir, "SCPCL000551_unfiltered.rds")
-filtered_file   <- file.path(file_dir, "SCPCL000551_filtered.rds")
+# These files are the from the Christensen Pool1 sample
+unfiltered_file <- file.path(file_dir, "SCPCL000533_unfiltered.rds")
+filtered_file   <- file.path(file_dir, "SCPCL000533_filtered.rds")
+
+# CITE-seq-count results
+csc_dir <- file.path(file_dir, "SCPCL000533_csc_umi")
 ```
 
-# Inital look at SCE objects 
+# Initial look at SCE objects 
+
+The initial mapping that we performed used `alevin-fry` to separately map and quantify RNA-seq reads and hash tag oligos (HTOs), assigning counts to droplets.
+These results were then read into R and saved as a `SingleCellExperiment` object, combining the two sets of data.
+Here we are reading in those data, both from an unfiltered file and one where the droplets have been filtered to those likely to contain cells, based on the RNA-seq data.
 
 ```{r}
 sce_unfiltered <- readRDS(unfiltered_file)
 sce_filtered <- readRDS(filtered_file)
-
 ```
 
 How many cells are in each of these files?
@@ -44,6 +58,9 @@ ncol(sce_unfiltered)
 ncol(sce_filtered)
 ```
 
+The number of cells after filtering empty drops is very high! 
+
+### HTO count patterns
 Both of these files have an `altExp` named `"cellhash"`.
 
 When we merge in feature data as part of `scpca-nf` workflow, we add zeros for any cells which do appear in the expression data, but do not appear in cellhash data.
@@ -67,41 +84,83 @@ ggplot(cell_metrics, aes(x = altexps_cellhash_sum))+
   coord_cartesian(xlim = c(0, 1000))
 ```
 
-Cool, most of the empty drips that we filtered out don't have any cellhash data, and most of the cells we keep do!
+Good, most of the empty drops that we filtered out don't have any cellhash data, and most of the cells we keep do!
 
 We'll proceed with just filtered data for now, but we might want to consider how we handle the unfiltered data in these cases... 
 It doesn't make sense to keep the zero-cellhash cells (unless we add an "unassigned" class which we might have to come back to), but that will filter out most of the empty drops anyway (so the resulting `_unfiltered` but split library will probably not have many empty cells...)
+
+```{r}
+# drop the unfiltered data to save space
+rm(sce_unfiltered)
+```
 
 
 # The cellhash data
 
 Let's start looking at the cellhash data.
+
 ```{r}
-hash_data <- rowData(altExp(sce_filtered, "cellhash")) |>
+# pull the hash data (from filtered cells) into a separate object
+hash_sce <- altExp(sce_filtered, "cellhash")
+
+hash_data <- rowData(hash_sce) |>
   as.data.frame() |>
   tibble::rownames_to_column("HTO")
 hash_data
 ```
 This sample seems to use barcodes 1-4, and all are found in every cell.
 
+Let's reduce our hash data to just those:
+```{r}
+hash_sce <- hash_sce[1:4,]
+```
 
-### Try `hashedDrops`
+Now let's look at the first 20 cells:
+```{r}
+t(counts(hash_sce)[,1:20])
+```
+
+There is some variation there, but the overall counts seem very similar across cells; it may be difficult to assign cells confidently.
+
+Let's see if there is much clustering among cells.
+
+```{r}
+# add a log counts matrix (no normalization)
+logcounts(hash_sce) <- log1p(counts(hash_sce)) 
+# calculate pca
+hash_sce <- scater::runPCA(hash_sce,
+                           ncomponents = 4, 
+                           BSPARAM=BiocSingular::ExactParam())
+# plot pca
+scater::plotPCA(hash_sce, point_size = 0.1) + 
+  ggtitle("PCA plot of cells based on HTO counts")
+```
+
+Looks like there may be a few potential clusters there, but overal it is pretty diffuse. 
+We do not see the 4 distinct clusters that we might have expected.
+I'm not sure how confidently we will be able to deconvolute.
+
+## Assigning cells with `hashedDrops`
 
 First we will run `hashedDrops` with default settings, on the filtered data.
+This uses a pretty simple method of identifying ambient tag patterns, remove that, and then look for the highest expressed HTO for assignment.
+
+
 ```{r}
-hash_result <- DropletUtils::hashedDrops(
-  altExp(sce_filtered, "cellhash")[1:4,] #only first 4 HTOs
-)
+hash_result <- DropletUtils::hashedDrops(hash_sce)
 
 metadata(hash_result)
 ```
+That looks like a pretty high level of estimated ambient HTO counts.
 
 How many calls were confidently made?
+
 ```{r}
 sum(hash_result$Confident)
 ```
 
-Let's look at the confident calls in a bit more depth
+Let's look at the "confident" calls in a bit more depth:
+
 ```{r}
 confident_calls <- hash_result |>
   as.data.frame() |>
@@ -110,24 +169,117 @@ confident_calls <- hash_result |>
 dplyr::count(confident_calls, Best)
 ```
 
-That isn't so good. It really looks like the background level of all HTOs is too high, or something else is wrong.
+That isn't so good. Only 108 total cells called of tens of thousands.
+It really looks like the background level of all HTOs is too high, or something else is wrong.
 
-### Expression data
+We can look at the log fold change value distribution between the best and second best HTO: we would expect to see large values here:
+```{r}
+ggplot(mapping = aes(x = hash_result$LogFC)) +
+  geom_histogram(bins = 50)+ 
+  labs(x = "Log Fold Change from first to second HTO")
+```
+Not much with even a 2-fold change, which makes it very hard to assign cells confidently.
+We could lower the threshold, but that seems fraught.
 
-Let's just look quickly at the expression data to see if that looks as we would expect:
+
+## Assigning cells with Seurat
+
+```{r}
+# filter out cells with low HTO counts, & reduce to only the first 4 HTOs
+sce_filtered <- sce_filtered[,sce_filtered$altexps_cellhash_sum > 50]
+altExp(sce_filtered) <- altExp(sce_filtered)[1:4,]
+
+# create a Seurat object
+seurat_obj <- Seurat::CreateSeuratObject(counts(sce_filtered))
+seurat_obj[["HTO"]] <- CreateAssayObject(counts = counts(altExp(sce_filtered)))
+seurat_obj <- Seurat::NormalizeData(seurat_obj, assay = "HTO", normalization.method = "CLR")
+seurat_obj <- Seurat::HTODemux(seurat_obj)
+```
+
+This worked, though with at least one other sample it failed for unknown reasons, so we may not want to rely on it.
+
+I'm also generally uncomfortable with the fact that it seems to call samples based on a relatively simple cutoff for each HTO; 
+
+Let's look at the results:
+
+```{r}
+table(seurat_obj$HTO_classification.global)
+```
+So it looks like it did make calls for a much larger number of cells, but the majority are still not being assigned to a single sample, and there are a very large number of "doublets."
+How confident are those calls?
+
+```{r}
+# Group cells based on the max HTO signal
+Idents(seurat_obj) <- "HTO_maxID"
+RidgePlot(seurat_obj, assay = "HTO", features = rownames(seurat_obj[["HTO"]])[1:4], ncol = 2)
+```
+
+I would not call those super-impressive differences.
+A very slight upward bias for th matching oligo, but that would be expected given the procedure being used to assign the cells requires it.
+
+```{r}
+FeatureScatter(seurat_obj, feature1 = "hto_MULTI-1", feature2 = "hto_MULTI-2")
+```
+
+We would expect the MULTI-1 and MULTI-2 samples to lie more along the axes here, away from the center, but they are not well-differentiated in general.
+
+Overall, I am not confident that the called cells are very reliable based on these data. 
+
+```{r}
+# clean up Seurat
+rm(seurat_obj)
+```
+
+
+# Alternative mapping
+
+We also performed mapping with CITE-seq-count just to check that the alevin-fry results were reasonable. We can read those results separately.
+
+We specified 50,000 cells when we ran this (it did not seem to like the whitelist option it claimed to support)
+
+```{r, message = FALSE}
+csc_counts <- as.matrix(Matrix::readMM(file = file.path(csc_dir, "matrix.mtx.gz")))
+csc_barcodes <- readr::read_tsv(file.path(csc_dir, "barcodes.tsv.gz"), 
+                                col_names = FALSE, 
+                                col_types = 'c')$X1
+csc_features <- readr::read_tsv(file.path(csc_dir, "features.tsv.gz"), 
+                                col_names = FALSE, 
+                                col_types = 'c')$X1
+
+dimnames(csc_counts) <- list(csc_features, csc_barcodes)
+```
+
+Let's look at the first few rows:
+```{r}
+t(csc_counts[1:4,1:20])
+```
+
+Looks like basically the same story: It does not appear that our mapping system was at fault.
+There is a very high background level of each HTO, which will likely make assignment difficult.
+
+# Expression data
+
+Let's just look quickly at the expression data to see if that looks as we would expect.
+We will plot some basic cell metrics, including mitochondrial percent.
 
 ```{r}
 cell_metrics <- colData(sce_filtered)|>
   as.data.frame()|>
   tibble::rownames_to_column("barcode")
-ggplot(cell_metrics, aes(x = sum, y = detected, color = prob_compromised)) +
-  geom_point() +
+ggplot(cell_metrics, aes(x = sum, y = detected, color = subsets_mito_percent)) +
+  geom_point(size = 0.2) +
   theme_bw() +
   scale_x_log10() + 
   scale_y_log10() +
-  scale_color_viridis_c()
+  scale_color_continuous(type = "viridis", limit = c(0,100)) + 
+  labs(x = "Total UMI count",
+       y = "Genes detected",
+       color = "Mito %") 
 ```
+
+Aside from having lots of cells, that looks pretty normal.
 Let's add some more aggressive filtering for now.
+
 ```{r}
 pass_barcodes <- cell_metrics |>
   dplyr::filter(detected > 500,
@@ -137,7 +289,8 @@ sce_filtered <- sce_filtered[, pass_barcodes]
 ```
 
 
-Now normalize:
+Now we will perform normalization:
+
 ```{r}
 qclust <- scran::quickCluster(sce_filtered)
 sce_filtered <- sce_filtered |> 
@@ -145,15 +298,23 @@ sce_filtered <- sce_filtered |>
   scater::logNormCounts()
 ```
 
-Calculate PCA & UMAP
+And some dimension reduction with UMAP:
 ```{r}
 sce_filtered <- sce_filtered |>
   scater::runPCA() |>
   scater::runUMAP()
 ```
 
-Plot the UMAP results
+Plot the UMAP results:
 ```{r}
-scater::plotUMAP(sce_filtered)
+scater::plotUMAP(sce_filtered, point_size = 0.1)
+```
+There does seem to be some normal-ish looking structure there, but of course without any context, there is little to interpret!
+Are the clusters different cell types or different samples?
+
+
+# Session info
+```{r}
+sessioninfo::session_info()
 ```
 
