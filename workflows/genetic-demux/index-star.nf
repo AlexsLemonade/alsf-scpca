@@ -12,7 +12,8 @@ STARCONTAINER = 'quay.io/biocontainers/star:2.7.9a--h9ee0642_0'
 process index_star{
   container STARCONTAINER
   publishDir "${params.ref_dir}/star_index", mode: 'copy'
-  label 'cpus_8'
+  memory "64.GB"
+  cpus "8"
   input:
     path ref_fasta
     path ref_gtf
@@ -32,7 +33,7 @@ process index_star{
       --genomeFastaFiles ${params.assembly}.fa \
       --sjdbGTFfile ${params.assembly}.gtf \
       --sjdbOverhang 100 \
-      --limitGenomeGenerateRAM 26000000000
+      --limitGenomeGenerateRAM 64000000000
     
     # clean up
     rm ${params.assembly}.fa
