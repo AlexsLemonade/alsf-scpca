@@ -20,7 +20,7 @@ process index_star{
   output:
     path output_dir
   script:
-    output_dir = "${params.assembly}"
+    output_dir = "${params.assembly}.star_idx"
     """
     mkdir ${output_dir}
 
