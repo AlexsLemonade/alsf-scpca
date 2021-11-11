@@ -25,8 +25,7 @@ process bulkmap_star{
   output:
     tuple val(meta), path(output_bam)
   script:
-    output_dir = "${meta.library_id}"
-    output_bam = "${output_dir}/Aligned.sortedByCoord.out.bam"
+    output_bam = "${meta.run_id}.sorted.bam"
     """
     STAR \
       --genomeDir ${star_index} \
@@ -34,14 +33,15 @@ process bulkmap_star{
       --readFilesIn ${read1.join(',')} \
       ${meta.technology == 'paired_end' ? read2.join(',') : ""} \
       --readFilesCommand gunzip -c \
-      --outFileNamePrefix ${output_dir}/ \
-      --outSAMtype BAM SortedByCoordinate 
+      --outSAMtype BAM SortedByCoordinate
+
+    mv Aligned.sortedByCoord.out.bam ${output_bam}
     """
 }
 
 process index_bam{
   container SAMTOOLSCONTAINER
-  publishDir "${params.outdir}"
+  publishDir "${params.outdir}/${meta.library_id}"
   input:
     tuple val(meta), path(bamfile)
   output:
