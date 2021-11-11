@@ -1,6 +1,9 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
+STARCONTAINER = 'quay.io/biocontainers/star:2.7.9a--h9ee0642_0'
+SAMTOOLSCONTAINER = 'quay.io/biocontainers/samtools:1.14--hb421002_0'
+
 // parameters
 params.ref  = 'Homo_sapiens.GRCh38.104'
 params.star_index = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/star_index/Homo_sapiens.GRCh38.104.star_idx'
@@ -10,20 +13,20 @@ params.run_ids = 'SCPCR000166'
 
 params.outdir = 's3://nextflow-ccdl-results/scpca/star-bulk/'
 
-STARCONTAINER = 'quay.io/biocontainers/star:2.7.9a--h9ee0642_0'
+
 
 process bulkmap_star{
   container STARCONTAINER
   memory "32.GB"
   cpus "8"
-  publishDir "${params.outdir}"
   input:
     tuple val(meta), path(read1), path(read2)
     path star_index
   output:
-    tuple val(meta), path(output_dir)
+    tuple val(meta), path(output_bam)
   script:
     output_dir = "${meta.library_id}"
+    output_bam = "${output_dir}/Aligned.sortedByCoord.out.bam"
     """
     STAR \
       --genomeDir ${star_index} \
@@ -33,6 +36,20 @@ process bulkmap_star{
       --readFilesCommand gunzip -c \
       --outFileNamePrefix ${output_dir}/ \
       --outSAMtype BAM SortedByCoordinate 
+    """
+}
+
+process index_bam{
+  container SAMTOOLSCONTAINER
+  publishDir "${params.outdir}"
+  input:
+    tuple val(meta), path(bamfile)
+  output:
+    tuple val(meta), path(bamfile), path(bamfile_index)
+  script:
+    bamfile_index = "${bamfile}.bai"
+    """
+    samtools index ${bamfile} ${bamfile_index}
     """
 }
 
@@ -70,5 +87,6 @@ workflow{
                          file("s3://${meta.s3_prefix}/*_R1_*.fastq.gz"),
                          file("s3://${meta.s3_prefix}/*_R2_*.fastq.gz"))}
     
-    bulkmap_star(bulk_reads_ch, params.star_index)
+    bulkmap_star(bulk_reads_ch, params.star_index) \
+      | index_bam
 }
