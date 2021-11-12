@@ -63,7 +63,7 @@ process spaceranger{
       --id=${output_id} \
       --transcriptome=${index} \
       --fastqs=${fastq_dir} \
-      --sample=${meta.samples} \
+      --sample=${meta.cr_samples} \
       --localcores=${task.cpus} \
       --localmem=${task.memory.toGiga()} \
       --image=${image_file} \
