@@ -69,9 +69,6 @@ workflow{
       project_id: it.scpca_project_id?: "no_project",
       submitter: it.submitter,
       technology: it.technology,
-      seq_unit: it.seq_unit,
-      feature_barcode_file: it.feature_barcode_file,
-      feature_barcode_geom: it.feature_barcode_geom,
       s3_prefix: it.s3_prefix,
     ]}
     // only bulk samples
