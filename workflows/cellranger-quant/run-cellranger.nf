@@ -20,7 +20,7 @@ all_tech_list = cellranger_tech_list + "spatial"
 params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 
 process cellranger{
-  container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.0.1'
+  container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.1.2'
   publishDir "${params.outdir}", mode: 'copy'
   tag "${id}-${index}" // add tag for tracking sample names in trace file  
   label 'cpus_8'
@@ -66,9 +66,9 @@ process spaceranger{
       --sample=${meta.samples} \
       --localcores=${task.cpus} \
       --localmem=${task.memory.toGiga()} \
-      --image=${$image_file} \
+      --image=${image_file} \
       --slide=${meta.slide_serial_number} \
-      --area=${slide_section}
+      --area=${meta.slide_section}
 
     """
 }
@@ -77,7 +77,7 @@ def getCRsamples(filelist){
   // takes a string with semicolon separated file names
   // returns just the 'sample info' portion of the file names,
   // as cellranger would interpret them, comma separated
-  fastq_files = filelist.tokenize(';')
+  fastq_files = filelist.tokenize(';').findAll{it.contains '.fastq.gz'}
   samples = []
   fastq_files.each{
     // append sample names to list, using regex to extract element before S001, etc.
@@ -98,22 +98,24 @@ workflow{
     .filter{it.technology in all_tech_list}
     // use only the rows in the sample list
     .filter{run_all || (it.scpca_run_id in run_ids)}
-    .map{it.cr_samples =  getCRsamples(it.fastq_files); it}
+    .map{it.cr_samples =  getCRsamples(it.files); it}
   
   cellranger_reads = ch_reads
     .filter{it.technology in cellranger_tech_list} // only cellranger 10X data
     // create tuple of [metadata, fastq dir]
+    //.map{it.cr_samples =  getCRsamples(it.files); it}
     .map{meta -> tuple(meta,
-                       file("${meta.fastq_directory}")
+                       file("s3://${meta.s3_prefix}")
                        )}
 
   spaceranger_reads = ch_reads
     .filter{it.technology == "spatial"}
     // create tuple of [metadata, fastq dir, and image filename]
     .map{meta -> tuple(meta,
-                      file("${meta.fastq_directory}"),
-                      file("s3://${row.s3_prefix}/*.jpg")
-                      )}
+                       file("s3://${meta.s3_prefix}"),
+                       //getCRsamples(${meta.files}.findAll{it.contains '.fastq.gz'}),
+                       file("s3://${meta.s3_prefix}/*.jpg")
+                       )}
 
   // run cellranger
   cellranger(cellranger_reads, params.index_path)
