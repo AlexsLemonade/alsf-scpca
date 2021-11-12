@@ -8,8 +8,13 @@ RUN rpm -i bcl2fastq2.rpm
 
 # Install cellranger
 WORKDIR /opt
-COPY cellranger-6.0.1.tar.gz cellranger-6.0.1.tar.gz
-RUN tar xzf cellranger-6.0.1.tar.gz && rm cellranger-6.0.1.tar.gz
-ENV PATH="/opt/cellranger-6.0.1:${PATH}"
+COPY cellranger-6.1.2.tar.gz cellranger-6.1.2.tar.gz
+RUN tar xzf cellranger-6.1.2.tar.gz && rm cellranger-6.1.2.tar.gz
+ENV PATH="/opt/cellranger-6.1.2:${PATH}"
+
+# Install spaceranger
+COPY spaceranger-1.3.1.tar.gz spaceranger-1.3.1.tar.gz
+RUN tar xzf spaceranger-1.3.1.tar.gz && rm spaceranger-1.3.1.tar.gz
+ENV PATH="/opt/spaceranger-1.3.1:${PATH}"
 
 WORKDIR /home
