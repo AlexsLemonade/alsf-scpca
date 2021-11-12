@@ -74,7 +74,6 @@ workflow{
     // only bulk samples
     .filter{it.technology in bulk_techs} 
     // use only the rows in the run_id list (run, library, or sample can match)
-    // or run by project or submitter if the project parameter is set
     .filter{run_all 
              || (it.run_id in run_ids) 
             }
