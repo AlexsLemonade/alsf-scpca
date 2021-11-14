@@ -52,8 +52,10 @@ process starsolo{
       --soloCBwhitelist ${barcode_file} \
       ${tech_flag[meta.technology]} \
       --soloCellFilter EmptyDrops_CR \
-      --outSAMtype BAM Unsorted \
+      --outSAMtype BAM SortedByCoordinate \
       --outSAMattributes NH HI nM AS CR UR CB UB CY UY GX GN \
+      --outBAMsortingThreadN 2 \
+      --limitBAMsortRAM 20000000000 \
       --runDirPerm All_RWX \
       --outFileNamePrefix ${output_dir}/ 
     """
