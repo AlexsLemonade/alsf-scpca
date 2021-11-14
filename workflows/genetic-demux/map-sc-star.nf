@@ -25,6 +25,7 @@ single_cell_techs = cell_barcodes.keySet()
 
 process starsolo{
   container STARCONTAINER
+  label 'bigdisk'
   memory "32.GB"
   cpus "8"
   publishDir "${params.outdir}/${meta.library_id}"
@@ -41,6 +42,7 @@ process starsolo{
                  '10Xv3.1': '--soloUMIlen 12']
     output_dir = "${meta.run_id}"
     """
+    mkdir -p ${output_dir}/Solo.out/Gene/raw
     STAR \
       --soloType CB_UMI_Simple \
       --genomeDir ${star_index} \
@@ -52,6 +54,9 @@ process starsolo{
       --soloCellFilter EmptyDrops_CR \
       --outSAMtype BAM SortedByCoordinate \
       --outSAMattributes NH HI nM AS CR UR CB UB CY UY GX GN \
+      --outBAMsortingThreadN 2 \
+      --limitBAMsortRAM 20000000000 \
+      --runDirPerm All_RWX \
       --outFileNamePrefix ${output_dir}/ 
     """
 }
