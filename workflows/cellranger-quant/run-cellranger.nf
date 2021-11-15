@@ -40,7 +40,7 @@ process cellranger{
       --sample=${meta.cr_samples} \
       --localcores=${task.cpus} \
       --localmem=${task.memory.toGiga()} \
-      ${meta.include_introns ? '--include-introns' : ''}
+      ${include_introns ? '--include-introns' : ''}
 
     """
 }
