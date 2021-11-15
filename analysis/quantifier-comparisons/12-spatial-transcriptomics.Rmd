@@ -1,0 +1,152 @@
+---
+title: "Spatial Transcriptomics Exploration"
+author: "Ally Hawkins for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+## Set Up
+
+```{r}
+library(magrittr)
+library(ggplot2)
+library(SingleCellExperiment)
+library(SpatialExperiment)
+```
+
+```{r}
+function_path <- file.path(".." ,"benchmarking-functions", "R")
+file.path(function_path, list.files(function_path, pattern = "*.R$")) %>%
+  purrr::walk(source)
+```
+
+
+```{r}
+base_dir <- here::here()
+
+# output folder to store alevin-fry and cellranger quants from S3
+data_dir <- file.path(base_dir, "data", "spatial") 
+s3_out <- file.path(data_dir, "data", "quants")
+
+# output folder for image files 
+image_dir <- file.path(data_dir, "data", "images")
+
+# results directory 
+results_dir <- file.path(data_dir, "results")
+
+# create directories
+if(!dir.exists(data_dir)){
+  dir.create(data_dir, recursive = TRUE)
+}
+
+if(!dir.exists(image_dir)){
+  dir.create(image_dir, recursive = TRUE)
+}
+
+if(!dir.exists(results_dir)){
+  dir.create(results_dir, recursive = TRUE)
+}
+
+
+```
+
+## Copy data from S3
+
+```{r}
+# grab alevin fry and cellranger output
+sample_ids <- c("SCPCR000372", "SCPCR000373")
+
+aws_copy_samples(local_dir = s3_out,
+                 s3_dir = "s3://nextflow-ccdl-results/scpca",
+                 samples = sample_ids,
+                 tools = c("alevin-fry-knee", "cellranger"))
+```
+
+## Importing Alevin-fry and Spaceranger output into a Spatial Experiment
+
+```{r}
+# create a sce for the alevin-fry outputs 
+fry_dir <- file.path(s3_out, "alevin-fry-knee", sample_ids)
+fry_dir <- paste0(fry_dir, "-spliced_intron_txome_k31-salign-cr-like-em-knee")
+
+fry_sce <- scpcaTools::read_alevin(fry_dir[1], 
+                                   usa_mode = TRUE,
+                                   which_counts = "spliced")
+```
+
+```{r}
+# paths to spatial folders 
+cellranger_folders <- paste0(sample_ids, "-cdna-spatial")
+spatial_dir <- file.path(s3_out, "cellranger", cellranger_folders[1], "outs", "spatial")
+```
+
+
+```{r}
+# read in image data
+image_data <- readImgData(spatial_dir,
+            sample_id = sample_ids[1])
+
+# read in spatial coordinates
+spatial_data_file <- file.path(spatial_dir, "tissue_positions_list.csv")
+spatial_data <- readr::read_csv(spatial_data_file, col_names = c("barcode", "in_tissue", "array_row",
+                                                              "array_col","pxl_row_in_fullres",
+                                                                 "pxl_col_in_fullres"))
+# find common cells between Alevin-fry and spaceranger 
+spatial_data <- spatial_data %>%
+  dplyr::mutate(barcode = gsub("-1", "", barcode))
+common_cells <- intersect(colnames(fry_sce), spatial_data$barcode)
+
+# subset fry_sce by common cells
+fry_sce_subset <- fry_sce[,common_cells]
+spatial_data_subset <- spatial_data %>%
+  dplyr::filter(barcode %in% common_cells)
+
+# construct 'SpatialExperiment'
+fry_spe <- SpatialExperiment(
+    assays = list(counts = assay(fry_sce_subset)),
+    colData = colData(fry_sce_subset), 
+    imgData = image_data,
+    spatialData = DataFrame(spatial_data_subset),
+    spatialCoordsNames = c("pxl_col_in_fullres", "pxl_row_in_fullres"),
+    sample_id = sample_ids[1])
+
+```
+
+
+```{r}
+# spaceranger output paths
+spaceranger_outs <- file.path(s3_out, cellranger_folders)
+
+# read in spaceranger output directly using read10XVisium
+spaceranger_spe <- read10xVisium(spaceranger_outs[1],
+                                 sample_id = sample_ids[1],
+                                 type = "sparse",
+                                 data = "raw",
+                                 images = "lowres", 
+                                 load = FALSE)
+
+```
+## Using Seurat 
+
+```{r}
+# convert sce to seurat object 
+fry_seurat <- CreateSeuratObject(counts = counts(fry_sce_subset),
+                                 project = "SPATIAL",
+                                 assay = "Spatial")
+
+# read in image data using Seurat and subset to common cells
+image_data <- Read10X_Image(spatial_dir)
+rownames(image_data@coordinates) <- gsub("-1","", rownames(image_data@coordinates))
+image_data <- image_data[common_cells,]
+
+# add image data to Seurat
+DefaultAssay(object = image_data) <- "Spatial"
+fry_seurat[['slice']] <- image_data
+```
+
+```{r}
+fry_seurat
+```
+
