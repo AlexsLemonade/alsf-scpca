@@ -14,7 +14,8 @@ params.outdir = 's3://nextflow-ccdl-results/scpca/cellranger-quant'
 
 // technology options
 cellranger_tech_list = ["10Xv2", "10Xv3", "10Xv3.1", "10Xv2_5prime"]
-all_tech_list = cellranger_tech_list + "spatial"
+spatial_techs = ["spatial", "visium_v1", "visium_v2"]
+all_tech_list = cellranger_tech_list + spatial_techs
 
 // build full paths
 params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
@@ -46,7 +47,7 @@ process cellranger{
 }
 
 process spaceranger{
-  container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.1.2'
+  container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-spaceranger:1.3.1'
   publishDir "${params.outdir}", mode: 'copy'
   tag "${meta.scpca_run_id}-${index}-spatial" 
   label 'cpus_8'
@@ -110,7 +111,7 @@ workflow{
                        )}
 
   spaceranger_reads = ch_reads
-    .filter{it.technology == "spatial"}
+    .filter{it.technology in spatial_techs}
     // create tuple of [metadata, fastq dir, and image filename]
     .map{meta -> tuple(meta,
                        file("s3://${meta.s3_prefix}"),
