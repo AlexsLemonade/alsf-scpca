@@ -28,19 +28,20 @@ process starsolo{
   label 'bigdisk'
   memory "32.GB"
   cpus "8"
-  publishDir "${params.outdir}/${meta.library_id}"
   input:
     tuple val(meta), path(read1), path(read2)
     path star_index
     path barcode_file
   output:
-    tuple val(meta), path(output_dir)
+    tuple val(meta), path(output_dir), emit: starsolo_dir
+    tuple val(meta), path(output_bam), emit: star_bam
   script:
     tech_flag = ['10Xv2': '',
                  '10Xv2_5prime': '',
                  '10Xv3': '--soloUMIlen 12',
                  '10Xv3.1': '--soloUMIlen 12']
     output_dir = "${meta.run_id}"
+    output_bam = "${meta.run_id}.sorted.bam"
     """
     mkdir -p ${output_dir}/Solo.out/Gene/raw
     STAR \
@@ -54,15 +55,17 @@ process starsolo{
       --soloCellFilter EmptyDrops_CR \
       --outSAMtype BAM SortedByCoordinate \
       --outSAMattributes NH HI nM AS CR UR CB UB CY UY GX GN \
-      --limitBAMsortRAM 20000000000 \
+      --limitBAMsortRAM 25000000000 \
       --runDirPerm All_RWX \
       --outFileNamePrefix ${output_dir}/ 
+
+    mv ${output_dir}/Aligned.sortedByCoord.out.bam ${output_bam}
     """
 }
 
 process index_bam{
   container SAMTOOLSCONTAINER
-  
+  publishDir "${params.outdir}/${meta.library_id}"
   input:
     tuple val(meta), path(bamfile)
   output:
@@ -112,4 +115,5 @@ workflow{
       .map{file("${params.barcode_dir}/${cell_barcodes[it.technology]}")}
     
     starsolo(sc_reads_ch, params.star_index, cellbarcodes_ch)
+    index_bam(starsolo.out.star_bam)
 }
