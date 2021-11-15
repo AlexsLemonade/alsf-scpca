@@ -22,16 +22,16 @@ params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
 process cellranger{
   container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.1.2'
   publishDir "${params.outdir}", mode: 'copy'
-  tag "${id}-${index}" // add tag for tracking sample names in trace file  
+  tag "${meta.scpca_run_id}-${index}" // add tag for tracking sample names in trace file  
   label 'cpus_8'
   label 'bigdisk'
   input:
-    tuple val(meta), path(fastq_dir)
+    tuple val(meta), path(fastq_dir), val(include_introns)
     path index
   output:
     path output_id
   script:
-    output_id = "${meta.library_id}-${index}-${meta.include_introns ? 'pre_mRNA' : 'mRNA'}"
+    output_id = "${meta.scpca_library_id}-${index}-${meta.include_introns ? 'pre_mRNA' : 'mRNA'}"
     """
     cellranger count \
       --id=${output_id} \
@@ -46,9 +46,9 @@ process cellranger{
 }
 
 process spaceranger{
-  container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.0.1'
+  container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.1.2'
   publishDir "${params.outdir}", mode: 'copy'
-  tag "${id}-${index}-spatial" 
+  tag "${meta.scpca_run_id}-${index}-spatial" 
   label 'cpus_8'
   label 'bigdisk'
   input:
@@ -57,7 +57,7 @@ process spaceranger{
   output:
     path output_id
   script:
-    output_id = "${meta.library_id}-${index}-spatial"
+    output_id = "${meta.scpca_library_id}-${index}-spatial"
     """
     spaceranger count \
       --id=${output_id} \
@@ -105,7 +105,8 @@ workflow{
     // create tuple of [metadata, fastq dir]
     //.map{it.cr_samples =  getCRsamples(it.files); it}
     .map{meta -> tuple(meta,
-                       file("s3://${meta.s3_prefix}")
+                       file("s3://${meta.s3_prefix}"),
+                       meta.seq_unit == 'nucleus'
                        )}
 
   spaceranger_reads = ch_reads
