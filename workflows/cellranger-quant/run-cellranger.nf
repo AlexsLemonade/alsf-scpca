@@ -31,7 +31,7 @@ process cellranger{
   output:
     path output_id
   script:
-    output_id = "${meta.scpca_library_id}-${index}-${meta.include_introns ? 'pre_mRNA' : 'mRNA'}"
+    output_id = "${meta.scpca_run_id}-${index}-${meta.include_introns ? 'pre_mRNA' : 'mRNA'}"
     """
     cellranger count \
       --id=${output_id} \
@@ -57,7 +57,7 @@ process spaceranger{
   output:
     path output_id
   script:
-    output_id = "${meta.scpca_library_id}-${index}-spatial"
+    output_id = "${meta.scpca_run_id}-${index}-spatial"
     """
     spaceranger count \
       --id=${output_id} \
