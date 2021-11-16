@@ -55,7 +55,7 @@ process starsolo{
       --soloCellFilter EmptyDrops_CR \
       --outSAMtype BAM SortedByCoordinate \
       --outSAMattributes NH HI nM AS CR UR CB UB CY UY GX GN \
-      --limitBAMsortRAM 25000000000 \
+      --limitBAMsortRAM 20000000000 \
       --runDirPerm All_RWX \
       --outFileNamePrefix ${output_dir}/ 
 
@@ -78,7 +78,6 @@ process index_bam{
 }
 
 workflow{
-  sc_techs = ['single_end', 'paired_end']
   run_ids = params.run_ids?.tokenize(',') ?: []
   run_all = run_ids[0] == "All"
 
@@ -94,11 +93,9 @@ workflow{
       submitter: it.submitter,
       technology: it.technology,
       seq_unit: it.seq_unit,
-      feature_barcode_file: it.feature_barcode_file,
-      feature_barcode_geom: it.feature_barcode_geom,
       s3_prefix: it.s3_prefix,
     ]}
-    // only bulk samples
+    // only single cell samples
     .filter{it.technology in single_cell_techs} 
     // use only the rows in the run_id list (run, library, or sample can match)
     // or run by project or submitter if the project parameter is set
