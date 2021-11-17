@@ -7,41 +7,65 @@ SAMTOOLSCONTAINER = 'quay.io/biocontainers/samtools:1.14--hb421002_0'
 // parameters
 params.ref  = 'Homo_sapiens.GRCh38.104'
 params.star_index = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/star_index/Homo_sapiens.GRCh38.104.star_idx'
+params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
-params.run_ids = 'SCPCR000170,SCPCR000171,SCPCR000172,SCPCR000173'
+params.run_ids = 'SCPCR000533'
 
-params.outdir = 's3://nextflow-ccdl-results/scpca/star-bulk/'
+params.outdir = 's3://nextflow-ccdl-results/scpca/starsolo/'
 
+// 10X barcode files
+cell_barcodes = ['10Xv2': '737K-august-2016.txt',
+                 '10Xv3': '3M-february-2018.txt',
+                 '10Xv3.1': '3M-february-2018.txt',
+                 '10Xv2_5prime': '737K-august-2016.txt']
 
+// supported single cell technologies
+single_cell_techs = cell_barcodes.keySet()
 
-process bulkmap_star{
+process starsolo{
   container STARCONTAINER
+  label 'bigdisk'
   memory "32.GB"
   cpus "8"
   input:
     tuple val(meta), path(read1), path(read2)
     path star_index
+    path barcode_file
   output:
-    tuple val(meta), path(output_bam)
+    tuple val(meta), path(output_dir), emit: starsolo_dir
+    tuple val(meta), path(output_bam), emit: star_bam
   script:
+    tech_flag = ['10Xv2': '',
+                 '10Xv2_5prime': '',
+                 '10Xv3': '--soloUMIlen 12',
+                 '10Xv3.1': '--soloUMIlen 12']
+    output_dir = "${meta.run_id}"
     output_bam = "${meta.run_id}.sorted.bam"
     """
+    mkdir -p ${output_dir}/Solo.out/Gene/raw
     STAR \
+      --soloType CB_UMI_Simple \
       --genomeDir ${star_index} \
       --runThreadN ${task.cpus} \
-      --readFilesIn ${read1.join(',')} \
-      ${meta.technology == 'paired_end' ? read2.join(',') : ""} \
+      --readFilesIn ${read2.join(',')} ${read1.join(',')} \
       --readFilesCommand gunzip -c \
-      --outSAMtype BAM SortedByCoordinate
+      --soloCBwhitelist ${barcode_file} \
+      ${tech_flag[meta.technology]} \
+      --soloCellFilter EmptyDrops_CR \
+      --outSAMtype BAM SortedByCoordinate \
+      --outSAMattributes NH HI nM AS CR UR CB UB CY UY GX GN \
+      --limitBAMsortRAM 20000000000 \
+      --runDirPerm All_RWX \
+      --outFileNamePrefix ${output_dir}/ 
 
-    mv Aligned.sortedByCoord.out.bam ${output_bam}
+    mv ${output_dir}/Aligned.sortedByCoord.out.bam ${output_bam}
     """
 }
 
 process index_bam{
   container SAMTOOLSCONTAINER
-  publishDir "${params.outdir}/${meta.sample_id}"
+  publishDir "${params.outdir}/${meta.library_id}"
   input:
     tuple val(meta), path(bamfile)
   output:
@@ -54,11 +78,10 @@ process index_bam{
 }
 
 workflow{
-  bulk_techs = ['single_end', 'paired_end']
   run_ids = params.run_ids?.tokenize(',') ?: []
   run_all = run_ids[0] == "All"
 
-  bulk_ch = Channel.fromPath(params.run_metafile)
+  singlecell_ch = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
     // convert row data to a metadata map, keeping only columns we will need (& some renaming)
     // sample_id can have multiple `;`-separated values, change to `_`
@@ -69,20 +92,25 @@ workflow{
       project_id: it.scpca_project_id?: "no_project",
       submitter: it.submitter,
       technology: it.technology,
+      seq_unit: it.seq_unit,
       s3_prefix: it.s3_prefix,
     ]}
-    // only bulk samples
-    .filter{it.technology in bulk_techs} 
+    // only single cell samples
+    .filter{it.technology in single_cell_techs} 
     // use only the rows in the run_id list (run, library, or sample can match)
+    // or run by project or submitter if the project parameter is set
     .filter{run_all 
              || (it.run_id in run_ids) 
             }
     
-    bulk_reads_ch = bulk_ch
+    sc_reads_ch = singlecell_ch
       .map{meta -> tuple(meta,
                          file("s3://${meta.s3_prefix}/*_R1_*.fastq.gz"),
                          file("s3://${meta.s3_prefix}/*_R2_*.fastq.gz"))}
     
-    bulkmap_star(bulk_reads_ch, params.star_index) \
-      | index_bam
+    cellbarcodes_ch = singlecell_ch
+      .map{file("${params.barcode_dir}/${cell_barcodes[it.technology]}")}
+    
+    starsolo(sc_reads_ch, params.star_index, cellbarcodes_ch)
+    index_bam(starsolo.out.star_bam)
 }
