@@ -27,7 +27,11 @@ process mpileup{
   script:
     mpileup_file = "${meta.multiplex_library_id}.vcf.gz"
     """
+    # create sample file to use for header
     echo "${meta.sample_ids.join('\n')}" > samples.txt
+    
+    # call genotypes against reference, filter sites with missing genotypes 
+    # & use sample names for header (replacing file names)
     bcftools mpileup -Ou \
       --fasta-ref ${reference} \
       ${bamfiles} \
@@ -105,14 +109,14 @@ workflow{
   multiplexed_ch = all_ch.filter{it.technology in single_cell_techs}
     .filter{it.sample_id.contains("_")} 
     .map{[tuple(it.sample_id.split("_")), it]} // split out sample ids into a tuple
-    .transpose() // one element per sample (run_ids repeated)
+    .transpose() // one element per sample (meta objects repeated)
 
   bulk_ch = Channel.from(bulk_results)
     // pull sample id out, leave other three fields as is
     .map{[it[0].sample_id, it[0], it[1], it[2]]}
   
-  pileup_ch = multiplexed_ch.combine(bulk_ch, by: 0)
-    .groupTuple(by: 1)
+  pileup_ch = multiplexed_ch.combine(bulk_ch, by: 0) // combine by sample id
+    .groupTuple(by: 1) // group by the multiplex run meta object
     .map{[
       [ // create a meta object for each group of files
         sample_ids: it[0],
