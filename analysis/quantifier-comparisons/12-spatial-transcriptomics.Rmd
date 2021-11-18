@@ -7,6 +7,12 @@ output:
     toc_float: true
 ---
 
+In this notebook we are comparing the use of Alevin-fry and Spaceranger for quantifying spatial transcriptomics libraries. 
+Two spatial transcriptomic libraries were quantified using Alevin-fry and Spaceranger and the results were combined following the [Alevin-fry tutorial](https://combine-lab.github.io/alevin-fry-tutorials/2021/af-spatial/). 
+We are comparing that to if we were to not integrate the Spaceranger data with Alevin-fry and only use Spaceranger. 
+
+Additionally in this notebook we also explore the use of storing spatial data in a [`SpatialExperiment` object](https://bioconductor.org/packages/release/bioc/vignettes/SpatialExperiment/inst/doc/SpatialExperiment.html#3_Common_operations) or in a [`Seurat` object](https://satijalab.org/seurat/articles/spatial_vignette.html). 
+
 ## Set Up
 
 ```{r}
@@ -14,9 +20,12 @@ library(magrittr)
 library(ggplot2)
 library(SingleCellExperiment)
 library(SpatialExperiment)
+library(ggspavis)
+library(ggupset)
 ```
 
 ```{r}
+# load in benchmarking functions that will be used for copying data and generating sample tables
 function_path <- file.path(".." ,"benchmarking-functions", "R")
 file.path(function_path, list.files(function_path, pattern = "*.R$")) %>%
   purrr::walk(source)
@@ -24,6 +33,7 @@ file.path(function_path, list.files(function_path, pattern = "*.R$")) %>%
 
 
 ```{r}
+# set up file paths 
 base_dir <- here::here()
 
 # output folder to store alevin-fry and cellranger quants from S3
@@ -48,9 +58,19 @@ if(!dir.exists(image_dir)){
 if(!dir.exists(results_dir)){
   dir.create(results_dir, recursive = TRUE)
 }
-
-
 ```
+
+
+```{r}
+mito_file <- file.path(base_dir, "sample-info", "Homo_sapiens.GRCh38.103.mitogenes.txt")
+  
+# read in mito genes 
+mito_genes <- readr::read_tsv(mito_file, col_names = "gene_id")
+mito_genes <- mito_genes %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+```
+
 
 ## Copy data from S3
 
@@ -64,19 +84,70 @@ aws_copy_samples(local_dir = s3_out,
                  tools = c("alevin-fry-knee", "cellranger"))
 ```
 
-## Importing Alevin-fry and Spaceranger output into a Spatial Experiment
+## Comparing SpatialExperiment to Seurat
+
+### Importing Alevin-fry and Spaceranger output into a SpatialExperiment
+
+First we are testing use of a `SpatialExperiment` object to store the spatial transcriptomics results. 
+We will create two functions, one to deal with creating the combined object from both Alevin-fry and Spaceranger output, and the second to import Spaceranger output only. 
 
 ```{r}
-# create a sce for the alevin-fry outputs 
-fry_dir <- file.path(s3_out, "alevin-fry-knee", sample_ids)
-fry_dir <- paste0(fry_dir, "-spliced_intron_txome_k31-salign-cr-like-em-knee")
-
-fry_sce <- scpcaTools::read_alevin(fry_dir[1], 
-                                   usa_mode = TRUE,
-                                   which_counts = "spliced")
+# custom function for converting Alevin-fry and Spaceranger output to spe
+convert_fry_spaceranger_spe <- function(fry_dir, spaceranger_dir, sample_name){
+  fry_sce <- scpcaTools::read_alevin(fry_dir, 
+                                     usa_mode = TRUE,
+                                     which_counts = "spliced")
+  
+  # read in image data
+  image_data <- SpatialExperiment::readImgData(spaceranger_dir,
+                            sample_id = sample_name)
+  
+  # read in spatial coordinates 
+  spatial_data_file <- file.path(spaceranger_dir, "tissue_positions_list.csv")
+  spatial_data <- readr::read_csv(spatial_data_file, col_names = c("barcode", "in_tissue", "array_row",
+                                                                   "array_col","pxl_row_in_fullres",
+                                                                   "pxl_col_in_fullres"))
+  # find common cells between Alevin-fry and spaceranger 
+  spatial_data <- spatial_data %>%
+    dplyr::mutate(barcode = gsub("-1", "", barcode))
+  common_cells <- intersect(colnames(fry_sce), spatial_data$barcode)
+  
+  # subset fry_sce by common cells
+  fry_sce_subset <- fry_sce[,common_cells]
+  spatial_data_subset <- spatial_data %>%
+    dplyr::filter(barcode %in% common_cells)
+  
+  # construct 'SpatialExperiment'
+  fry_spe <- SpatialExperiment(
+    assays = list(counts = assay(fry_sce_subset)),
+    colData = colData(fry_sce_subset), 
+    imgData = image_data,
+    spatialData = DataFrame(spatial_data_subset),
+    spatialCoordsNames = c("pxl_col_in_fullres", "pxl_row_in_fullres"),
+    sample_id = sample_name)
+}
 ```
 
+
 ```{r}
+spaceranger_only_spe <- function(spaceranger_outs_dir, sample_name){
+  # read in spaceranger outputs directly using read10XVisium
+  spaceranger_spe <- read10xVisium(spaceranger_outs_dir,
+                                 sample_id = sample_name,
+                                 type = "sparse",
+                                 data = "raw",
+                                 images = "lowres", 
+                                 load = FALSE)
+}
+```
+
+Let's test these functions out and read in the Alevin-fry and Spaceranger output for one sample. 
+
+```{r}
+# get path to fry output directory 
+fry_dir <- file.path(s3_out, "alevin-fry-knee", sample_ids[1])
+fry_dir <- paste0(fry_dir, "-spliced_intron_txome_k31-salign-cr-like-em-knee")
+
 # paths to spatial folders 
 cellranger_folders <- paste0(sample_ids, "-cdna-spatial")
 spatial_dir <- file.path(s3_out, "cellranger", cellranger_folders[1], "outs", "spatial")
@@ -84,61 +155,41 @@ spatial_dir <- file.path(s3_out, "cellranger", cellranger_folders[1], "outs", "s
 
 
 ```{r}
-# read in image data
-image_data <- readImgData(spatial_dir,
-            sample_id = sample_ids[1])
-
-# read in spatial coordinates
-spatial_data_file <- file.path(spatial_dir, "tissue_positions_list.csv")
-spatial_data <- readr::read_csv(spatial_data_file, col_names = c("barcode", "in_tissue", "array_row",
-                                                              "array_col","pxl_row_in_fullres",
-                                                                 "pxl_col_in_fullres"))
-# find common cells between Alevin-fry and spaceranger 
-spatial_data <- spatial_data %>%
-  dplyr::mutate(barcode = gsub("-1", "", barcode))
-common_cells <- intersect(colnames(fry_sce), spatial_data$barcode)
-
-# subset fry_sce by common cells
-fry_sce_subset <- fry_sce[,common_cells]
-spatial_data_subset <- spatial_data %>%
-  dplyr::filter(barcode %in% common_cells)
-
-# construct 'SpatialExperiment'
-fry_spe <- SpatialExperiment(
-    assays = list(counts = assay(fry_sce_subset)),
-    colData = colData(fry_sce_subset), 
-    imgData = image_data,
-    spatialData = DataFrame(spatial_data_subset),
-    spatialCoordsNames = c("pxl_col_in_fullres", "pxl_row_in_fullres"),
-    sample_id = sample_ids[1])
-
+# read in combined fry and spaceranger spe 
+fry_spe <- convert_fry_spaceranger_spe(fry_dir, 
+                                       spatial_dir, 
+                                       sample_ids[1])
 ```
 
+Below we import just the Spaceranger outputs into a `SpatialExperiment` object.
 
 ```{r}
 # spaceranger output paths
-spaceranger_outs <- file.path(s3_out, cellranger_folders)
+spaceranger_out <- file.path(s3_out, "cellranger", cellranger_folders[1], "outs")
 
 # read in spaceranger output directly using read10XVisium
-spaceranger_spe <- read10xVisium(spaceranger_outs[1],
-                                 sample_id = sample_ids[1],
-                                 type = "sparse",
-                                 data = "raw",
-                                 images = "lowres", 
-                                 load = FALSE)
-
+spaceranger_spe <- spaceranger_only_spe(spaceranger_out, sample_ids[1])
 ```
-## Using Seurat 
+
+### Importing as Seurat Object
+
+Below we will import the same data but as a `Seurat` object instead of a `SpatialExperiment` object. 
 
 ```{r}
+# first create sce from Alevin output
+fry_sce <- scpcaTools::read_alevin(fry_dir,
+                                   usa_mode = TRUE,
+                                   which_counts = "spliced")
+
 # convert sce to seurat object 
-fry_seurat <- CreateSeuratObject(counts = counts(fry_sce_subset),
+fry_seurat <- CreateSeuratObject(counts = counts(fry_sce),
                                  project = "SPATIAL",
                                  assay = "Spatial")
 
 # read in image data using Seurat and subset to common cells
 image_data <- Read10X_Image(spatial_dir)
 rownames(image_data@coordinates) <- gsub("-1","", rownames(image_data@coordinates))
+common_cells <- intersect(Cells(x = fry_seurat), rownames(image_data@coordinates))
 image_data <- image_data[common_cells,]
 
 # add image data to Seurat
@@ -147,6 +198,398 @@ fry_seurat[['slice']] <- image_data
 ```
 
 ```{r}
-fry_seurat
+# load spaceranger outputs directly into Seurat object 
+spaceranger_seurat <- Load10X_Spatial(spaceranger_out)
+```
+
+
+### Comparing Seurat and Spatial Experiment
+
+Now let's take a look at how each of these objects stores information for the experiment. 
+We will just look at the files that have been produced from Spaceranger only and compare the `Seurat` object to the `SpatialExperiment`. 
+
+```{r}
+head(colData(spaceranger_spe))
+head(spaceranger_seurat@meta.data)
+```
+
+Seurat automatically adds some per cell QC metrics here, but in general the `colData` looks similar to what we would expect for a `SingleCellExperiment` for the `SpatialExperiment`.
+
+```{r}
+head(rowData(spaceranger_spe))
+head(spaceranger_seurat[["Spatial"]]@meta.features)
+```
+
+```{r}
+spaceranger_spe <- spaceranger_spe %>%
+  scuttle::addPerCellQCMetrics(subsets = list(mito_genes = mito_genes[mito_genes %in% rownames(spaceranger_spe)])) 
+head(colData(spaceranger_spe))
+```
+
+You can still use the same functions to add in per cell metrics that we are using in `scpcaTools` now on a `SpatialExperiment`. 
+
+Let's specifically look at how each of them stores the data related to the spatial information.
+The `SpatialExperiment` has three places where it stores spatial information, `spatialData`, `spatialCoords`, and `imgData`. 
+
+```{r}
+head(spatialData(spaceranger_spe))
+```
+
+```{r}
+head(spatialCoords(spaceranger_spe))
+```
+
+`spatialData` holds information about whether or not each barcode was covered by tissue and spatial metadata.
+`spatialCoords` holds the coordinates for each spot.
+
+This same information can be found by looking in the `images` slot in the `Seurat` object. 
+
+```{r}
+head(spaceranger_seurat@images$slice1@coordinates)
+```
+`imgData` holds information about each image that is stored as multiple slices of an image can be stored within one `SpatialExperiment`. 
+
+```{r}
+imgData(spaceranger_spe)
+```
+
+This same information can be found by looking at the `images` slot in the `Seurat` object. 
+
+```{r}
+spaceranger_seurat@images$slice1@scale.factors
+```
+
+Let's take a look at some example plots that can be produced with each of these objects.
+
+```{r}
+library(viridis)
+# plot tissue spots coloring by total UMI count
+plotSpots(spe = spaceranger_spe, 
+          x_coord = "pxl_col_in_fullres", 
+          y_coord = "pxl_row_in_fullres", 
+          annotate = "sum") +
+  scale_color_viridis_c()
+```
+```{r}
+SpatialFeaturePlot(spaceranger_seurat, features = "nCount_Spatial")
+```
+It looks like overall they both would work and that the `SpatialExperiment` will provide similar functionality to how we have things already set up for single-cell experiments. 
+I think I have a slight preference for the Seurat plots as you can adjust the transparency of the points and also see the tissue, but I also think we may be able to play around with the plots with the `SpatialExperiment` more if we want something similar to that. 
+
+## Alevin-fry + Spaceranger versus Spaceranger Only
+
+Now let's take a look at comparing the two methods of using Alevin-fry + Spaceranger to only Spaceranger for quantification. 
+To do this, we will read in a list of Alevin-fry + Spaceranger `SpatialExperiment` objects and Spaceranger objects and then merge them into one list before grabbing the per cell and per gene quality metrics. 
+
+### Create Spatial Experiments 
+
+```{r}
+# create sample info dataframe to be joined with per cell dataframe later
+sample_info_df <- quant_info_table(data_dir= s3_out, 
+                 tools = c("cellranger", "alevin-fry-knee"),
+                 samples = sample_ids) %>%
+  # convert cellranger to spaceranger 
+  dplyr::mutate(tool = ifelse(tool == "cellranger", "spaceranger", tool))
+```
+
+```{r}
+# modify sample data frame to get spatial and fry directories for each sample
+input_df <- sample_info_df %>%
+  dplyr::select(tool, quant_dir, sample, data_dir) %>%
+  dplyr::mutate(data_dir = dplyr::case_when(tool == "spaceranger" ~ 
+                                            file.path(data_dir, "outs", "spatial"),
+                                            tool == "alevin-fry" ~ data_dir)) %>%
+  tidyr::pivot_wider(id_cols = sample, names_from = tool, values_from = data_dir)
+
+# use custome function to create list of spe's
+fry_spe_list <- mapply(convert_fry_spaceranger_spe,
+                       input_df$`alevin-fry`,
+                       input_df$spaceranger,
+                       input_df$sample)
+names(fry_spe_list) <- paste0(sample_ids, "-fry-spaceranger-combined")
+```
+
+
+
+```{r}
+# create list of spaceranger only processed spe's 
+# spaceranger output paths
+spaceranger_outs <- file.path(s3_out, "cellranger", cellranger_folders, "outs")
+names(spaceranger_outs) <- sample_ids
+
+spaceranger_spe_list <- purrr::imap(spaceranger_outs, spaceranger_only_spe)
+names(spaceranger_spe_list) <- paste0(sample_ids, "-spaceranger-only")
+```
+
+```{r}
+all_spe_list <- append(fry_spe_list, spaceranger_spe_list)
+
+# calculate per cell QC and output to a combined data frame with plotting 
+all_spe_list <- all_spe_list %>%
+    purrr::map(
+      ~ scuttle::addPerCellQCMetrics(.x, 
+                                     subsets = list(mito = mito_genes[mito_genes %in% rownames(.x)]))) %>%
+  purrr::map(scuttle::addPerFeatureQCMetrics)
+```
+
+### Per Spot QC Metrics
+
+```{r}
+# create custom function to grab colData and convert to data frame 
+spatial_coldata_to_df <- function(spe){
+  df <- as.data.frame(colData(spe)) %>%
+    tibble::rownames_to_column(var = "spot_id")
+}
+```
+
+
+```{r}
+fry_samples = c("SCPCR000372-fry-spaceranger-combined", "SCPCR000373-fry-spaceranger-combined")
+spaceranger_samples = c("SCPCR000372-spaceranger-only", "SCPCR000373-spaceranger-only")
+
+# join coldata dataframe with sample info
+coldata_df <- purrr::map_df(all_spe_list,spatial_coldata_to_df, .id = "sample") %>%
+  dplyr::mutate(tool = dplyr::case_when(sample %in% fry_samples ~ "alevin-fry",
+                                        sample %in% spaceranger_samples ~ "spaceranger"),
+                # extract sample name only to allow for joining
+                sample = stringr::word(sample, 1, sep = "-"),
+                # remove extra -1 from spaceranger barcodes
+                spot_id = gsub("-1", "", spot_id))%>%
+  dplyr::left_join(sample_info_df,
+                   by = c("sample", "tool"))
+```
+
+```{r}
+# identify shared spots only 
+spot_counts <- coldata_df %>%  
+  dplyr::count(spot_id, sample)
+
+common_spots <- spot_counts %>%
+  dplyr::filter(n == 2) %>%
+  dplyr::pull(spot_id)
+
+coldata_df_common <- coldata_df %>%
+  dplyr::filter(spot_id %in% common_spots,
+                in_tissue == 1)
+```
+
+In addition to filtering on shared spots we will also want to filter based on spots that are found to overlap with tissue. 
+
+```{r}
+# also want to filter the spe's directly 
+filter_spe <- function(spe){
+  spe <- spe[, spatialData(spe)$in_tissue == 1]
+}
+
+all_spes_filter <- all_spe_list %>%
+  purrr::map(filter_spe)
+```
+
+
+```{r}
+# custom function for plotting spe results and coloring by column of colData of choice
+plot_spe <- function(spe, sample, column){
+  plotSpots(spe, 
+            x_coord = "pxl_col_in_fullres", 
+            y_coord = "pxl_row_in_fullres", 
+            annotate = column) +
+  scale_color_viridis_c() + 
+    ggtitle(sample)
+}
+```
+
+First we will look at the per cell metrics: mitochondrial reads per cell, total UMI per cell, and total genes detected per cell. 
+
+```{r}
+# % mitochondrial reads/ spot 
+ggplot(coldata_df_common, aes(x = tool, y = subsets_mito_percent, fill = tool)) + 
+  geom_boxplot() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Mito Percent") + 
+  xlab("")
+```
+```{r}
+all_spes_filter %>%
+  purrr::imap(plot_spe, "subsets_mito_percent")
+```
+
+Overall it looks like mitochondrial content is low and fairly similar across both tools. 
+
+
+```{r}
+# total UMI/ spot 
+ggplot(coldata_df_common, aes(x = sum, color = tool)) + 
+  geom_density() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("UMI/spot") + 
+  xlab("")
+```
+```{r}
+all_spes_filter %>%
+  purrr::imap(plot_spe, "sum")
+```
+
+Interestingly when looking at the pictures (besides that the Alevin-fry and Spaceranger pictures are flipped), there appears to be different patterns of total UMI count per spot showing up between fry and Spaceranger. 
+
+```{r}
+# total genes/ spot 
+ggplot(coldata_df_common, aes(x = detected, color = tool)) + 
+  geom_density() + 
+  facet_grid(~ sample) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) + 
+  ylab("Genes detected/spot") + 
+  xlab("") 
+```
+```{r}
+all_spes_filter %>%
+  purrr::imap(plot_spe, "detected")
+```
+Generally it looks like both tools are fairly similar in the number of UMI/cell and genes detected/cell but the actual spatial distribution of looks very different within each sample across both tools which is concerning. 
+
+### Per Gene QC Metrics
+
+Let's also look at the correlation of mean gene expression across shared genes. 
+
+```{r}
+# custom function to grab row data from spe
+spatial_rowdata_to_df <- function(spe){
+  df <- as.data.frame(rowData(spe)) %>%
+    tibble::rownames_to_column(var = "gene_id")
+}
+```
+
+```{r}
+# combine rowdata with sample info
+rowdata_df <- purrr::map_df(all_spe_list,spatial_rowdata_to_df, .id = "sample") %>%
+  dplyr::mutate(tool = dplyr::case_when(sample %in% fry_samples ~ "alevin-fry",
+                                        sample %in% spaceranger_samples ~ "spaceranger"),
+                sample = stringr::word(sample, 1, sep = "-")) %>%
+  dplyr::left_join(sample_info_df,
+                   by = c("sample", "tool"))
+
+
+gene_counts <- rowdata_df %>% 
+  # remove genes that have a low frequency of being detected
+  dplyr::filter(detected >= 5.0) %>%
+  dplyr::count(gene_id, sample)
+
+# restrict to only common genes 
+common_genes <- gene_counts %>%
+  dplyr::filter(n == 2) %>%
+  dplyr::pull(gene_id)
+
+rowdata_df_common <- rowdata_df %>%
+  dplyr::filter(
+    (gene_id %in% common_genes) 
+  )
+```
+
+```{r}
+rowdata_cor <- rowdata_df_common %>%
+  dplyr::select(tool, gene_id, sample, mean) %>%
+  # spread the mean expression stats to one column per caller
+  tidyr::pivot_wider(id_cols = c(gene_id, sample),
+                     names_from = c("tool"),
+                     values_from = mean) %>%
+  # drop rows with NA values to ease correlation calculation
+  tidyr::drop_na()
+```
+
+```{r}
+# look at correlation between the two tools
+rowdata_cor %>% 
+  dplyr::group_by(sample) %>%
+  dplyr::summarize(
+    alevin_fry_knee_spaceranger_cor = cor(`spaceranger`, `alevin-fry`, method = "spearman")
+  )
+```
+
+```{r}
+# mean gene expression across shared genes 
+ggplot(rowdata_cor, aes(x = `spaceranger`, y = `alevin-fry`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  facet_wrap(~ sample) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  labs(x = "Spaceranger mean gene expression", y = "Alevin Fry Mean gene expression") + 
+  theme_classic()
+```
+### Shared genes across tools
+
+The final thing we will look at is the overlap of genes detected in each tool. 
+First we need to filter the `SpatialExperiment` objects to only have spots that are found in both tools and then we filter to include only genes that are found in both indices before looking at the overlap. 
+
+```{r}
+# make a function to filter sces by subset of spots and re-calculate feature stats
+filter_spe <- function(spe, spots){
+  # remove "-1" at end of barcode for spaceranger spes
+  colnames(spe) <- gsub("-1", "", colnames(spe))
+  cells_to_keep <- colnames(spe) %in% spots
+  rowData(spe) <- NULL
+  spe[, cells_to_keep] %>%
+    scuttle::addPerFeatureQCMetrics()
+}
+```
+
+```{r}
+# filter all spes to only have common spots 
+spe_list_common <- all_spes_filter %>%
+  purrr::map(filter_spe, spots = common_spots)
+
+# grab rowdata from filtered sces 
+rowdata_df_filtered <- purrr::map_df(spe_list_common, spatial_rowdata_to_df, .id = "sample") %>%
+  dplyr::mutate(tool = dplyr::case_when(sample %in% fry_samples ~ "alevin-fry",
+                                        sample %in% spaceranger_samples ~ "spaceranger"),
+                sample = stringr::word(sample, 1, sep = "-")) %>%
+  dplyr::left_join(sample_info_df,
+                   by = c("sample", "tool"))
+```
+
+
+```{r}
+# get genes common in all tools
+common_genes <- rowdata_df_filtered %>%
+  dplyr::select(gene_id, tool) %>%
+  dplyr::distinct() %>%
+  dplyr::group_by(gene_id) %>%
+  dplyr::tally() %>%
+  # filter for genes found in both spaceranger and alevin-fry
+  dplyr::filter(n == 2) %>%
+  dplyr::pull(gene_id)
+
+# filter rowdata_df to only include genes found in all tools and genes with mean > 0 and detected > 0 in all cells
+rowdata_df_filtered <- rowdata_df_filtered %>% 
+  dplyr::filter(gene_id %in% common_genes) %>%
+  dplyr::filter(mean > 0 & detected > 0)
+```
+
+
+```{r}
+# create upset plot 
+gene_detect_df <- rowdata_df_filtered %>%
+  dplyr::group_by(gene_id) %>%
+  dplyr::summarise(tools_detected = list(unique(tool)))
+
+ggplot(gene_detect_df, aes(x = tools_detected)) +
+  geom_bar() +
+  scale_x_upset(n_intersections = 3)
+```
+
+Similar to with the single-cell data most genes are detected in both Alevin-fry and Spaceranger which is good. 
+
+## Concluding thoughts 
+
+- It appears that we can use the `SpatialExperiment` to store the quantification output and it will maintain similar functionality to the `SingleCellExperiment` obejcts we use for single-cell and single-nuclei data. 
+- Although Alevin-fry and Spaceranger only result in similar distributions of UMI/spot and genes/spot, the patterning across the tissue is not the same which is not ideal and doesn't provide support for adding the use of Alevin-fry to our workflow (since we have to use Spaceranger anyways).  
+
+## Session Info
+
+```{r}
+sessioninfo::session_info()
 ```
 
