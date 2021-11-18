@@ -20,7 +20,6 @@ library(magrittr)
 library(ggplot2)
 library(SingleCellExperiment)
 library(SpatialExperiment)
-library(ggspavis)
 library(ggupset)
 ```
 
@@ -114,8 +113,8 @@ convert_fry_spaceranger_spe <- function(fry_dir, spaceranger_dir, sample_name){
   
   # subset fry_sce by common cells
   fry_sce_subset <- fry_sce[,common_cells]
-  spatial_data_subset <- spatial_data %>%
-    dplyr::filter(barcode %in% common_cells)
+  spatial_data_subset <- data.frame(barcode = common_cells) %>%
+    dplyr::left_join(spatial_data)
   
   # construct 'SpatialExperiment'
   fry_spe <- SpatialExperiment(
@@ -123,7 +122,7 @@ convert_fry_spaceranger_spe <- function(fry_dir, spaceranger_dir, sample_name){
     colData = colData(fry_sce_subset), 
     imgData = image_data,
     spatialData = DataFrame(spatial_data_subset),
-    spatialCoordsNames = c("pxl_col_in_fullres", "pxl_row_in_fullres"),
+    spatialCoordsNames = c("pxl_row_in_fullres", "pxl_col_in_fullres"),
     sample_id = sample_name)
 }
 ```
@@ -132,7 +131,7 @@ convert_fry_spaceranger_spe <- function(fry_dir, spaceranger_dir, sample_name){
 ```{r}
 spaceranger_only_spe <- function(spaceranger_outs_dir, sample_name){
   # read in spaceranger outputs directly using read10XVisium
-  spaceranger_spe <- read10xVisium(spaceranger_outs_dir,
+  spaceranger_spe <- SpatialExperiment::read10xVisium(spaceranger_outs_dir,
                                  sample_id = sample_name,
                                  type = "sparse",
                                  data = "raw",
@@ -182,24 +181,24 @@ fry_sce <- scpcaTools::read_alevin(fry_dir,
                                    which_counts = "spliced")
 
 # convert sce to seurat object 
-fry_seurat <- CreateSeuratObject(counts = counts(fry_sce),
+fry_seurat <- Seurat::CreateSeuratObject(counts = counts(fry_sce),
                                  project = "SPATIAL",
                                  assay = "Spatial")
 
 # read in image data using Seurat and subset to common cells
-image_data <- Read10X_Image(spatial_dir)
+image_data <- Seurat::Read10X_Image(spatial_dir)
 rownames(image_data@coordinates) <- gsub("-1","", rownames(image_data@coordinates))
-common_cells <- intersect(Cells(x = fry_seurat), rownames(image_data@coordinates))
+common_cells <- intersect(Seurat::Cells(x = fry_seurat), rownames(image_data@coordinates))
 image_data <- image_data[common_cells,]
 
 # add image data to Seurat
-DefaultAssay(object = image_data) <- "Spatial"
+Seurat::DefaultAssay(object = image_data) <- "Spatial"
 fry_seurat[['slice']] <- image_data
 ```
 
 ```{r}
 # load spaceranger outputs directly into Seurat object 
-spaceranger_seurat <- Load10X_Spatial(spaceranger_out)
+spaceranger_seurat <- Seurat::Load10X_Spatial(spaceranger_out)
 ```
 
 
@@ -264,14 +263,14 @@ Let's take a look at some example plots that can be produced with each of these 
 ```{r}
 library(viridis)
 # plot tissue spots coloring by total UMI count
-plotSpots(spe = spaceranger_spe, 
-          x_coord = "pxl_col_in_fullres", 
-          y_coord = "pxl_row_in_fullres", 
+ggspavis::plotSpots(spe = spaceranger_spe, 
+          x_coord = "pxl_row_in_fullres", 
+          y_coord = "pxl_col_in_fullres", 
           annotate = "sum") +
   scale_color_viridis_c()
 ```
 ```{r}
-SpatialFeaturePlot(spaceranger_seurat, features = "nCount_Spatial")
+Seurat::SpatialFeaturePlot(spaceranger_seurat, features = "nCount_Spatial")
 ```
 It looks like overall they both would work and that the `SpatialExperiment` will provide similar functionality to how we have things already set up for single-cell experiments. 
 I think I have a slight preference for the Seurat plots as you can adjust the transparency of the points and also see the tissue, but I also think we may be able to play around with the plots with the `SpatialExperiment` more if we want something similar to that. 
@@ -337,8 +336,10 @@ all_spe_list <- all_spe_list %>%
 ```{r}
 # create custom function to grab colData and convert to data frame 
 spatial_coldata_to_df <- function(spe){
-  df <- as.data.frame(colData(spe)) %>%
-    tibble::rownames_to_column(var = "spot_id")
+  # grab coldata and add in tissue column
+  col_df <- as.data.frame(colData(spe)) %>%
+    tibble::rownames_to_column(var = "spot_id") %>%
+    dplyr::mutate(in_tissue = spatialData(spe)$in_tissue)
 }
 ```
 
@@ -389,11 +390,11 @@ all_spes_filter <- all_spe_list %>%
 ```{r}
 # custom function for plotting spe results and coloring by column of colData of choice
 plot_spe <- function(spe, sample, column){
-  plotSpots(spe, 
-            x_coord = "pxl_col_in_fullres", 
-            y_coord = "pxl_row_in_fullres", 
-            annotate = column) +
-  scale_color_viridis_c() + 
+  ggspavis::plotSpots(spe, 
+                      x_coord = "pxl_row_in_fullres", 
+                      y_coord = "pxl_col_in_fullres", 
+                      annotate = column) +
+    scale_color_viridis_c() + 
     ggtitle(sample)
 }
 ```
@@ -449,7 +450,7 @@ ggplot(coldata_df_common, aes(x = detected, color = tool)) +
 all_spes_filter %>%
   purrr::imap(plot_spe, "detected")
 ```
-Generally it looks like both tools are fairly similar in the number of UMI/cell and genes detected/cell but the actual spatial distribution of looks very different within each sample across both tools which is concerning. 
+Generally it looks like both tools are fairly similar in the number of UMI/cell and genes detected/cell.
 
 ### Per Gene QC Metrics
 
@@ -585,7 +586,8 @@ Similar to with the single-cell data most genes are detected in both Alevin-fry 
 ## Concluding thoughts 
 
 - It appears that we can use the `SpatialExperiment` to store the quantification output and it will maintain similar functionality to the `SingleCellExperiment` obejcts we use for single-cell and single-nuclei data. 
-- Although Alevin-fry and Spaceranger only result in similar distributions of UMI/spot and genes/spot, the patterning across the tissue is not the same which is not ideal and doesn't provide support for adding the use of Alevin-fry to our workflow (since we have to use Spaceranger anyways).  
+- Alevin-fry and Spaceranger only result in similar distributions of UMI/spot and genes/spot, although it is not quite as nice as the overlay you see with single-cell libraries. 
+- Both tools also show high correlation in mean gene expression and high overlap in the genes that are detected.
 
 ## Session Info
 
