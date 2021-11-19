@@ -12,7 +12,7 @@ params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes'
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 params.run_ids = 'SCPCR000533'
 
-params.outdir = 's3://nextflow-ccdl-results/scpca/starsolo/'
+params.outdir = 's3://nextflow-ccdl-results/scpca/demux/starsolo/'
 
 // 10X barcode files
 cell_barcodes = ['10Xv2': '737K-august-2016.txt',

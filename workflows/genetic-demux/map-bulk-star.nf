@@ -11,7 +11,7 @@ params.star_index = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 params.run_ids = 'SCPCR000170,SCPCR000171,SCPCR000172,SCPCR000173'
 
-params.outdir = 's3://nextflow-ccdl-results/scpca/star-bulk/'
+params.outdir = 's3://nextflow-ccdl-results/scpca/demux/star-bulk/'
 
 
 
