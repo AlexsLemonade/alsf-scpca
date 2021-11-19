@@ -48,8 +48,7 @@ starsolo_results = [
 process cellsnp{
   container CELLSNPCONTAINER
   publishDir "${params.outdir}/${meta.library_id}"
-  memory "32.GB"
-  cpus "8"
+  label "cpus_8" 
   input:
     tuple val(meta_star), path(star_bam), path(star_bai)
     tuple val(meta_mpileup), path(vcf_file)
@@ -60,13 +59,14 @@ process cellsnp{
     meta = meta_star 
     meta.sample_ids = meta_mpileup.sample_ids
     meta.bulk_run_ids = meta_mpileup.bulk_run_ids
+    outdir = "${meta.library_id}_cellSNP"
     """
     cellsnp-lite \
       --samFile ${star_bam} \
       --barcodeFile ${barcode_file} \
       --regionsVCF <(gunzip -c ${vcf_file}) \
       --nproc ${task.cpus} \
-      --outDir ${meta.library_id}_cellSNP \
+      --outDir ${outdir} \
       --minMAF=0.1 \
       --minCOUNT=20 \
       --gzip
