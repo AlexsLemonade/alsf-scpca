@@ -206,4 +206,11 @@ Seurat::SpatialFeaturePlot(fry_seurat, features = "nCount_Spatial")
 ```
 
 It looks like overall they both would work and that the `SpatialExperiment` will provide similar functionality to how we have things already set up for single-cell experiments. 
-One thing to note is that you cannot have `SpatialExperiment` installed at the same time that you attempt to do this plot. 
+
+One thing to note is that there is incompatibility between `SpatialExperiment` and `Seurat`, and this notebook will not run to completion because of this. 
+The last chunk which includes making the plot using `Seurat` has a conflict with the `imgRaster` function present in both `Seurat` and `SpatialExperiment` that will cause this chunk to fail. 
+The way to remove this error is to uninstall the `SpatialExperiment` package and then reinstall `Seurat`. 
+
+Additionally, there will be warnings throughout the notebook that both packages refer to `SpatialImage`, and by default it will always use `Seurat`, however those chunks will still run. 
+This error appears to occur even without loading `Seurat`.
+
