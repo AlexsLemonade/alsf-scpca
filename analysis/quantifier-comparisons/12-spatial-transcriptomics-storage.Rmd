@@ -214,3 +214,7 @@ The way to remove this error is to uninstall the `SpatialExperiment` package and
 Additionally, there will be warnings throughout the notebook that both packages refer to `SpatialImage`, and by default it will always use `Seurat`, however those chunks will still run. 
 This error appears to occur even without loading `Seurat`.
 
+```{r}
+sessionInfo()
+```
+
