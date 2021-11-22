@@ -61,9 +61,12 @@ mito_genes <- mito_genes %>%
 ## Copy data from S3
 
 ```{r}
-# grab alevin fry and cellranger output
+# set samples to process
 sample_id <- c("SCPCR000372")
+```
 
+```{r eval=FALSE}
+# download alevin fry and cellranger output
 aws_copy_samples(local_dir = s3_out,
                  s3_dir = "s3://nextflow-ccdl-results/scpca",
                  samples = sample_id,
