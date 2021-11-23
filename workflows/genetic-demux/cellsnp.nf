@@ -6,7 +6,7 @@ CELLSNPCONTAINER = 'quay.io/biocontainers/cellsnp-lite:1.2.2--h22771d5_0'
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 params.run_ids = 'SCPCR000533'
 params.outdir = 's3://nextflow-ccdl-results/scpca/demux/cellsnp'
-params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
+params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes'
 
 params.ref_fasta = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz'
 params.ref_fasta_index = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai'
@@ -30,13 +30,14 @@ mpileup_results = [
   ]
 ]
 // starsolo results as they would come
-starsolo_results = [
+starsolo_bam_results = [
   [
     [
-      run_id: 'SCPCR000533', 
-      sample_id: 'SCPCS000133_SCPCS000134_SCPCS000135_SCPCS000136', 
-      technology: '10Xv3.1', 
-      seq_unit: 'nucleus', 
+      run_id: 'SCPCR000533',
+      library_id: 'SCPCL000533',
+      sample_id: 'SCPCS000133_SCPCS000134_SCPCS000135_SCPCS000136',
+      technology: '10Xv3.1',
+      seq_unit: 'nucleus',
       s3_prefix: 'sccdl-scpca-data/runs/SCPCR000533'
     ],
     file('s3://nextflow-ccdl-results/scpca/demux/starsolo/SCPCL000533/SCPCR000533.sorted.bam'),
@@ -44,26 +45,42 @@ starsolo_results = [
   ]
 ]
 
+// starsolo results as they would come
+starsolo_quant_results = [
+  [
+    [
+      run_id: 'SCPCR000533',
+      library_id: 'SCPCL000533',
+      sample_id: 'SCPCS000133_SCPCS000134_SCPCS000135_SCPCS000136',
+      technology: '10Xv3.1',
+      seq_unit: 'nucleus',
+      s3_prefix: 'sccdl-scpca-data/runs/SCPCR000533'
+    ],
+    file('s3://nextflow-ccdl-results/scpca/demux/starsolo/SCPCL000533/SCPCR000533_star')
+  ]
+]
+
 
 process cellsnp{
   container CELLSNPCONTAINER
   publishDir "${params.outdir}/${meta.library_id}"
-  label "cpus_8" 
+  label "cpus_8"
   input:
     tuple val(meta_star), path(star_bam), path(star_bai)
     tuple val(meta_mpileup), path(vcf_file)
-    path barcode_file
+    tuple val(meta_star), path(star_quant)
   output:
     tuple val(meta), path(outdir)
   script:
-    meta = meta_star 
+    meta = meta_star
     meta.sample_ids = meta_mpileup.sample_ids
     meta.bulk_run_ids = meta_mpileup.bulk_run_ids
+    barcodes = "${star_quant}/Solo.out/Gene/filtered/barcodes.tsv"
     outdir = "${meta.library_id}_cellSNP"
     """
     cellsnp-lite \
       --samFile ${star_bam} \
-      --barcodeFile ${barcode_file} \
+      --barcodeFile ${barcodes} \
       --regionsVCF <(gunzip -c ${vcf_file}) \
       --nproc ${task.cpus} \
       --outDir ${outdir} \
@@ -75,9 +92,8 @@ process cellsnp{
 
 workflow{
   // only multiplexed samples as [sample_id, run_id] pairs
-  multiplexed_ch = Channel.from(starsolo_results)
+  multiplexed_ch = Channel.from(starsolo_bam_results)
   mpileup_ch = Channel.from(mpileup_results)
-  cellbarcodes_ch = multiplexed_ch
-      .map{file("${params.barcode_dir}/${cell_barcodes[it[0].technology]}")}
-  cellsnp(multiplexed_ch, mpileup_ch, cellbarcodes_ch)
+  star_quant_ch = Channel.from(starsolo_quant_results)
+  cellsnp(multiplexed_ch, mpileup_ch, star_quant_ch)
 }
