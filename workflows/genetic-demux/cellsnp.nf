@@ -2,6 +2,7 @@
 nextflow.enable.dsl=2
 
 CELLSNPCONTAINER = 'quay.io/biocontainers/cellsnp-lite:1.2.2--h22771d5_0'
+CONDACONTAINER = 'continuumio/miniconda3:4.10.3p0'
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 params.run_ids = 'SCPCR000533'
@@ -90,10 +91,32 @@ process cellsnp{
     """
 }
 
+process vireo{
+  container CONDACONTAINER
+  publishDir "${params.outdir}/${meta.library_id}"
+  label "cpus_8"
+  input:
+    tuple val(meta), path(cellsnp_dir)
+    tuple val(meta_mpileup), path(vcf_file)
+  output:
+    tuple val(meta), path(outdir)
+  script:
+    outdir = "${meta.library_id}_vireo"
+    """
+    pip install vireoSNP==0.5.6
+    vireo \
+      --cellData ${cellsnp_dir} \
+      --donorFile ${vcf_file}  \
+      --outDir ${outdir} \
+      --nproc ${task.cpus}
+    """
+}
+
 workflow{
   // only multiplexed samples as [sample_id, run_id] pairs
   multiplexed_ch = Channel.from(starsolo_bam_results)
   mpileup_ch = Channel.from(mpileup_results)
   star_quant_ch = Channel.from(starsolo_quant_results)
   cellsnp(multiplexed_ch, mpileup_ch, star_quant_ch)
+  vireo(cellsnp.out, mpileup_ch)
 }
