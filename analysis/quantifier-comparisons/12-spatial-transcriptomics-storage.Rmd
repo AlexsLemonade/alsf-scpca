@@ -201,7 +201,7 @@ ggspavis::plotVisium(spe = fry_spe[,spatialData(fry_spe)$in_tissue == 1],
                      y_coord = "pxl_row_in_fullres")
 ```
 
-```{r}
+```{r eval=FALSE}
 Seurat::SpatialFeaturePlot(fry_seurat, features = "nCount_Spatial")
 ```
 
