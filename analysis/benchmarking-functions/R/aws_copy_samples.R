@@ -68,6 +68,7 @@ aws_copy_samples <- function(local_dir, s3_dir, samples, tools) {
       sync_call <- paste('aws s3 cp', s3_tool_dir, local_tool_dir, 
                          '--exclude "*"', includes, 
                          '--exclude "*/SC_RNA_COUNTER_CS/*"',
+                         '--exclude "*/SPATIAL_RNA_COUNTER_CS/*"',
                          '--exclude "*.bam"', '--exclude "*.bam.bai"',
                          '--recursive')
     }
