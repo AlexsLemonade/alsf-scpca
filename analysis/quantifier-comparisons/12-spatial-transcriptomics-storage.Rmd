@@ -163,6 +163,7 @@ head(spatialCoords(fry_spe))
 
 `spatialData` holds information about whether or not each barcode was covered by tissue and spatial metadata.
 `spatialCoords` holds the coordinates for each spot.
+Although it appears that `spatialData` may be disappearing in a future version of this packag, see [issue #84](https://github.com/drighelli/SpatialExperiment/issues/84).
 
 This same information can be found by looking in the `images` slot in the `Seurat` object. 
 
@@ -209,6 +210,7 @@ It looks like overall they both would work and that the `SpatialExperiment` will
 
 One thing to note is that there is incompatibility between `SpatialExperiment` and `Seurat`, and this notebook will not run to completion because of this. 
 The last chunk which includes making the plot using `Seurat` has a conflict with the `imgRaster` function present in both `Seurat` and `SpatialExperiment` that will cause this chunk to fail. 
+Because of this we have run this separately and stored the image separately in [`plots/seurat-spatial-plot-example.png`](plots/seurat-spatial-plot-example.png).
 The way to remove this error is to uninstall the `SpatialExperiment` package and then reinstall `Seurat`.
 This is documented in [an issue on the `Seurat` repo](https://github.com/satijalab/seurat/issues/5128). 
 
