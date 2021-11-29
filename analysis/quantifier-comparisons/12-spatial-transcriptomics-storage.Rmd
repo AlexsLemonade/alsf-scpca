@@ -1,0 +1,223 @@
+---
+title: "Storing Spatial Transcriptomics Results"
+author: "Ally Hawkins for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+---
+
+In this notebook we are doing a quick exploration of the use of storing spatial data in a [`SpatialExperiment` object](https://bioconductor.org/packages/release/bioc/vignettes/SpatialExperiment/inst/doc/SpatialExperiment.html#3_Common_operations) or in a [`Seurat` object](https://satijalab.org/seurat/articles/spatial_vignette.html). 
+We will take a look at one library, SCPCR000372, that has been quantified with Spaceranger and compare the use of `SpatialExperiment` to `Seurat`.  
+
+## Set Up
+
+```{r}
+library(magrittr)
+library(ggplot2)
+library(SingleCellExperiment)
+library(SpatialExperiment)
+```
+
+```{r}
+# load in benchmarking functions that will be used for copying data and generating sample tables
+function_path <- file.path(".." ,"benchmarking-functions", "R")
+file.path(function_path, list.files(function_path, pattern = "*.R$")) %>%
+  purrr::walk(source)
+```
+
+```{r}
+# set up file paths 
+base_dir <- here::here()
+
+# output folder to store alevin-fry and spaceranger quants from S3
+data_dir <- file.path(base_dir, "data", "spatial") 
+s3_out <- file.path(data_dir, "data", "quants")
+
+# results directory 
+results_dir <- file.path(data_dir, "results")
+
+# create directories
+if(!dir.exists(data_dir)){
+  dir.create(data_dir, recursive = TRUE)
+}
+
+if(!dir.exists(results_dir)){
+  dir.create(results_dir, recursive = TRUE)
+}
+```
+
+
+```{r}
+mito_file <- file.path(base_dir, "sample-info", "Homo_sapiens.GRCh38.103.mitogenes.txt")
+  
+# read in mito genes 
+mito_genes <- readr::read_tsv(mito_file, col_names = "gene_id")
+mito_genes <- mito_genes %>%
+  dplyr::pull(gene_id) %>%
+  unique()
+```
+
+## Copy data from S3
+
+```{r}
+# set samples to process
+sample_id <- c("SCPCR000372")
+```
+
+```{r eval=FALSE}
+# download alevin fry and cellranger output
+aws_copy_samples(local_dir = s3_out,
+                 s3_dir = "s3://nextflow-ccdl-results/scpca",
+                 samples = sample_id,
+                 tools = c("alevin-fry-knee", "cellranger"))
+```
+
+## Comparing SpatialExperiment to Seurat
+
+### Importing Alevin-fry and Spaceranger output into a SpatialExperiment
+
+First we are testing use of a `SpatialExperiment` object to store the spatial transcriptomics results. 
+We will look at the Alevin-fry + Spaceranger quantification and use a custom function to create the combined object from both tools.
+
+```{r}
+# get path to fry output directory 
+fry_dir <- file.path(s3_out, "alevin-fry-knee", sample_id)
+fry_dir <- paste0(fry_dir, "-spliced_intron_txome_k31-salign-cr-like-em-knee")
+
+# paths to spatial folders 
+cellranger_folder <- paste0(sample_id, "-cdna-spatial")
+spatial_dir <- file.path(s3_out, "cellranger", cellranger_folder, "outs", "spatial")
+```
+
+```{r}
+# read in combined fry and spaceranger spe 
+fry_spe <- create_fry_spaceranger_spe(fry_dir, 
+                                       spatial_dir, 
+                                       sample_id)
+```
+
+### Importing as Seurat Object
+
+Below we will import the same data but as a `Seurat` object instead of a `SpatialExperiment` object. 
+
+```{r}
+# first create sce from Alevin output
+fry_sce <- scpcaTools::read_alevin(fry_dir,
+                                   usa_mode = TRUE,
+                                   which_counts = "spliced")
+
+# convert sce to seurat object 
+fry_seurat <- Seurat::CreateSeuratObject(counts = counts(fry_sce),
+                                 project = "SPATIAL",
+                                 assay = "Spatial")
+
+# read in image data using Seurat and subset to common cells
+image_data <- Seurat::Read10X_Image(spatial_dir)
+rownames(image_data@coordinates) <- gsub("-1","", rownames(image_data@coordinates))
+common_cells <- intersect(Seurat::Cells(x = fry_seurat), rownames(image_data@coordinates))
+image_data <- image_data[common_cells,]
+
+# add image data to Seurat
+Seurat::DefaultAssay(object = image_data) <- "Spatial"
+fry_seurat[['slice']] <- image_data
+```
+
+
+### Comparing Seurat and Spatial Experiment
+
+Now let's take a look at how each of these objects stores information for the experiment. 
+
+```{r}
+head(colData(fry_spe))
+head(fry_seurat@meta.data)
+```
+
+Seurat automatically adds some per cell QC metrics here, but in general the `colData` looks similar to what we would expect for a `SingleCellExperiment` for the `SpatialExperiment`.
+
+```{r}
+head(rowData(fry_spe))
+head(fry_seurat[["Spatial"]]@meta.features)
+```
+
+It looks like both of these start off with no `rowData` as expected.
+
+```{r}
+fry_spe <- fry_spe %>%
+  scuttle::addPerCellQCMetrics(subsets = list(mito_genes = mito_genes[mito_genes %in% rownames(fry_spe)])) 
+head(colData(fry_spe))
+```
+
+You can still use the same functions to add in per cell metrics that we are using in `scpcaTools` now on a `SpatialExperiment`. 
+
+Let's specifically look at how each of them stores the data related to the spatial information.
+The `SpatialExperiment` has three places where it stores spatial information, `spatialData`, `spatialCoords`, and `imgData`. 
+
+```{r}
+head(spatialData(fry_spe))
+```
+
+```{r}
+head(spatialCoords(fry_spe))
+```
+
+`spatialData` holds information about whether or not each barcode was covered by tissue and spatial metadata.
+`spatialCoords` holds the coordinates for each spot.
+Although it appears that `spatialData` may be disappearing in a future version of this packag, see [issue #84](https://github.com/drighelli/SpatialExperiment/issues/84).
+
+This same information can be found by looking in the `images` slot in the `Seurat` object. 
+
+```{r}
+head(fry_seurat@images)
+```
+
+`imgData` holds information about each image that is stored as multiple slices of an image can be stored within one `SpatialExperiment`. 
+
+```{r}
+imgData(fry_spe)
+```
+
+This same information can be found by looking at the `images` slot in the `Seurat` object. 
+
+```{r}
+fry_seurat@images$slice@scale.factors
+```
+
+Let's take a look at some example plots that can be produced with each of these objects.
+
+```{r}
+library(viridis)
+# plot tissue spots coloring by total UMI count
+ggspavis::plotSpots(spe = fry_spe, 
+          x_coord = "pxl_col_in_fullres", 
+          y_coord = "pxl_row_in_fullres", 
+          annotate = "sum") +
+  scale_color_viridis_c()
+```
+You can also overlay the image by using `plotVisium`. 
+
+```{r}
+ggspavis::plotVisium(spe = fry_spe[,spatialData(fry_spe)$in_tissue == 1],
+                     x_coord = "pxl_col_in_fullres",
+                     y_coord = "pxl_row_in_fullres")
+```
+
+```{r eval=FALSE}
+Seurat::SpatialFeaturePlot(fry_seurat, features = "nCount_Spatial")
+```
+
+It looks like overall they both would work and that the `SpatialExperiment` will provide similar functionality to how we have things already set up for single-cell experiments. 
+
+One thing to note is that there is incompatibility between `SpatialExperiment` and `Seurat`, and this notebook will not run to completion because of this. 
+The last chunk which includes making the plot using `Seurat` has a conflict with the `imgRaster` function present in both `Seurat` and `SpatialExperiment` that will cause this chunk to fail. 
+Because of this we have run this separately and stored the image separately in [`plots/seurat-spatial-plot-example.png`](plots/seurat-spatial-plot-example.png).
+The way to remove this error is to uninstall the `SpatialExperiment` package and then reinstall `Seurat`.
+This is documented in [an issue on the `Seurat` repo](https://github.com/satijalab/seurat/issues/5128). 
+
+Additionally, there will be warnings throughout the notebook that both packages refer to `SpatialImage`, and by default it will always use `Seurat`, however those chunks will still run. 
+This error appears to occur even without loading `Seurat`.
+
+```{r}
+sessionInfo()
+```
+
