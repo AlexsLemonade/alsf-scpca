@@ -132,7 +132,8 @@ sample_info_df <- quant_info_table(data_dir= s3_out,
 When we convert the `colData` to a data frame we use the custom function, `spatial_coldata_to_df()` to do so and apply it to each spe in our list. 
 ```{r}
 # join coldata dataframe with sample info
-coldata_df <- purrr::map_df(all_spe_list, spatial_coldata_to_df, .id = "tool") %>%
+coldata_df <- all_spe_list %>%
+  purrr::map_df(spatial_coldata_to_df, .id = "tool") %>%
   # remove extra -1 from spaceranger barcodes
   dplyr::mutate(spot_id = gsub("-1", "", spot_id)) %>%
   dplyr::left_join(sample_info_df,
@@ -301,9 +302,7 @@ common_genes <- gene_counts %>%
   dplyr::pull(gene_id)
 
 rowdata_df_common <- rowdata_df %>%
-  dplyr::filter(
-    (gene_id %in% common_genes) 
-  )
+  dplyr::filter(gene_id %in% common_genes) 
 ```
 
 ```{r}
