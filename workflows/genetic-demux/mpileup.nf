@@ -108,7 +108,7 @@ workflow{
   // only multiplexed samples as [sample_id, run_id] pairs
   multiplexed_ch = all_ch.filter{it.technology in single_cell_techs}
     .filter{it.sample_id.contains("_")} 
-    .map{[tuple(it.sample_id.split("_")), it]} // split out sample ids into a tuple
+    .map{[it.sample_id.tokenize("_"), it]} // split out sample ids into a tuple
     .transpose() // one element per sample (meta objects repeated)
 
   bulk_ch = Channel.from(bulk_results)
