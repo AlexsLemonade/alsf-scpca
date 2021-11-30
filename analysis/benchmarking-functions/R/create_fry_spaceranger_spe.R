@@ -1,14 +1,16 @@
 #' Import Alevin-fry and Spaceranger output for Spatial Transcriptomics library into a SpatialExperiment object.
 #'
 #' @param fry_dir Path to alevin-fry outputs directory. 
-#' @param spaceranger_dir Path to "spatial" folder output by Spaceranger. 
+#' @param spaceranger_dir Path to folder output by Spaceranger. 
 #' @param sample_name Sample id. 
 #'
 #' @return SpatialExperiment object with shared spots detected in Alevin-fry and Spaceranger.
 #'
 create_fry_spaceranger_spe <- function(fry_dir, 
-                                        spaceranger_dir, 
-                                        sample_name){
+                                       spaceranger_dir, 
+                                       sample_name){
+  # path to spatial output folder 
+  spatial_dir <- file.path(spaceranger_dir, "outs", "spatial")
   
   # create SingleCellExperiment using scpcaTools
   fry_sce <- scpcaTools::read_alevin(fry_dir, 
@@ -16,11 +18,11 @@ create_fry_spaceranger_spe <- function(fry_dir,
                                      which_counts = "spliced")
   
   # read in image data
-  image_data <- SpatialExperiment::readImgData(spaceranger_dir,
+  image_data <- SpatialExperiment::readImgData(spatial_dir,
                                                sample_id = sample_name)
   
   # read in spatial coordinates 
-  spatial_data_file <- file.path(spaceranger_dir, "tissue_positions_list.csv")
+  spatial_data_file <- file.path(spatial_dir, "tissue_positions_list.csv")
   spatial_data <- readr::read_csv(spatial_data_file, col_names = c("barcode", "in_tissue", "array_row",
                                                                    "array_col","pxl_row_in_fullres",
                                                                    "pxl_col_in_fullres"))
