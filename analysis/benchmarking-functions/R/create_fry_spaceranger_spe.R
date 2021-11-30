@@ -23,9 +23,10 @@ create_fry_spaceranger_spe <- function(fry_dir,
   
   # read in spatial coordinates 
   spatial_data_file <- file.path(spatial_dir, "tissue_positions_list.csv")
-  spatial_data <- readr::read_csv(spatial_data_file, col_names = c("barcode", "in_tissue", "array_row",
-                                                                   "array_col","pxl_row_in_fullres",
-                                                                   "pxl_col_in_fullres"))
+  spatial_cols <- c("barcode", "in_tissue", 
+                    "array_row", "array_col",
+                    "pxl_row_in_fullres", "pxl_col_in_fullres")
+  spatial_data <- readr::read_csv(spatial_data_file, col_names = spatial_cols)
   # find common cells between Alevin-fry and spaceranger 
   spatial_data <- spatial_data %>%
     dplyr::mutate(barcode = gsub("-1", "", barcode))

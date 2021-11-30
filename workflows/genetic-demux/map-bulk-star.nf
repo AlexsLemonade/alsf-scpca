@@ -9,9 +9,9 @@ params.ref  = 'Homo_sapiens.GRCh38.104'
 params.star_index = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/star_index/Homo_sapiens.GRCh38.104.star_idx'
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
-params.run_ids = 'SCPCR000166'
+params.run_ids = 'SCPCR000170,SCPCR000171,SCPCR000172,SCPCR000173'
 
-params.outdir = 's3://nextflow-ccdl-results/scpca/star-bulk/'
+params.outdir = 's3://nextflow-ccdl-results/scpca/demux/star-bulk/'
 
 
 
@@ -41,7 +41,7 @@ process bulkmap_star{
 
 process index_bam{
   container SAMTOOLSCONTAINER
-  publishDir "${params.outdir}/${meta.library_id}"
+  publishDir "${params.outdir}/${meta.sample_id}"
   input:
     tuple val(meta), path(bamfile)
   output:

@@ -61,9 +61,12 @@ mito_genes <- mito_genes %>%
 ## Copy data from S3
 
 ```{r}
-# grab alevin fry and cellranger output
+# set samples to process
 sample_id <- c("SCPCR000372")
+```
 
+```{r eval=FALSE}
+# download alevin fry and cellranger output
 aws_copy_samples(local_dir = s3_out,
                  s3_dir = "s3://nextflow-ccdl-results/scpca",
                  samples = sample_id,
@@ -160,6 +163,7 @@ head(spatialCoords(fry_spe))
 
 `spatialData` holds information about whether or not each barcode was covered by tissue and spatial metadata.
 `spatialCoords` holds the coordinates for each spot.
+Although it appears that `spatialData` may be disappearing in a future version of this packag, see [issue #84](https://github.com/drighelli/SpatialExperiment/issues/84).
 
 This same information can be found by looking in the `images` slot in the `Seurat` object. 
 
@@ -198,9 +202,22 @@ ggspavis::plotVisium(spe = fry_spe[,spatialData(fry_spe)$in_tissue == 1],
                      y_coord = "pxl_row_in_fullres")
 ```
 
-```{r}
+```{r eval=FALSE}
 Seurat::SpatialFeaturePlot(fry_seurat, features = "nCount_Spatial")
 ```
 
 It looks like overall they both would work and that the `SpatialExperiment` will provide similar functionality to how we have things already set up for single-cell experiments. 
-One thing to note is that you cannot have `SpatialExperiment` installed at the same time that you attempt to do this plot. 
+
+One thing to note is that there is incompatibility between `SpatialExperiment` and `Seurat`, and this notebook will not run to completion because of this. 
+The last chunk which includes making the plot using `Seurat` has a conflict with the `imgRaster` function present in both `Seurat` and `SpatialExperiment` that will cause this chunk to fail. 
+Because of this we have run this separately and stored the image separately in [`plots/seurat-spatial-plot-example.png`](plots/seurat-spatial-plot-example.png).
+The way to remove this error is to uninstall the `SpatialExperiment` package and then reinstall `Seurat`.
+This is documented in [an issue on the `Seurat` repo](https://github.com/satijalab/seurat/issues/5128). 
+
+Additionally, there will be warnings throughout the notebook that both packages refer to `SpatialImage`, and by default it will always use `Seurat`, however those chunks will still run. 
+This error appears to occur even without loading `Seurat`.
+
+```{r}
+sessionInfo()
+```
+
