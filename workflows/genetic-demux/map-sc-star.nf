@@ -7,12 +7,12 @@ SAMTOOLSCONTAINER = 'quay.io/biocontainers/samtools:1.14--hb421002_0'
 // parameters
 params.ref  = 'Homo_sapiens.GRCh38.104'
 params.star_index = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/star_index/Homo_sapiens.GRCh38.104.star_idx'
-params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
+params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes'
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 params.run_ids = 'SCPCR000533'
 
-params.outdir = 's3://nextflow-ccdl-results/scpca/starsolo/'
+params.outdir = 's3://nextflow-ccdl-results/scpca/demux/starsolo/'
 
 // 10X barcode files
 cell_barcodes = ['10Xv2': '737K-august-2016.txt',
@@ -25,6 +25,7 @@ single_cell_techs = cell_barcodes.keySet()
 
 process starsolo{
   container STARCONTAINER
+  publishDir "${params.outdir}/${meta.library_id}"
   label 'bigdisk'
   memory "32.GB"
   cpus "8"
@@ -40,7 +41,7 @@ process starsolo{
                  '10Xv2_5prime': '',
                  '10Xv3': '--soloUMIlen 12',
                  '10Xv3.1': '--soloUMIlen 12']
-    output_dir = "${meta.run_id}"
+    output_dir = "${meta.run_id}_star"
     output_bam = "${meta.run_id}.sorted.bam"
     """
     mkdir -p ${output_dir}/Solo.out/Gene/raw
@@ -57,7 +58,7 @@ process starsolo{
       --outSAMattributes NH HI nM AS CR UR CB UB CY UY GX GN \
       --limitBAMsortRAM 20000000000 \
       --runDirPerm All_RWX \
-      --outFileNamePrefix ${output_dir}/ 
+      --outFileNamePrefix ${output_dir}/
 
     mv ${output_dir}/Aligned.sortedByCoord.out.bam ${output_bam}
     """
@@ -96,21 +97,21 @@ workflow{
       s3_prefix: it.s3_prefix,
     ]}
     // only single cell samples
-    .filter{it.technology in single_cell_techs} 
+    .filter{it.technology in single_cell_techs}
     // use only the rows in the run_id list (run, library, or sample can match)
     // or run by project or submitter if the project parameter is set
-    .filter{run_all 
-             || (it.run_id in run_ids) 
+    .filter{run_all
+             || (it.run_id in run_ids)
             }
-    
+
     sc_reads_ch = singlecell_ch
       .map{meta -> tuple(meta,
                          file("s3://${meta.s3_prefix}/*_R1_*.fastq.gz"),
                          file("s3://${meta.s3_prefix}/*_R2_*.fastq.gz"))}
-    
+
     cellbarcodes_ch = singlecell_ch
       .map{file("${params.barcode_dir}/${cell_barcodes[it.technology]}")}
-    
+
     starsolo(sc_reads_ch, params.star_index, cellbarcodes_ch)
     index_bam(starsolo.out.star_bam)
 }
