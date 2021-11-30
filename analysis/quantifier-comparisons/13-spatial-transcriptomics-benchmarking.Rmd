@@ -21,6 +21,9 @@ library(SingleCellExperiment)
 library(SpatialExperiment)
 library(ggupset)
 library(gridExtra)
+library(ggrepel)
+library(clusterProfiler)
+library(org.Hs.eg.db)
 ```
 
 ```{r}
@@ -35,24 +38,15 @@ file.path(function_path, list.files(function_path, pattern = "*.R$")) %>%
 # set up file paths 
 base_dir <- here::here()
 
-# output folder to store alevin-fry and cellranger quants from S3
+# folder with alevin-fry and cellranger quants from S3
 data_dir <- file.path(base_dir, "data", "spatial") 
-s3_out <- file.path(data_dir, "data", "quants")
+quants_dir <- file.path(data_dir, "data", "quants")
 
 # results directory 
 results_dir <- file.path(data_dir, "results")
 
 # sample name
 sample_id <- c("SCPCR000372")
-
-# create directories
-if(!dir.exists(data_dir)){
-  dir.create(data_dir, recursive = TRUE)
-}
-
-if(!dir.exists(results_dir)){
-  dir.create(results_dir, recursive = TRUE)
-}
 ```
 
 
@@ -76,28 +70,28 @@ To do this, we will read in the Alevin-fry + Spaceranger combined and Spacerange
 
 ```{r}
 # get path to fry output directory 
-fry_dir <- file.path(s3_out, "alevin-fry-knee", sample_id)
+fry_dir <- file.path(quants_dir, "alevin-fry-knee", sample_id)
 fry_dir <- paste0(fry_dir, "-spliced_intron_txome_k31-salign-cr-like-em-knee")
 
 # paths to spatial folders 
 cellranger_folder <- paste0(sample_id, "-cdna-spatial")
-spatial_dir <- file.path(s3_out, "cellranger", cellranger_folder, "outs", "spatial")
+spaceranger_dir <- file.path(quants_dir, "cellranger", cellranger_folder)
 ```
 
 
 ```{r}
 # read in combined fry and spaceranger spe 
 fry_spe <- create_fry_spaceranger_spe(fry_dir, 
-                                       spatial_dir, 
-                                       sample_id)
+                                      spaceranger_dir, 
+                                      sample_id)
 ```
 
 ```{r}
 # spaceranger output paths
-spaceranger_out <- file.path(s3_out, "cellranger", cellranger_folder, "outs")
+spaceranger_dir <- file.path(quants_dir, "cellranger", cellranger_folder)
 
 # read in spaceranger output directly using read10XVisium
-spaceranger_spe <- create_spaceranger_spe(spaceranger_out, sample_id)
+spaceranger_spe <- create_spaceranger_spe(spaceranger_dir, sample_id)
 ```
 
 ### Per Spot QC Metrics
@@ -113,8 +107,7 @@ names(all_spe_list) <- c("alevin-fry", "spaceranger")
 all_spe_list <- all_spe_list %>%
     purrr::map(
       ~ scuttle::addPerCellQCMetrics(.x, 
-                                     subsets = list(mito = mito_genes[mito_genes %in% rownames(.x)]))) %>%
-  purrr::map(scuttle::addPerFeatureQCMetrics)
+                                     subsets = list(mito = mito_genes[mito_genes %in% rownames(.x)])))
 ```
 
 After adding in the per spot QC metrics to both of the spe's, we want to extract the `colData` from each spe and create a data frame that we can use for plotting. 
@@ -122,11 +115,13 @@ We will also need some information about each sample and how it was run, so we w
 
 ```{r}
 # create sample info dataframe to be joined with per spot dataframe later
-sample_info_df <- quant_info_table(data_dir= s3_out, 
+sample_info_df <- quant_info_table(data_dir= quants_dir, 
                  tools = c("cellranger", "alevin-fry-knee"),
                  samples = sample_id) %>%
   # convert cellranger to spaceranger 
   dplyr::mutate(tool = ifelse(tool == "cellranger", "spaceranger", tool))
+
+sample_info_df
 ```
 
 When we convert the `colData` to a data frame we use the custom function, `spatial_coldata_to_df()` to do so and apply it to each spe in our list. 
@@ -137,7 +132,7 @@ coldata_df <- all_spe_list %>%
   # remove extra -1 from spaceranger barcodes
   dplyr::mutate(spot_id = gsub("-1", "", spot_id)) %>%
   dplyr::left_join(sample_info_df,
-                   by = c("tool"))
+                   by = c("tool", "sample_id" = "sample"))
 ```
 
 Now we only want to filter our data frame to contain spots that are shared between both tools and those that are found to be overlapping with the tissue. 
@@ -145,8 +140,24 @@ Now we only want to filter our data frame to contain spots that are shared betwe
 ```{r}
 # identify shared spots only 
 spot_counts <- coldata_df %>%  
-  dplyr::count(spot_id, sample)
+  dplyr::count(spot_id, sample_id)
+```
 
+```{r}
+# how many spots are shared among the tools
+spot_counts_plot <- coldata_df %>%
+  dplyr::group_by(spot_id) %>%
+  dplyr::summarise(tools_detected = list(unique(tool)))
+
+ggplot(spot_counts_plot, aes(x = tools_detected))+
+  geom_bar() +
+  scale_x_upset(n_intersections = 3)
+```
+For the most part, the majority of the spots identified are found in both Spaceranger alone and the combination with Alevin-fry, with a small subset being identified in Spaceranger alone. 
+
+Let's filter to only include these common spots and those that are found to be overlapping the tissue.
+
+```{r}
 common_spots <- spot_counts %>%
   dplyr::filter(n == 2) %>%
   dplyr::pull(spot_id)
@@ -169,12 +180,12 @@ all_spe_filter <- all_spe_list %>%
   purrr::map(filter_spe)
 ```
 
+
 When we look at our results, we will also want to visualize them so we will make a custom function to plot the results.
-Because of the bug that is present in `SpatialExperiment::read10XVisium()` function, we will make two separate functions, one for spaceranger only spes and one for alevin-fry + spaceranger spes.
 
 ```{r}
 # custom function for plotting spe results and coloring by column of colData of choice
-plot_fry_spe <- function(spe, sample, column){
+plot_spe <- function(spe, sample, column){
   # plot spots only 
   p1 <- ggspavis::plotSpots(spe, 
                             x_coord = "pxl_col_in_fullres", 
@@ -192,28 +203,6 @@ plot_fry_spe <- function(spe, sample, column){
   # arrange plots and add sample name as title 
   grid.arrange(p1, p2, nrow = 1, top = grid::textGrob(sample))
 }
-
-
-plot_spaceranger_spe <- function(spe, sample, column){
-  # plot spots only 
-  p1 <- ggspavis::plotSpots(spe, 
-                            # switch the order of row and col to flip the image 
-                            x_coord = "pxl_row_in_fullres", 
-                            y_coord = "pxl_col_in_fullres", 
-                            annotate = column) +
-    scale_color_viridis_c() 
-  
-  # plot with tissue underneath
-  p2 <- ggspavis::plotVisium(spe, 
-                                   x_coord = "pxl_row_in_fullres", 
-                                   y_coord = "pxl_col_in_fullres", 
-                                   fill = column) +
-    scale_fill_viridis_c()
-  
-  # arrange plots and add sample name as title 
-  grid.arrange(p1, p2, nrow = 1, top = grid::textGrob(sample))
-  
-}
 ```
 
 First we will look at the per cell metrics: mitochondrial reads per cell, total UMI per cell, and total genes detected per cell. 
@@ -227,14 +216,12 @@ ggplot(coldata_df_common, aes(x = tool, y = subsets_mito_percent, fill = tool)) 
   ylab("Mito Percent") + 
   xlab("")
 ```
+
 ```{r}
-plot_fry_spe(all_spe_filter$`alevin-fry`, "alevin-fry", "subsets_mito_percent")
-```
-```{r}
-plot_spaceranger_spe(all_spe_filter$spaceranger, "spaceranger", "subsets_mito_percent")
+all_spe_filter %>%
+  purrr::iwalk(plot_spe, column = "subsets_mito_percent")
 ```
 Overall it looks like mitochondrial content is low and fairly similar across both tools. 
-
 
 ```{r}
 # total UMI/ spot 
@@ -245,13 +232,12 @@ ggplot(coldata_df_common, aes(x = sum, color = tool)) +
   ylab("UMI/spot") + 
   xlab("")
 ```
-```{r}
-plot_fry_spe(all_spe_filter$`alevin-fry`, "alevin-fry", "sum")
-```
 
 ```{r}
-plot_spaceranger_spe(all_spe_filter$spaceranger, "spaceranger", "sum")
+all_spe_filter %>%
+  purrr::iwalk(plot_spe, column = "sum")
 ```
+
 
 ```{r}
 # total genes/ spot 
@@ -262,14 +248,15 @@ ggplot(coldata_df_common, aes(x = detected, color = tool)) +
   ylab("Genes detected/spot") + 
   xlab("") 
 ```
-```{r}
-plot_fry_spe(all_spe_filter$`alevin-fry`, "alevin-fry", "detected")
-```
 
 ```{r}
-plot_spaceranger_spe(all_spe_filter$spaceranger, "spaceranger", "detected")
+all_spe_filter %>%
+  purrr::iwalk(plot_spe, column = "detected")
 ```
-Generally it looks like both tools are fairly similar in the number of UMI/cell and genes detected/cell.
+
+Generally it looks like there are some differences between the tools. 
+When looking at this closer, it appears that Alevin-fry provides an increase in both total UMI/cell and genes detected/cell which is seen in the spatial plot as well. 
+
 
 ### Per Gene QC Metrics
 
@@ -283,7 +270,7 @@ all_spe_filter <- all_spe_filter %>%
 
 ```{r}
 # grab rowdata and combine with sample info
-rowdata_df <- purrr::map_df(all_spe_filter, spatial_rowdata_to_df, .id = "tool") %>%
+rowdata_df <- purrr::map_df(all_spe_filter, scpcaTools::rowdata_to_df, .id = "tool") %>%
   dplyr::left_join(sample_info_df,
                    by = c("tool"))
 ```
@@ -332,10 +319,84 @@ ggplot(rowdata_cor, aes(x = `spaceranger`, y = `alevin-fry`)) +
   geom_point(size = 0.5, alpha = 0.1) + 
   scale_x_log10() + 
   scale_y_log10() + 
+  geom_abline() +
   labs(x = "Spaceranger mean gene expression", y = "Alevin Fry Mean gene expression") + 
   theme_classic()
+  
 ```
 Correlation appears to be quite high between mean gene expression in Spaceranger and Alevin-fry, however, we do see that there is a subset of genes that have higher gene expression in Spaceranger than in Alevin-fry and are slightly off the diagonal. 
+
+
+
+```{r}
+# get the gene symbols and then join back with rowdata df 
+gene_symbols_df <- rowdata_df %>%
+  dplyr::select(gene_id, symbol)
+
+# join correlation with gene symbols 
+rowdata_cor <- rowdata_cor %>%
+  dplyr::left_join(gene_symbols_df) %>%
+  dplyr::distinct() %>%
+  tidyr::drop_na() %>%
+  # add difference in mean gene expression between alevin-fry and spaceranger 
+  dplyr::mutate(log_fold_change = log(`alevin-fry`/spaceranger))
+
+# print out list of genes with with > 1.5 gene expression in Alevin-fry
+rowdata_cor %>%
+  dplyr::filter(abs(log_fold_change) > 0.5) %>%
+  dplyr::arrange(desc(log_fold_change)) %>%
+  dplyr::select(sample, symbol, gene_id, log_fold_change, `alevin-fry`, spaceranger)
+```
+
+```{r}
+ggplot(rowdata_cor, aes(x = `spaceranger`, y = `alevin-fry`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  geom_abline() +
+  labs(x = "Spaceranger mean gene expression", y = "Alevin Fry Mean gene expression") + 
+  theme_classic() + 
+  geom_text_repel(data = rowdata_cor %>%
+                    dplyr::filter(abs(log_fold_change) > 0.5),
+                  mapping = aes(x = `spaceranger`, y = `alevin-fry`, label = symbol),
+                  max.overlaps= 50, size= 2)
+```
+Let's look at what types of genes are found to have different gene expression across these two tools using over representation analysis. 
+
+```{r}
+# target gene list 
+different_genes <- rowdata_cor %>%
+  # filter for anything with fold change > 1.5
+  dplyr::filter(abs(log_fold_change) > 0.4) %>%
+  dplyr::pull(symbol) %>%
+  unique()
+
+# background gene list 
+background_genes <- rowdata_cor$symbol %>%
+  unique()
+```
+
+
+```{r}
+# perform gene ontology looking at all genes that are different 
+go_ora_results <- enrichGO(gene = different_genes,
+                           universe = background_genes,
+                           keyType = "SYMBOL",
+                           OrgDb = org.Hs.eg.db,
+                           ont = "BP",
+                           pAdjustMethod = "BH",
+                           pvalueCutoff = 0.00001)
+```
+
+
+```{r}
+# look at gene ontology results 
+go_results <- go_ora_results@result %>%
+  as.data.frame() %>%
+  dplyr::filter(p.adjust < 0.00001)
+go_results
+```
+It looks like there aren't any specific pathways that are affected. 
 
 ### Shared genes across tools
 
@@ -360,7 +421,7 @@ spe_list_common <- all_spe_filter %>%
   purrr::map(filter_spe, spots = common_spots)
 
 # grab rowdata from filtered sces 
-rowdata_df_filtered <- purrr::map_df(spe_list_common, spatial_rowdata_to_df, .id = "tool") %>%
+rowdata_df_filtered <- purrr::map_df(spe_list_common, scpcaTools::rowdata_to_df, .id = "tool") %>%
   dplyr::left_join(sample_info_df,
                    by = c("tool"))
 ```
@@ -400,7 +461,8 @@ Similar to with the single-cell data most genes are detected in both Alevin-fry 
 ## Concluding thoughts 
 
 - Alevin-fry and Spaceranger only result in similar distributions of UMI/spot and genes/spot, although it is not quite as nice as the overlay you see with single-cell libraries. 
-- Both tools also show high correlation in mean gene expression and high overlap in the genes that are detected.
+- It appears that Alevin-fry has slightly higher UMI/cell and genes detected/cell. 
+- Both tools also show high correlation in mean gene expression and high overlap in the genes that are detected, although there is a subset of genes that are off the diagonal but have no particular gene set enrichment. 
 
 ## Session Info
 
