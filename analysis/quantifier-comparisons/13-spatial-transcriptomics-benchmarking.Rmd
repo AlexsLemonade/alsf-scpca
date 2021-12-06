@@ -91,7 +91,7 @@ fry_spe <- create_fry_spaceranger_spe(fry_dir,
 spaceranger_dir <- file.path(quants_dir, "cellranger", cellranger_folder)
 
 # read in spaceranger output directly using read10XVisium
-spaceranger_spe <- create_spaceranger_spe(spaceranger_dir, sample_id)
+spaceranger_spe <- read10xVisium(file.path(spaceranger_dir, "outs"), sample_id = sample_id)
 ```
 
 ### Per Spot QC Metrics
@@ -139,13 +139,15 @@ Now we only want to filter our data frame to contain spots that are shared betwe
 
 ```{r}
 # identify shared spots only 
-spot_counts <- coldata_df %>%  
+spot_counts <- coldata_df %>%
   dplyr::count(spot_id, sample_id)
 ```
 
 ```{r}
 # how many spots are shared among the tools
 spot_counts_plot <- coldata_df %>%
+  # only look at spots in the tissue
+  dplyr::filter(in_tissue == 1) %>%
   dplyr::group_by(spot_id) %>%
   dplyr::summarise(tools_detected = list(unique(tool)))
 
@@ -233,6 +235,8 @@ ggplot(coldata_df_common, aes(x = sum, color = tool)) +
   xlab("")
 ```
 
+
+
 ```{r}
 all_spe_filter %>%
   purrr::iwalk(plot_spe, column = "sum")
@@ -254,8 +258,7 @@ all_spe_filter %>%
   purrr::iwalk(plot_spe, column = "detected")
 ```
 
-Generally it looks like there are some differences between the tools. 
-When looking at this closer, it appears that Alevin-fry provides an increase in both total UMI/cell and genes detected/cell which is seen in the spatial plot as well. 
+Generally it looks like the tools are fairly similar, except that Alevin-fry shows a slight decrease in both total UMI/cell and genes detected/cell when compared to Spaceranger alone, which is seen in the spatial plot as well. 
 
 
 ### Per Gene QC Metrics
@@ -324,9 +327,10 @@ ggplot(rowdata_cor, aes(x = `spaceranger`, y = `alevin-fry`)) +
   theme_classic()
   
 ```
-Correlation appears to be quite high between mean gene expression in Spaceranger and Alevin-fry, however, we do see that there is a subset of genes that have higher gene expression in Spaceranger than in Alevin-fry and are slightly off the diagonal. 
+Correlation appears to be quite high between mean gene expression in Spaceranger and Alevin-fry, however, we do see that generally genes have higher gene expression in Spaceranger than in Alevin-fry and are slightly off the diagonal. 
 
-
+There is a subset of genes that seems to be slightly more affected and be further off the diagonal. 
+Let's take at those genes.
 
 ```{r}
 # get the gene symbols and then join back with rowdata df 
@@ -396,7 +400,7 @@ go_results <- go_ora_results@result %>%
   dplyr::filter(p.adjust < 0.00001)
 go_results
 ```
-It looks like there aren't any specific pathways that are affected. 
+It looks like genes in pathways affecting blood vessel development and wound healing are identified as being differentially quantified across the two tools. 
 
 ### Shared genes across tools
 
@@ -461,8 +465,9 @@ Similar to with the single-cell data most genes are detected in both Alevin-fry 
 ## Concluding thoughts 
 
 - Alevin-fry and Spaceranger only result in similar distributions of UMI/spot and genes/spot, although it is not quite as nice as the overlay you see with single-cell libraries. 
-- It appears that Alevin-fry has slightly higher UMI/cell and genes detected/cell. 
-- Both tools also show high correlation in mean gene expression and high overlap in the genes that are detected, although there is a subset of genes that are off the diagonal but have no particular gene set enrichment. 
+- It appears that Spaceranger has slightly higher UMI/cell and genes detected/cell. 
+- Both tools also show high correlation in mean gene expression and high overlap in the genes that are detected, although there is an increase in gene expression in Spaceranger alone. 
+- Genes showing differential gene expression across the two tools appear to be involved in blood vessel development and wound healing.  
 
 ## Session Info
 
