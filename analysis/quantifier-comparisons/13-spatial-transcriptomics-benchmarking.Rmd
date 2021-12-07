@@ -110,7 +110,7 @@ Now that we have read in the data and created our two `SpatialExperiment` object
 
 ```{r}
 # create one list with both spe's together
-all_spe_list <- list(fry_spe_1, fry_spe_2, spaceranger_spe_1, spaceranger_spe_2)
+all_spe_list <- list(fry_spe_1, spaceranger_spe_1, fry_spe_2, spaceranger_spe_2)
 
 # name each spe with combination of sample_id-tool 
 fry_names <- c("SCPCR000372-alevin-fry", "SCPCR000373-alevin-fry")
