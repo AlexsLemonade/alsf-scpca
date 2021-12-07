@@ -131,3 +131,36 @@ workflow{
   
   mpileup(pileup_ch, [params.ref_fasta, params.ref_fasta_index])
 }
+
+workflow pileup_multibulk{
+  take:
+    multiplex_ch // a channel of multiplex meta objects, with sample_ids join by `_` in their ids
+    bulk_mapped_ch // output of bulk mapping: [meta, bamfile, bamfile_index]
+  
+  main:
+    //pull sample to front of bulk_mapped_ch
+    sample_bulk_ch = bulk_mapped_ch
+      .map{[it[0].sample_id, it[0], it[1], it[2]]} 
+
+    pileup_ch = multiplex_ch 
+      .map{[it.sample_id.tokenize("_"), it]} // split out sample ids into a tuple
+      .transpose() // one element per sample (meta objects repeated)
+      .combine(sample_bulk_ch, by: 0) // combine by sample id
+      .groupTuple(by: 1) // group by the multiplex run meta object
+      .map{[
+        [ // create a meta object for each group of files
+          sample_ids: it[0],
+          multiplex_run_id: it[1].run_id,
+          multiplex_library_id: it[1].library_id,
+          bulk_run_ids: it[2].collect{it.run_id},
+          bulk_run_prefixes: it[2].collect{it.s3_prefix}
+        ],
+        it[3], // bamfiles
+        it[4]  // bamfile indexes
+      ]}
+    mpileup(pileup_ch, [params.ref_fasta, params.ref_fasta_index])
+  
+  emit:
+    mpileup.out
+
+}
