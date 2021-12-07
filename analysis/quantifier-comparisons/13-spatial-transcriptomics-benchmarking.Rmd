@@ -10,6 +10,7 @@ output:
 In this notebook we are comparing the use of Alevin-fry and Spaceranger for quantifying spatial transcriptomics libraries. 
 Two spatial transcriptomic libraries were quantified using Alevin-fry and Spaceranger and the results were combined following the [Alevin-fry tutorial](https://combine-lab.github.io/alevin-fry-tutorials/2021/af-spatial/). 
 We are comparing that to if we were to not integrate the Spaceranger data with Alevin-fry and only use Spaceranger. 
+When performing this analysis Spaceranger was run using an index generated with Ensembl 100, while Alevin-fry used an index with Ensembl 104 so there may be some small differences pertaining to the index used.
 Here we will look at two libraries, SCPCR000372 and SCPCR000373.
 
 Note that `SpatialExperiment` was installed from Github, in order to reflect the most recent changes in `read10XVisium` at commit ddb15e0.
@@ -113,9 +114,9 @@ Now that we have read in the data and created our two `SpatialExperiment` object
 all_spe_list <- list(fry_spe_1, spaceranger_spe_1, fry_spe_2, spaceranger_spe_2)
 
 # name each spe with combination of sample_id-tool 
-fry_names <- c("SCPCR000372-alevin-fry", "SCPCR000373-alevin-fry")
-spaceranger_names <- c("SCPCR000372-spaceranger", "SCPCR000373-spaceranger")
-names(all_spe_list) <- c(fry_names, spaceranger_names)
+spe_names <- c("SCPCR000372-alevin-fry","SCPCR000372-spaceranger",
+               "SCPCR000373-alevin-fry", "SCPCR000373-spaceranger")
+names(all_spe_list) <- spe_names
 
 # calculate per cell QC and output to a combined data frame with plotting 
 all_spe_list <- all_spe_list %>%
@@ -140,6 +141,9 @@ sample_info_df
 
 When we convert the `colData` to a data frame we use the custom function, `spatial_coldata_to_df()` to do so and apply it to each spe in our list. 
 ```{r}
+fry_names <- c("SCPCR000372-alevin-fry", "SCPCR000373-alevin-fry")
+spaceranger_names <- c("SCPCR000372-spaceranger", "SCPCR000373-spaceranger")
+
 # join coldata dataframe with sample info
 coldata_df <- all_spe_list %>%
   purrr::map_df(spatial_coldata_to_df, .id = "tool") %>%
@@ -380,20 +384,6 @@ rowdata_cor %>%
   dplyr::select(sample_id, symbol, gene_id, log_fold_change, `alevin-fry`, spaceranger)
 ```
 
-```{r fig.height=7, fig.width=10}
-ggplot(rowdata_cor, aes(x = `spaceranger`, y = `alevin-fry`)) +
-  geom_point(size = 0.5, alpha = 0.1) + 
-  scale_x_log10() + 
-  scale_y_log10() + 
-  geom_abline() +
-  facet_wrap(~ sample_id, nrow = 2) + 
-  labs(x = "Spaceranger mean gene expression", y = "Alevin Fry Mean gene expression") + 
-  theme_classic() + 
-  geom_text_repel(data = rowdata_cor %>%
-                    dplyr::filter(abs(log_fold_change) > 0.5),
-                  mapping = aes(x = `spaceranger`, y = `alevin-fry`, label = symbol),
-                  max.overlaps= 30, size= 3)
-```
 Let's look at what types of genes are found to have different gene expression across these two tools using over representation analysis. 
 
 ```{r}
@@ -515,6 +505,12 @@ gene_detect_df <- rowdata_df_filtered %>%
 ggplot(gene_detect_df, aes(x = tools_detected)) +
   geom_bar() +
   scale_x_upset(n_intersections = 3)
+```
+
+```{r}
+# save spe list
+spe_file <- file.path(results_dir, "all_spe_list.rds")
+readr::write_rds(all_spe_list, spe_file)
 ```
 
 Similar to with the single-cell data most genes are detected in both Alevin-fry and Spaceranger which is good. 
