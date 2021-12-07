@@ -26,8 +26,8 @@ all_techs = single_cell_techs + bulk_techs
 
 
 // include processes
-include { bulkmap_star; index_bam } from './map-bulk-star.nf'
-include { starsolo } from './map-sc-star.nf'
+include { star_bulk } from './map-bulk-star.nf'
+include { star_singlecell } from './map-sc-star.nf'
 include { mpileup } from './mpileup.nf'
 include { cellsnp; vireo } from './cellsnp.nf'
 
@@ -59,14 +59,45 @@ workflow{
              || (it.library_id in run_ids)
             }
     .filter{it.sample_id.contains("_")} 
-    .map{[it.sample_id.tokenize("_"), it]} // split out sample ids into a tuple
+  
+  bulk_samples = multiplex_ch
+    .map{[it.sample_id.tokenize("_")]} // split out sample ids into a tuple
     .transpose() // one element per sample (meta objects repeated)
-  
+    .map{it[0]} // get sample ids
+    .collect()
+
   bulk_ch = runs_ch
-    .filter {it.technology in bulk_techs}
-    .map{[it.sample_id, it]}
+    .filter{it.technology in bulk_techs}
+    .filter{it.sample_id in bulk_samples.getVal()}
   
-  multiplex_bulk_ch = multiplex_ch
-    .combine(bulk_ch, by:0)
-    .view()
+  // map bulk samples
+  bulk_mapped_ch = star_bulk(bulk_ch)
+    .map{[it[0].sample_id, it[0], it[1], it[2]]} // [sample_id, meta, bam, bai]
+  
+  // combine bulk samples for pileup
+  pileup_ch = multiplex_ch 
+    .map{[it.sample_id.tokenize("_"), it]} // split out sample ids into a tuple
+    .transpose()
+    .combine(bulk_mapped_ch, by: 0) //combine by sample id
+    .groupTuple(by: 1) // group by the multiplex run meta object
+    .map{[
+      [ // create a meta object for each group of files
+        sample_ids: it[0],
+        multiplex_run_id: it[1].run_id,
+        multiplex_library_id: it[1].library_id,
+        bulk_run_ids: it[2].collect{it.run_id},
+        bulk_run_prefixes: it[2].collect{it.s3_prefix}
+      ],
+      it[3], // bamfiles
+      it[4]  // bamfile indexes
+     ]}
+  // pileup bulk samples 
+  mpileup(pileup_ch, [params.ref_fasta, params.ref_fasta_index])
+  
+
+  // map multiplex
+  star_singlecell(multiplex_ch)
+  
+  cellsnp(star_singlecell.out.bam, mpileup.out, star_singlecell.out.quant)
+  vireo(cellsnp.out, mpileup.out)
 }
