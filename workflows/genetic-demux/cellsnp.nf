@@ -76,7 +76,8 @@ process cellsnp{
     meta = meta_star
     meta.sample_ids = meta_mpileup.sample_ids
     meta.bulk_run_ids = meta_mpileup.bulk_run_ids
-    barcodes = "${star_quant}/Solo.out/Gene/filtered/barcodes.tsv"
+    quant_dir = ${meta_star.seq_unit} == "nucleus" ? "GeneFull" : "Gene"
+    barcodes = "${star_quant}/Solo.out/${quant_dir}/filtered/barcodes.tsv"
     outdir = "${meta.library_id}_cellSNP"
     """
     cellsnp-lite \

@@ -41,8 +41,10 @@ process starsolo{
                  '10Xv2_5prime': '',
                  '10Xv3': '--soloUMIlen 12',
                  '10Xv3.1': '--soloUMIlen 12']
+    features_flag = ${meta.seq_unit} == "nucleus" ? "--soloFeatures Gene GeneFull" : "--soloFeatures Gene"
     output_dir = "${meta.run_id}_star"
     output_bam = "${meta.run_id}.sorted.bam"
+    
     """
     mkdir -p ${output_dir}/Solo.out/Gene/raw
     STAR \
@@ -53,6 +55,7 @@ process starsolo{
       --readFilesCommand gunzip -c \
       --soloCBwhitelist ${barcode_file} \
       ${tech_flag[meta.technology]} \
+      ${features_flag} \
       --soloCellFilter EmptyDrops_CR \
       --outSAMtype BAM SortedByCoordinate \
       --outSAMattributes NH HI nM AS CR UR CB UB CY UY GX GN \
