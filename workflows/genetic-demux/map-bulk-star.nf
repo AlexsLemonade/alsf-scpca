@@ -86,3 +86,21 @@ workflow{
     bulkmap_star(bulk_reads_ch, params.star_index) \
       | index_bam
 }
+
+workflow star_bulk{
+  take: bulk_channel 
+  // a channel with a map of metadata for each rna library to process
+    
+  main: 
+    // create tuple of (metadata map, [Read 1 files], [Read 2 files])
+    bulk_reads_ch = bulk_channel
+        .map{meta -> tuple(meta,
+                            file("s3://${meta.s3_prefix}/*_R1_*.fastq.gz"),
+                            file("s3://${meta.s3_prefix}/*_R2_*.fastq.gz"))}
+    // map and index
+    bulkmap_star(bulk_reads_ch, params.star_index) \
+    | index_bam
+  
+  emit: 
+    index_bam.out
+}

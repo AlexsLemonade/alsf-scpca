@@ -41,7 +41,7 @@ process starsolo{
                  '10Xv2_5prime': '',
                  '10Xv3': '--soloUMIlen 12',
                  '10Xv3.1': '--soloUMIlen 12']
-    features_flag = ${meta.seq_unit} == "nucleus" ? "--soloFeatures Gene GeneFull" : "--soloFeatures Gene"
+    features_flag = meta.seq_unit == "nucleus" ? "--soloFeatures Gene GeneFull" : "--soloFeatures Gene"
     output_dir = "${meta.run_id}_star"
     output_bam = "${meta.run_id}.sorted.bam"
     
@@ -117,4 +117,25 @@ workflow{
 
     starsolo(sc_reads_ch, params.star_index, cellbarcodes_ch)
     index_bam(starsolo.out.star_bam)
+}
+
+
+workflow star_singlecell{
+  take: singlecell_ch
+
+  main: 
+    sc_reads_ch = singlecell_ch
+      .map{meta -> tuple(meta,
+                         file("s3://${meta.s3_prefix}/*_R1_*.fastq.gz"),
+                         file("s3://${meta.s3_prefix}/*_R2_*.fastq.gz"))}
+
+    cellbarcodes_ch = singlecell_ch
+      .map{file("${params.barcode_dir}/${cell_barcodes[it.technology]}")}
+
+    starsolo(sc_reads_ch, params.star_index, cellbarcodes_ch)
+    index_bam(starsolo.out.star_bam)
+  
+  emit:
+    bam = index_bam.out
+    quant = starsolo.out.starsolo_dir
 }
