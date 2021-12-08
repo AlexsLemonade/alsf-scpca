@@ -3,10 +3,11 @@ nextflow.enable.dsl=2
 
 SAMTOOLSCONTAINER = 'quay.io/biocontainers/samtools:1.14--hb421002_0'
 BCFTOOLSCONTAINER = 'quay.io/biocontainers/bcftools:1.14--h88f3f91_0'
+CELLSNPCONTAINER = 'quay.io/biocontainers/cellsnp-lite:1.2.2--h22771d5_0'
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 params.run_ids = 'SCPCR000533'
-params.outdir = 's3://nextflow-ccdl-results/scpca/demux/mpileup'
+params.outdir = 's3://nextflow-ccdl-results/scpca/demux/'
 
 params.ref_fasta = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz'
 params.ref_fasta_index = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai'
@@ -16,7 +17,7 @@ single_cell_techs = ['10Xv2', '10Xv3', '10Xv3.1', '10Xv2_5prime']
 
 process mpileup{
   container BCFTOOLSCONTAINER
-  publishDir "${params.outdir}/${meta.multiplex_library_id}"
+  publishDir "${params.outdir}/mpileup/${meta.multiplex_library_id}"
   cpus "2"
   memory "2.G"
   input:
@@ -42,6 +43,41 @@ process mpileup{
     """
 }
 
+process mpileup_cellsnp{
+  container CELLSNPCONTAINER
+  publishDir "${params.outdir}/mpileup_cellsnp/${meta.multiplex_library_id}"
+  label "cpus_8"
+  input:
+    tuple val(meta), path(bamfiles), path(bamfiles_index)
+    tuple path(reference), path(reference_index)
+  output:
+    tuple val(meta), path(mpileup_file)
+  script:
+    mpileup_file = "${meta.multiplex_library_id}.vcf.gz"
+    outdir = "${meta.multiplex_library_id}_mpileup_cellsnp"
+    """
+    # create sample and bam file lists
+    echo "${meta.sample_ids.join('\n')}" > samples.txt
+    echo "${bamfiles.join('\n')}" > bamfiles.txt
+
+    cellsnp-lite \
+      --samFileList bamfiles.txt \
+      --sampleList samples.txt \
+      --refseq ${reference} \
+      --UMItag None \
+      --cellTAG None \
+      --nproc ${task.cpus} \
+      --outDir cellsnp \
+      --minMAF=0.1 \
+      --minCOUNT=20 \
+      --maxDEPTH=1000000 \
+      --genotype \
+      --gzip
+    
+    mv cellsnp/cellSNP.cells.vcf.gz ${mpileup_file}
+    """
+}
+
 
 // bulk mapping results as they would come from a channel
 bulk_results = [
@@ -52,8 +88,8 @@ bulk_results = [
       seq_unit: 'bulk', 
       s3_prefix: 'sccdl-scpca-data/runs/SCPCR000170'
     ],
-    file('s3://nextflow-ccdl-results/scpca/star-bulk/SCPCS000133/SCPCR000170.sorted.bam'),
-    file('s3://nextflow-ccdl-results/scpca/star-bulk/SCPCS000133/SCPCR000170.sorted.bam.bai')
+    file('s3://nextflow-ccdl-results/scpca/demux/star-bulk/SCPCS000133/SCPCR000170.sorted.bam'),
+    file('s3://nextflow-ccdl-results/scpca/demux/star-bulk/SCPCS000133/SCPCR000170.sorted.bam.bai')
   ],
   [ [ 
       run_id: 'SCPCR000171', 
@@ -62,8 +98,8 @@ bulk_results = [
       seq_unit: 'bulk', 
       s3_prefix: 'sccdl-scpca-data/runs/SCPCR000171'
     ],
-    file('s3://nextflow-ccdl-results/scpca/star-bulk/SCPCS000134/SCPCR000171.sorted.bam'),
-    file('s3://nextflow-ccdl-results/scpca/star-bulk/SCPCS000134/SCPCR000171.sorted.bam.bai')
+    file('s3://nextflow-ccdl-results/scpca/demux/star-bulk/SCPCS000134/SCPCR000171.sorted.bam'),
+    file('s3://nextflow-ccdl-results/scpca/demux/star-bulk/SCPCS000134/SCPCR000171.sorted.bam.bai')
   ],
   [ [
       run_id: 'SCPCR000172', 
@@ -72,8 +108,8 @@ bulk_results = [
       seq_unit: 'bulk', 
       s3_prefix: 'sccdl-scpca-data/runs/SCPCR000172'
     ],
-    file('s3://nextflow-ccdl-results/scpca/star-bulk/SCPCS000135/SCPCR000172.sorted.bam'),
-    file('s3://nextflow-ccdl-results/scpca/star-bulk/SCPCS000135/SCPCR000172.sorted.bam.bai')
+    file('s3://nextflow-ccdl-results/scpca/demux/star-bulk/SCPCS000135/SCPCR000172.sorted.bam'),
+    file('s3://nextflow-ccdl-results/scpca/demux/star-bulk/SCPCS000135/SCPCR000172.sorted.bam.bai')
   ],
   [ [
       run_id: 'SCPCR000173', 
@@ -82,8 +118,8 @@ bulk_results = [
       seq_unit: 'bulk', 
       s3_prefix: 'sccdl-scpca-data/runs/SCPCR000173'
     ],
-    file('s3://nextflow-ccdl-results/scpca/star-bulk/SCPCS000136/SCPCR000173.sorted.bam'),
-    file('s3://nextflow-ccdl-results/scpca/star-bulk/SCPCS000136/SCPCR000173.sorted.bam.bai')
+    file('s3://nextflow-ccdl-results/scpca/demux/star-bulk/SCPCS000136/SCPCR000173.sorted.bam'),
+    file('s3://nextflow-ccdl-results/scpca/demux/star-bulk/SCPCS000136/SCPCR000173.sorted.bam.bai')
   ]
 ]
 
@@ -129,7 +165,7 @@ workflow{
       it[4]  // bamfile indexes
      ]}
   
-  mpileup(pileup_ch, [params.ref_fasta, params.ref_fasta_index])
+  mpileup_cellsnp(pileup_ch, [params.ref_fasta, params.ref_fasta_index])
 }
 
 workflow pileup_multibulk{
