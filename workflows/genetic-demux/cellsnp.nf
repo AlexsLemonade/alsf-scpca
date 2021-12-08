@@ -6,7 +6,7 @@ CONDACONTAINER = 'continuumio/miniconda3:4.10.3p0'
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 params.run_ids = 'SCPCR000533'
-params.outdir = 's3://nextflow-ccdl-results/scpca/demux/cellsnp'
+params.outdir = 's3://nextflow-ccdl-results/scpca/demux'
 params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes'
 
 params.ref_fasta = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz'
@@ -64,7 +64,7 @@ starsolo_quant_results = [
 
 process cellsnp{
   container CELLSNPCONTAINER
-  publishDir "${params.outdir}/${meta.library_id}"
+  publishDir "${params.outdir}/cellsnp/${meta.library_id}"
   label "cpus_8"
   input:
     tuple val(meta_star), path(star_bam), path(star_bai)
@@ -94,7 +94,7 @@ process cellsnp{
 
 process vireo{
   container CONDACONTAINER
-  publishDir "${params.outdir}/${meta.library_id}"
+  publishDir "${params.outdir}/cellsnp/${meta.library_id}"
   label "cpus_8"
   input:
     tuple val(meta), path(cellsnp_dir)

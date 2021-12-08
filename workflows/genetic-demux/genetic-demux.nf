@@ -3,7 +3,7 @@ nextflow.enable.dsl=2
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 params.run_ids = 'SCPCR000533'
-params.outdir = 's3://nextflow-ccdl-results/scpca/demux/cellsnp'
+params.outdir = 's3://nextflow-ccdl-results/scpca/demux/'
 params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes'
 
 params.ref_fasta = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz'

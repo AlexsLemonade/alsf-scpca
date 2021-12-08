@@ -12,7 +12,7 @@ params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes'
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 params.run_ids = 'SCPCR000533'
 
-params.outdir = 's3://nextflow-ccdl-results/scpca/demux/starsolo/'
+params.outdir = 's3://nextflow-ccdl-results/scpca/demux'
 
 // 10X barcode files
 cell_barcodes = ['10Xv2': '737K-august-2016.txt',
@@ -25,7 +25,7 @@ single_cell_techs = cell_barcodes.keySet()
 
 process starsolo{
   container STARCONTAINER
-  publishDir "${params.outdir}/${meta.library_id}"
+  publishDir "${params.outdir}/starsolo/${meta.library_id}"
   label 'bigdisk'
   memory "32.GB"
   cpus "8"
@@ -59,6 +59,7 @@ process starsolo{
       --soloCellFilter EmptyDrops_CR \
       --outSAMtype BAM SortedByCoordinate \
       --outSAMattributes NH HI nM AS CR UR CB UB CY UY GX GN \
+      --outBAMsortingThreadN 2 \
       --limitBAMsortRAM 20000000000 \
       --runDirPerm All_RWX \
       --outFileNamePrefix ${output_dir}/
@@ -69,7 +70,7 @@ process starsolo{
 
 process index_bam{
   container SAMTOOLSCONTAINER
-  publishDir "${params.outdir}/${meta.library_id}"
+  publishDir "${params.outdir}/starsolo/${meta.library_id}"
   input:
     tuple val(meta), path(bamfile)
   output:
