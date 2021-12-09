@@ -1,15 +1,22 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
-params.run_ids = 'SCPCR000533'
 params.outdir = 's3://nextflow-ccdl-results/scpca/demux/'
+params.run_ids = 'SCPCR000533'
+
+params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes'
 
 params.ref_fasta = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz'
 params.ref_fasta_index = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai'
 params.star_index = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/star_index/Homo_sapiens.GRCh38.104.star_idx'
 
+//containers
+params.STAR_CONTAINER = 'quay.io/biocontainers/star:2.7.9a--h9ee0642_0'
+params.CELLSNP_CONTAINER = 'quay.io/biocontainers/cellsnp-lite:1.2.2--h22771d5_0'
+params.CONDA_CONTAINER = 'continuumio/miniconda3:4.10.3p0'
+params.SAMTOOLS_CONTAINER = 'quay.io/biocontainers/samtools:1.14--hb421002_0'
+params.BCFTOOLS_CONTAINER = 'quay.io/biocontainers/bcftools:1.14--h88f3f91_0'
 
 // 10X barcode files
 cell_barcodes = [
@@ -27,9 +34,9 @@ all_techs = single_cell_techs + bulk_techs
 
 // include processes
 include { star_bulk } from './map-bulk-star.nf'
-include { star_singlecell } from './map-sc-star.nf'
+include { starsolo_sc } from './map-sc-star.nf'
 include { pileup_multibulk } from './mpileup.nf'
-include { cellsnp; vireo } from './cellsnp.nf'
+include { cellsnp_vireo } from './cellsnp.nf'
 
 workflow{
   run_ids = params.run_ids?.tokenize(',') ?: []
@@ -52,6 +59,7 @@ workflow{
     // only technologies we know how to process
     .filter{it.technology in all_techs} 
 
+  // get the single cell samples which were multiplexed
   multiplex_ch = runs_ch
     .filter{it.technology in single_cell_techs}
     .filter{run_all 
@@ -60,12 +68,13 @@ workflow{
             }
     .filter{it.sample_id.contains("_")} 
   
+  // get the bulk samples that correspond to multiplexed samples
   bulk_samples = multiplex_ch
     .map{[it.sample_id.tokenize("_")]} // split out sample ids into a tuple
     .transpose() // one element per sample (meta objects repeated)
     .map{it[0]} // get sample ids
     .collect()
-
+  // make a channel of the bulk samples we need to process
   bulk_ch = runs_ch
     .filter{it.technology in bulk_techs}
     .filter{it.sample_id in bulk_samples.getVal()}
@@ -76,9 +85,9 @@ workflow{
   // pileup bulk samples by multiplex groups
   pileup_multibulk(multiplex_ch, star_bulk.out)
 
-  // map multiplex
-  star_singlecell(multiplex_ch)
-  
-  cellsnp(star_singlecell.out.bam, pileup_multibulk.out, star_singlecell.out.quant)
-  vireo(cellsnp.out, pileup_multibulk.out)
+  // map multiplexed single cell samples
+  starsolo_sc(multiplex_ch)
+
+  // call cell snps and genotype cells 
+  cellsnp_vireo(starsolo_sc.out.bam,  starsolo_sc.out.quant, pileup_multibulk.out)
 }
