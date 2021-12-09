@@ -67,12 +67,13 @@ workflow cellsnp_vireo {
     mpileup_vcf_ch // channel of [meta, vcf_file]
   main:
     mpileup_ch = mpileup_vcf_ch
-      .map{[it[0].multiplex_library_id, it[0], it[1]]} // pull out library id for combining
+      .map{[it[0].multiplex_library_id] + it} // pull out library id for combining
     star_mpileup_ch = starsolo_bam_ch
-      .combine(starsolo_quant_ch, by: 0)
-      .map{[it[0].library_id, it[0], it[1], it[2]]} // add library id at start
-      .combine(mpileup_ch, by: 0)
-      .map{[it[1], it[2], it[3], it[4], it[5], it[6]]} // drop library id
+      .combine(starsolo_quant_ch, by: 0) // rejoin starsolo outs by meta object
+      .map{[it[0].library_id] + it} // add library id at start
+      .combine(mpileup_ch, by: 0) // join starsolo and mpileup by library id
+      .map{it.drop(1)} // drop library id
+      //result: [meta, star_bam, star_bai, star_quant, meta_mpileup, vcf_file]
     
     cellsnp(star_mpileup_ch)
     vireo(cellsnp.out)

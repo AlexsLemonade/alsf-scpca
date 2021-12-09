@@ -80,7 +80,7 @@ workflow pileup_multibulk{
   main:
     //pull sample to front of bulk_mapped_ch
     sample_bulk_ch = bulk_mapped_ch
-      .map{[it[0].sample_id, it[0], it[1], it[2]]} 
+      .map{[it[0].sample_id] + it} 
 
     pileup_ch = multiplex_ch 
       .map{[it.sample_id.tokenize("_"), it]} // split out sample ids into a tuple
