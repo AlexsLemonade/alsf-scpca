@@ -1,8 +1,6 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-CELLSNPCONTAINER = 'quay.io/biocontainers/cellsnp-lite:1.2.2--h22771d5_0'
-CONDACONTAINER = 'continuumio/miniconda3:4.10.3p0'
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 params.run_ids = 'SCPCR000533'
@@ -12,71 +10,21 @@ params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes'
 params.ref_fasta = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz'
 params.ref_fasta_index = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai'
 
-// 10X barcode files
-cell_barcodes = ['10Xv2': '737K-august-2016.txt',
-                 '10Xv3': '3M-february-2018.txt',
-                 '10Xv3.1': '3M-february-2018.txt',
-                 '10Xv2_5prime': '737K-august-2016.txt']
-
-// bulk mpileup results as they would come from a channel
-mpileup_results = [
-  [
-    [ //meta
-      sample_ids: ['SCPCS000133', 'SCPCS000134', 'SCPCS000135', 'SCPCS000136'],
-      multiplex_run_id: 'SCPCR000533',
-      multiplex_library_id: 'SCPCL000533',
-      bulk_run_ids: ['SCPCR000170', 'SCPCR000171', 'SCPCR000172', 'SCPCR000173']
-    ],
-    file('s3://nextflow-ccdl-results/scpca/demux/mpileup/SCPCL000533/SCPCL000533.vcf.gz')
-  ]
-]
-// starsolo results as they would come
-starsolo_bam_results = [
-  [
-    [
-      run_id: 'SCPCR000533',
-      library_id: 'SCPCL000533',
-      sample_id: 'SCPCS000133_SCPCS000134_SCPCS000135_SCPCS000136',
-      technology: '10Xv3.1',
-      seq_unit: 'nucleus',
-      s3_prefix: 'sccdl-scpca-data/runs/SCPCR000533'
-    ],
-    file('s3://nextflow-ccdl-results/scpca/demux/starsolo/SCPCL000533/SCPCR000533.sorted.bam'),
-    file('s3://nextflow-ccdl-results/scpca/demux/starsolo/SCPCL000533/SCPCR000533.sorted.bam.bai')
-  ]
-]
-
-// starsolo results as they would come
-starsolo_quant_results = [
-  [
-    [
-      run_id: 'SCPCR000533',
-      library_id: 'SCPCL000533',
-      sample_id: 'SCPCS000133_SCPCS000134_SCPCS000135_SCPCS000136',
-      technology: '10Xv3.1',
-      seq_unit: 'nucleus',
-      s3_prefix: 'sccdl-scpca-data/runs/SCPCR000533'
-    ],
-    file('s3://nextflow-ccdl-results/scpca/demux/starsolo/SCPCL000533/SCPCR000533_star')
-  ]
-]
-
 
 process cellsnp{
-  container CELLSNPCONTAINER
+  container params.CELLSNP_CONTAINER
   publishDir "${params.outdir}/cellsnp/${meta.library_id}"
   label "cpus_8"
   input:
-    tuple val(meta_star), path(star_bam), path(star_bai)
-    tuple val(meta_mpileup), path(vcf_file)
-    tuple val(meta_star), path(star_quant)
+    tuple val(meta_star), path(star_bam), path(star_bai), path(star_quant),
+          val(meta_mpileup), path(vcf_file)
   output:
-    tuple val(meta), path(outdir)
+    tuple val(meta), path(outdir), path(vcf_file)
   script:
     meta = meta_star
     meta.sample_ids = meta_mpileup.sample_ids
     meta.bulk_run_ids = meta_mpileup.bulk_run_ids
-    quant_dir = ${meta_star.seq_unit} == "nucleus" ? "GeneFull" : "Gene"
+    quant_dir = meta_star.seq_unit == "nucleus" ? "GeneFull" : "Gene"
     barcodes = "${star_quant}/Solo.out/${quant_dir}/filtered/barcodes.tsv"
     outdir = "${meta.library_id}_cellSNP"
     """
@@ -93,12 +41,11 @@ process cellsnp{
 }
 
 process vireo{
-  container CONDACONTAINER
+  container params.CONDA_CONTAINER
   publishDir "${params.outdir}/cellsnp/${meta.library_id}"
   label "cpus_8"
   input:
-    tuple val(meta), path(cellsnp_dir)
-    tuple val(meta_mpileup), path(vcf_file)
+    tuple val(meta), path(cellsnp_dir), path(vcf_file)
   output:
     tuple val(meta), path(outdir)
   script:
@@ -113,11 +60,22 @@ process vireo{
     """
 }
 
-workflow{
-  // only multiplexed samples as [sample_id, run_id] pairs
-  multiplexed_ch = Channel.from(starsolo_bam_results)
-  mpileup_ch = Channel.from(mpileup_results)
-  star_quant_ch = Channel.from(starsolo_quant_results)
-  cellsnp(multiplexed_ch, mpileup_ch, star_quant_ch)
-  vireo(cellsnp.out, mpileup_ch)
+workflow cellsnp_vireo {
+  take: 
+    starsolo_bam_ch //channel of [meta, bamfile, bam.bai]
+    starsolo_quant_ch //channel of [meta, starsolo_dir]
+    mpileup_vcf_ch // channel of [meta, vcf_file]
+  main:
+    mpileup_ch = mpileup_vcf_ch
+      .map{[it[0].multiplex_library_id, it[0], it[1]]} // pull out library id for combining
+    star_mpileup_ch = starsolo_bam_ch
+      .combine(starsolo_quant_ch, by: 0)
+      .map{[it[0].library_id, it[0], it[1], it[2]]} // add library id at start
+      .combine(mpileup_ch, by: 0)
+      .map{[it[1], it[2], it[3], it[4], it[5], it[6]]} // drop library id
+    
+    cellsnp(star_mpileup_ch)
+    vireo(cellsnp.out)
+  emit:
+    vireo.out
 }
