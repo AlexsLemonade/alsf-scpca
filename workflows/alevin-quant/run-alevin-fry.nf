@@ -2,13 +2,13 @@
 nextflow.enable.dsl=2
 
 // run parameters
-params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-103'
+params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104'
 params.index_dir = 'salmon_index'
 params.annotation_dir = 'annotation'
 params.index_type = 'cdna' // default index type is cdna, can also use splici
 params.sketch = false // use sketch mode for mapping with flag `--sketch`
 params.resolution = 'full' //default resolution is full, can also use cr-like, cr-like-em, parsimony, and trivial
-params.t2g_3col = 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene_3col.tsv'
+params.t2g_3col = 'Homo_sapiens.GRCh38.104.spliced_intron.tx2gene_3col.tsv'
 params.barcode_dir = 's3://nextflow-ccdl-data/reference/10X/barcodes' 
 params.filter = 'unfiltered' // default filtering strategy is to use unfiltered, other options include knee (--knee-distance)
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
@@ -24,18 +24,20 @@ ALEVINFRY_CONTAINER = 'quay.io/biocontainers/alevin-fry:0.4.1--h7d875b9_0'
 
 
 // index files 
-index_names_map = ['cdna': 'spliced_txome_k31',
-                   'splici': 'spliced_intron_txome_k31']
+index_names_map = ['cdna': 'Homo_sapiens.GRCh38.104.spliced_cdna.txome',
+                   'splici': 'Homo_sapiens.GRCh38.104.spliced_intron.txome']
 
 // tx2gene 2 column files
-t2g_map = ['cdna': 'Homo_sapiens.GRCh38.103.spliced.tx2gene.tsv',
-           'splici': 'Homo_sapiens.GRCh38.103.spliced_intron.tx2gene.tsv']
+t2g_map = ['cdna': 'Homo_sapiens.GRCh38.104.spliced.tx2gene.tsv',
+           'splici': 'Homo_sapiens.GRCh38.104.spliced_intron.tx2gene.tsv']
 
 // 10X barcode files
 barcodes = ['10Xv2': '737K-august-2016.txt',
             '10Xv3': '3M-february-2018.txt',
             '10Xv3.1': '3M-february-2018.txt',
             '10Xv2_5prime': '737K-august-2016.txt',
+            'visium_v1': 'visium-v1.txt',
+            'visium_v2': 'visium-v2.txt',
             'spatial': '']
 
 // supported single cell technologies
@@ -76,6 +78,8 @@ process alevin{
                  '10Xv3': '--chromiumV3',
                  '10Xv3.1': '--chromiumV3',
                  '10Xv2_5prime': '--chromium',
+                 'visium_v1': '--chromiumV3',
+                 'visium_v2': '--chromiumV3',
                  'spatial': '--chromiumV3']
     // run alevin like normal with the --rad flag 
     // creates output directory with RAD file needed for alevin-fry
