@@ -15,6 +15,7 @@ process cellsnp{
   container params.CELLSNP_CONTAINER
   publishDir "${params.outdir}/cellsnp/${meta.library_id}"
   label "cpus_8"
+  tag "${meta_star.run_id}"
   input:
     tuple val(meta_star), path(star_bam), path(star_bai), path(star_quant),
           val(meta_mpileup), path(vcf_file)
@@ -43,6 +44,7 @@ process cellsnp{
 process vireo{
   container params.CONDA_CONTAINER
   publishDir "${params.outdir}/cellsnp/${meta.library_id}"
+  tag "${meta.run_id}"
   label "cpus_8"
   input:
     tuple val(meta), path(cellsnp_dir), path(vcf_file)

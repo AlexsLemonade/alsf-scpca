@@ -5,8 +5,8 @@ nextflow.enable.dsl=2
 process mpileup{
   container params.BCFTOOLS_CONTAINER
   publishDir "${params.outdir}/mpileup/${meta.multiplex_library_id}"
+  tag "${meta.multiplex_library_id}"
   cpus "2"
-  memory "2.G"
   input:
     tuple val(meta), path(bamfiles), path(bamfiles_index)
     tuple path(ref_fasta), path(ref_index)

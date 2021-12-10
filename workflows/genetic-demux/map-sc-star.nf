@@ -14,6 +14,7 @@ single_cell_techs = cell_barcodes.keySet()
 process starsolo{
   container params.STAR_CONTAINER
   publishDir "${params.outdir}/starsolo/${meta.library_id}"
+  tag "${meta.run_id}"
   label 'bigdisk'
   memory "32.GB"
   cpus "8"
@@ -59,6 +60,7 @@ process starsolo{
 process index_bam{
   container params.SAMTOOLS_CONTAINER
   publishDir "${params.outdir}/starsolo/${meta.library_id}"
+  tag "${meta.run_id}"
   input:
     tuple val(meta), path(bamfile)
   output:

@@ -3,6 +3,7 @@ nextflow.enable.dsl=2
 
 process bulkmap_star{
   container params.STAR_CONTAINER
+  tag "${meta.run_id}"
   memory "32.GB"
   cpus "8"
   input:
@@ -28,6 +29,7 @@ process bulkmap_star{
 process index_bam{
   container params.SAMTOOLS_CONTAINER
   publishDir "${params.outdir}/star-bulk/${meta.sample_id}"
+  tag "${meta.run_id}"
   input:
     tuple val(meta), path(bamfile)
   output:
