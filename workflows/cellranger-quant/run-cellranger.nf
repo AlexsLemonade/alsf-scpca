@@ -24,8 +24,7 @@ process cellranger{
   label 'bigdisk'
   input:
     tuple val(meta), path(fastq_dir), val(include_introns)
-    val index_name
-    path index
+    tuple val(index_name), path(index)
   output:
     path output_id
   script:
@@ -51,8 +50,7 @@ process spaceranger{
   label 'bigdisk'
   input:
     tuple val(meta), path(fastq_dir), file(image_file)
-    val index_name
-    path index
+    tuple val(index_name), path(index)
   output:
     path output_id
   script:
@@ -118,9 +116,9 @@ workflow{
                        )}
 
   // run cellranger
-  cellranger(cellranger_reads, params.index_name, params.index_path)
+  cellranger(cellranger_reads, [params.index_name, params.index_path])
 
   // run spaceranger 
-  spaceranger(spaceranger_reads, params.index_name, params.index_path)
+  spaceranger(spaceranger_reads, [params.index_name, params.index_path])
   
 }

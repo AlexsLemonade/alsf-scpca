@@ -37,7 +37,7 @@ barcodes = ['10Xv2': '737K-august-2016.txt',
             '10Xv3.1': '3M-february-2018.txt',
             '10Xv2_5prime': '737K-august-2016.txt',
             'visium_v1': 'visium-v1.txt',
-            'visium_v2': 'visium-v1.txt',
+            'visium_v2': 'visium-v2.txt',
             'spatial': '']
 
 // supported single cell technologies
