@@ -17,14 +17,11 @@ process mpileup{
     """
     # create sample file to use for header
     echo "${meta.sample_ids.join('\n')}" > samples.txt
-    # decompress reference
-    gunzip -c ${ref_fasta} > reference.fa
-    mv ${ref_index} reference.fa.fai
 
     # call genotypes against reference, filter sites with missing genotypes 
     # & use sample names for header (replacing file names)
     bcftools mpileup -Ou \
-      --fasta-ref reference.fa \
+      --fasta-ref ${ref_fasta} \
       ${bamfiles} \
     | bcftools call -Ou --multiallelic-caller --variants-only \
     | bcftools view -Oz --genotype ^miss \
