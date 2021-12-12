@@ -34,7 +34,7 @@ all_techs = single_cell_techs + bulk_techs
 
 // include processes
 include { star_bulk } from './map-bulk-star.nf'
-include { starsolo_sc } from './map-sc-star.nf'
+include { starsolo_sc } from './map-sc-star.nf' addParams(cell_barcodes: cell_barcodes)
 include { pileup_multibulk } from './mpileup.nf'
 include { cellsnp_vireo } from './cellsnp.nf'
 

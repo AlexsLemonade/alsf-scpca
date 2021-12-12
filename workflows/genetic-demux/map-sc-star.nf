@@ -2,15 +2,6 @@
 nextflow.enable.dsl=2
 
 
-// 10X barcode files
-cell_barcodes = ['10Xv2': '737K-august-2016.txt',
-                 '10Xv3': '3M-february-2018.txt',
-                 '10Xv3.1': '3M-february-2018.txt',
-                 '10Xv2_5prime': '737K-august-2016.txt']
-
-// supported single cell technologies
-single_cell_techs = cell_barcodes.keySet()
-
 process starsolo{
   container params.STAR_CONTAINER
   publishDir "${params.outdir}/starsolo/${meta.library_id}"
@@ -83,7 +74,7 @@ workflow starsolo_sc{
                          file("s3://${meta.s3_prefix}/*_R2_*.fastq.gz"))}
 
     cellbarcodes_ch = singlecell_ch
-      .map{file("${params.barcode_dir}/${cell_barcodes[it.technology]}")}
+      .map{file("${params.barcode_dir}/${params.cell_barcodes[it.technology]}")}
 
     starsolo(sc_reads_ch, params.star_index, cellbarcodes_ch)
     index_bam(starsolo.out.star_bam)

@@ -64,12 +64,11 @@ workflow cellsnp_vireo {
       .combine(starsolo_quant_ch.map{[it[0].library_id] + it}, by: 0) // join starsolo outs by library_id 
       .map{[it[0], it[1], it[2], it[3], it[5]]} // remove redundant meta
       .combine(mpileup_ch, by: 0) // join starsolo and mpileup by library id
-      .view()
       .map{it.drop(1)} // drop library id
       //result: [meta, star_bam, star_bai, star_quant, meta_mpileup, vcf_file]
 
-    cellsnp(star_mpileup_ch)
-    vireo(cellsnp.out)
+    cellsnp(star_mpileup_ch) \
+      | vireo
   emit:
     vireo.out
 }

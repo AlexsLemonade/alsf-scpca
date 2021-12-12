@@ -30,6 +30,7 @@ process mpileup{
     """
 }
 
+// not currently used: faster than mpileup but may be less accurate
 process mpileup_cellsnp{
   container params.CELLSNP_CONTAINER
   publishDir "${params.outdir}/mpileup_cellsnp/${meta.multiplex_library_id}"
