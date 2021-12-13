@@ -2,9 +2,8 @@
 nextflow.enable.dsl=2
 
 // basic parameters
-params.ref_dir = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-100'
-params.index_dir = 'cellranger_index'
-params.index_name = 'cdna'
+params.index_path = 's3://nextflow-ccdl-data/reference/homo_sapiens/ensembl-104/cellranger_index/Homo_sapiens.GRCh38.104_cellranger_full'
+params.index_name = 'GRCh38_104_cellranger_full'
 
 params.run_metafile = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv'
 // run_ids are comma separated list to be parsed into a list of run ids,
@@ -17,22 +16,19 @@ cellranger_tech_list = ["10Xv2", "10Xv3", "10Xv3.1", "10Xv2_5prime"]
 spatial_techs = ["spatial", "visium_v1", "visium_v2"]
 all_tech_list = cellranger_tech_list + spatial_techs
 
-// build full paths
-params.index_path = "${params.ref_dir}/${params.index_dir}/${params.index_name}"
-
 process cellranger{
   container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-cellranger:6.1.2'
   publishDir "${params.outdir}", mode: 'copy'
-  tag "${meta.scpca_run_id}-${index}" // add tag for tracking sample names in trace file  
+  tag "${meta.scpca_run_id}-${index_name}" // add tag for tracking sample names in trace file  
   label 'cpus_8'
   label 'bigdisk'
   input:
     tuple val(meta), path(fastq_dir), val(include_introns)
-    path index
+    tuple val(index_name), path(index)
   output:
     path output_id
   script:
-    output_id = "${meta.scpca_run_id}-${index}-${meta.include_introns ? 'pre_mRNA' : 'mRNA'}"
+    output_id = "${meta.scpca_run_id}-${index_name}-${meta.include_introns ? 'pre_mRNA' : 'mRNA'}"
     """
     cellranger count \
       --id=${output_id} \
@@ -49,16 +45,16 @@ process cellranger{
 process spaceranger{
   container '589864003899.dkr.ecr.us-east-1.amazonaws.com/scpca-spaceranger:1.3.1'
   publishDir "${params.outdir}", mode: 'copy'
-  tag "${meta.scpca_run_id}-${index}-spatial" 
+  tag "${meta.scpca_run_id}-${index_name}-spatial" 
   label 'cpus_8'
   label 'bigdisk'
   input:
     tuple val(meta), path(fastq_dir), file(image_file)
-    path index
+    tuple val(index_name), path(index)
   output:
     path output_id
   script:
-    output_id = "${meta.scpca_run_id}-${index}-spatial"
+    output_id = "${meta.scpca_run_id}-${index_name}-spatial"
     """
     spaceranger count \
       --id=${output_id} \
@@ -120,9 +116,9 @@ workflow{
                        )}
 
   // run cellranger
-  cellranger(cellranger_reads, params.index_path)
+  cellranger(cellranger_reads, [params.index_name, params.index_path])
 
   // run spaceranger 
-  spaceranger(spaceranger_reads, params.index_path)
+  spaceranger(spaceranger_reads, [params.index_name, params.index_path])
   
 }
