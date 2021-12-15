@@ -58,7 +58,7 @@ sample_ids <- c("SCPCR000372", "SCPCR000373")
 
 
 ```{r}
-mito_file <- file.path(base_dir, "sample-info", "Homo_sapiens.GRCh38.103.mitogenes.txt")
+mito_file <- file.path(base_dir, "sample-info", "Homo_sapiens.GRCh38.104.mitogenes.txt")
   
 # read in mito genes 
 mito_genes <- readr::read_tsv(mito_file, col_names = "gene_id")
@@ -503,7 +503,7 @@ background_genes <- rowdata_cor$symbol %>%
 ```
 
 ```{r}
-knee_go_ora_results <- enrichGO(gene = knee_outlier_genes,
+knee_go_ora_results <- enrichGO(gene = knee_diff_genes,
                                 universe = background_genes,
                                 keyType = "SYMBOL",
                                 OrgDb = org.Hs.eg.db,
@@ -511,7 +511,7 @@ knee_go_ora_results <- enrichGO(gene = knee_outlier_genes,
                                 pAdjustMethod = "BH",
                                 pvalueCutoff = 0.00001)
 
-unfiltered_go_ora_results <- enrichGO(gene = unfiltered_outlier_genes,
+unfiltered_go_ora_results <- enrichGO(gene = unfiltered_diff_genes,
                                       universe = background_genes,
                                       keyType = "SYMBOL",
                                       OrgDb = org.Hs.eg.db,
@@ -656,18 +656,43 @@ ggplot(gene_detect_df, aes(x = tools_detected)) +
 
 For the most part genes are found in all tools, however it looks like there is a chunk of genes that we would miss that are found in Spaceranger that are not found in either of the Alevin-fry tools. 
 Are any of those genes involved in important pathways that we might want to make sure that we don't lose? 
+First, we can see what types of genes there are by grabbing the gene annotation from the gtf file. 
+
+```{r}
+# load gtf file and select gene name and gene_biotype
+gtf_file <- file.path(base_dir, "sample-info", "Homo_sapiens.GRCh38.104.gtf.gz")
+gtf <- rtracklayer::import(gtf_file, feature.type = "gene") %>%
+  as.data.frame() %>%
+  dplyr::select(gene_id, gene_name, gene_biotype)
+```
+
+```{r}
+# join spaceranger only genes with gene biotypes from gtf
+spaceranger_only_gene_table <- gene_detect_df %>%
+  dplyr::filter(tools_detected == "spaceranger") %>%
+  dplyr::select(gene_id) %>%
+  dplyr::left_join(gtf, by= "gene_id") 
+
+# create a table of gene biotypes that are specific to spaceranger
+spaceranger_gene_counts <- spaceranger_only_gene_table %>%
+  dplyr::count(gene_biotype) %>% 
+  # reorder by gene biotype
+  dplyr::mutate(gene_biotype =factor(gene_biotype, levels = gene_biotype[order(n)]))
+```
+
+```{r}
+ggplot(spaceranger_gene_counts, aes(y = gene_biotype, x = n)) + 
+  geom_bar(stat = "identity") + 
+  xlab("")
+```
+It looks like the majority of the genes that we lose from not using Spaceranger correspond to pseudogenes and long-noncoding RNA's, with protein coding genes being the third most represented category. 
+We can also do over-representation analysis and see if any genes in specific pathways are lost. 
 
 ```{r}
 # spaceranger only genes to do ORA 
-spaceranger_only_genes <- gene_detect_df %>%
-  dplyr::filter(tools_detected == "spaceranger") %>%
-  dplyr::select(gene_id) %>%
-  dplyr::left_join(gene_symbols_df, by= "gene_id") %>%
-  tidyr::drop_na() %>%
+spaceranger_only_genes <- spaceranger_only_gene_table %>%
   unique() %>%
-  dplyr::pull(symbol)
-
-spaceranger_only_genes
+  dplyr::pull(gene_name)
 ```
 
 ```{r}
@@ -689,7 +714,6 @@ spaceranger_go_results <- spaceranger_ora_results@result %>%
 spaceranger_go_results
 ```
 
-The genes that are identified in only Spaceranger are not enriched for any specific pathway and also appear to be comprised of a lot of ribosomal genes, mitochondrial genes, and long intergenic non-coding RNA's. 
 
 ```{r}
 # save spe list
