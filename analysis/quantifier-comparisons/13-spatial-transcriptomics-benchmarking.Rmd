@@ -13,6 +13,7 @@ We are comparing that to if we were to not integrate the Spaceranger data with A
 When performing this analysis all tools used an index with Ensembl 104.
 Here we will look at two libraries, SCPCR000372 and SCPCR000373.
 Alevin-fry was run both using the knee filtering and the unfiltered permit list mode. 
+Included here is also use of Alevin-fry with the `--sketch` alignment mode and unfiltered permit list.
 
 Note that `SpatialExperiment` was installed from Github, in order to reflect the most recent changes in `read10XVisium` at commit ddb15e0.
 
@@ -94,6 +95,10 @@ fry_knee_dir <- paste0(fry_knee_dir, "-Homo_sapiens.GRCh38.104.spliced_intron.tx
 fry_unfiltered_dir <- file.path(quants_dir, "alevin-fry-unfiltered", sample_ids)
 fry_unfiltered_dir <- paste0(fry_unfiltered_dir, "-Homo_sapiens.GRCh38.104.spliced_intron.txome-salign-cr-like-em")
 
+# get path to fry unfiltered sketch output directory 
+fry_sketch_dir <- file.path(quants_dir, "alevin-fry-unfiltered", sample_ids)
+fry_sketch_dir <- paste0(fry_sketch_dir, "-Homo_sapiens.GRCh38.104.spliced_intron.txome-sketch-cr-like-em")
+
 # paths to spatial folders 
 cellranger_folders <- paste0(sample_ids, "-GRCh38_104_cellranger_full-spatial")
 spaceranger_dir <- file.path(quants_dir, "cellranger", cellranger_folders)
@@ -122,6 +127,16 @@ fry_unfiltered_spe_2 <- create_fry_spaceranger_spe(fry_unfiltered_dir[2],
                                                    sample_ids[2])
 ```
 
+```{r}
+# read in combined fry and spaceranger spe for fry knee
+fry_sketch_spe_1 <- create_fry_spaceranger_spe(fry_sketch_dir[1], 
+                                             spaceranger_dir[1], 
+                                             sample_ids[1])
+
+fry_sketch_spe_2 <- create_fry_spaceranger_spe(fry_sketch_dir[2], 
+                                             spaceranger_dir[2], 
+                                             sample_ids[2])
+```
 
 
 ```{r}
@@ -139,11 +154,16 @@ Now that we have read in the data and created our two `SpatialExperiment` object
 
 ```{r}
 # create one list with both spe's together
-all_spe_list <- list(fry_knee_spe_1, fry_unfiltered_spe_1, spaceranger_spe_1, fry_knee_spe_2, fry_unfiltered_spe_2, spaceranger_spe_2)
+all_spe_list <- list(fry_knee_spe_1, fry_unfiltered_spe_1, 
+                     fry_sketch_spe_1, spaceranger_spe_1, 
+                     fry_knee_spe_2, fry_unfiltered_spe_2, 
+                     fry_sketch_spe_2, spaceranger_spe_2)
 
 # name each spe with combination of sample_id-tool 
-spe_names <- c("SCPCR000372-alevin-fry-knee", "SCPCR000372-alevin-fry-unfiltered", "SCPCR000372-spaceranger",
-               "SCPCR000373-alevin-fry-knee", "SCPCR000373-alevin-fry-unfiltered", "SCPCR000373-spaceranger")
+spe_names <- c("SCPCR000372-alevin-fry-knee", "SCPCR000372-alevin-fry-unfiltered", 
+               "SCPCR000372-alevin-fry-unfiltered-sketch", "SCPCR000372-spaceranger",
+               "SCPCR000373-alevin-fry-knee", "SCPCR000373-alevin-fry-unfiltered", 
+               "SCPCR000373-alevin-fry-unfiltered-sketch", "SCPCR000373-spaceranger")
 names(all_spe_list) <- spe_names
 
 # calculate per cell QC and output to a combined data frame with plotting 
@@ -162,7 +182,9 @@ sample_info_df <- quant_info_table(data_dir= quants_dir,
                  tools = c("cellranger", "alevin-fry-knee", "alevin-fry-unfiltered"),
                  samples = sample_ids) %>%
   # convert cellranger to spaceranger and paste filtering strategy to alevin-fry
-  dplyr::mutate(tool = ifelse(tool == "cellranger", "spaceranger", paste(tool, filter_strategy, sep = "-")))
+  dplyr::mutate(tool = ifelse(tool == "cellranger", "spaceranger", paste(tool, filter_strategy, sep = "-")),
+                tool = dplyr::case_when(alevin_alignment == "sketch" ~ paste(tool, alevin_alignment, sep = "-"),
+                                        alevin_alignment != "sketch" ~ tool))
 
 sample_info_df
 ```
@@ -171,6 +193,7 @@ When we convert the `colData` to a data frame we use the custom function, `spati
 ```{r}
 fry_knee_names <- c("SCPCR000372-alevin-fry-knee", "SCPCR000373-alevin-fry-knee")
 fry_unfiltered_names <- c("SCPCR000372-alevin-fry-unfiltered", "SCPCR000373-alevin-fry-unfiltered")
+fry_unfiltered_sketch_names <- c("SCPCR000372-alevin-fry-unfiltered-sketch", "SCPCR000373-alevin-fry-unfiltered-sketch")
 spaceranger_names <- c("SCPCR000372-spaceranger", "SCPCR000373-spaceranger")
 
 # join coldata dataframe with sample info
@@ -183,6 +206,7 @@ coldata_df <- all_spe_list %>%
                 # remove sample id from tool 
                 tool = dplyr::case_when(tool %in% fry_knee_names ~ "alevin-fry-knee",
                                         tool %in% fry_unfiltered_names ~ "alevin-fry-unfiltered",
+                                        tool %in% fry_unfiltered_sketch_names ~ "alevin-fry-unfiltered-sketch", 
                                         tool %in% spaceranger_names ~ "spaceranger")) %>%
   dplyr::left_join(sample_info_df,
                    by = c("tool", "sample_id" = "sample")) %>%
@@ -215,7 +239,7 @@ Let's filter to only include these common spots.
 
 ```{r}
 common_spots <- spot_counts %>%
-  dplyr::filter(n == 3) %>%
+  dplyr::filter(n == 4) %>%
   dplyr::pull(spot_id)
 
 coldata_df_common <- coldata_df %>%
@@ -234,9 +258,7 @@ all_spe_filter <- all_spe_list %>%
   purrr::map(filter_spe)
 ```
 
-
 When we look at our results, we will also want to visualize them so we will make a custom function to plot the results.
-
 ```{r}
 # custom function for plotting spe results and coloring by column of colData of choice
 plot_spe <- function(spe, sample, column){
@@ -249,9 +271,9 @@ plot_spe <- function(spe, sample, column){
   
   # plot with tissue underneath
   p2 <- ggspavis::plotVisium(spe, 
-                                   x_coord = "pxl_col_in_fullres", 
-                                   y_coord = "pxl_row_in_fullres", 
-                                   fill = column) +
+                             x_coord = "pxl_col_in_fullres", 
+                             y_coord = "pxl_row_in_fullres", 
+                             fill = column) +
     scale_fill_viridis_c()
   
   # arrange plots and add sample name as title 
@@ -313,6 +335,8 @@ all_spe_filter %>%
 
 Generally it looks like the tools are fairly similar, except that Alevin-fry shows a slight decrease in both total UMI/cell and genes detected/cell when compared to Spaceranger alone, which is seen in the spatial plot as well. 
 Alevin-fry-knee and alevin-fry-unfiltered seem to almost completely overlap in terms of quantification with the only difference being a few spots that were not detected using the knee method are now identified in the unfiltered method. 
+If using alevin-fry with `--sketch` we see that the UMI/cell and genes detected/cell almost completely overlap the counts observed in Spaceranger. 
+This is also seen in the plots, as the plots visually look almost identical when using `--sketch` but not selective alignment. 
 
 
 ### Per Gene QC Metrics
@@ -332,6 +356,7 @@ rowdata_df <- purrr::map_df(all_spe_filter, scpcaTools::rowdata_to_df, .id = "to
   dplyr::mutate(sample_id = stringr::word(tool, 1, sep = "-"),
                 tool = dplyr::case_when(tool %in% fry_knee_names ~ "alevin-fry-knee",
                                         tool %in% fry_unfiltered_names ~ "alevin-fry-unfiltered",
+                                        tool %in% fry_unfiltered_sketch_names ~ "alevin-fry-unfiltered-sketch", 
                                         tool %in% spaceranger_names ~ "spaceranger")) %>%
   dplyr::left_join(sample_info_df,
                    by = c("tool", "sample_id" = "sample"))
@@ -347,7 +372,7 @@ gene_counts <- rowdata_df %>%
 
 # restrict to only common genes 
 common_genes <- gene_counts %>%
-  dplyr::filter(n == 3) %>%
+  dplyr::filter(n == 4) %>%
   dplyr::pull(gene_id)
 
 rowdata_df_common <- rowdata_df %>%
@@ -372,7 +397,8 @@ rowdata_cor %>%
   dplyr::group_by(sample_id) %>%
   dplyr::summarize(
     alevin_fry_knee_spaceranger_cor = cor(`spaceranger`, `alevin-fry-knee`, method = "spearman"),
-    alevin_fry_unfiltered_spaceranger_cor= cor(`spaceranger`, `alevin-fry-unfiltered`, method = "spearman")
+    alevin_fry_unfiltered_spaceranger_cor= cor(`spaceranger`, `alevin-fry-unfiltered`, method = "spearman"),
+    alevin_fry_unfiltered_sketch_spaceranger_cor = cor(`spaceranger`, `alevin-fry-unfiltered-sketch`, method = "spearman")
   )
 ```
 
@@ -399,11 +425,24 @@ ggplot(rowdata_cor, aes(x = `spaceranger`, y = `alevin-fry-unfiltered`)) +
   labs(x = "Spaceranger mean gene expression", y = "Alevin Fry Unfiltered Mean gene expression") + 
   theme_classic()
 ```
+```{r}
+ggplot(rowdata_cor, aes(x = `spaceranger`, y = `alevin-fry-unfiltered-sketch`)) +
+  geom_point(size = 0.5, alpha = 0.1) + 
+  scale_x_log10() + 
+  scale_y_log10() + 
+  facet_wrap(~sample_id) +
+  geom_abline() +
+  labs(x = "Spaceranger mean gene expression", y = "Alevin Fry Unfiltered Sketch Mean gene expression") + 
+  theme_classic()
+```
 Correlation appears to be quite high between mean gene expression in Spaceranger and Alevin-fry, however, we do see that generally genes have higher gene expression in Spaceranger than in Alevin-fry and are slightly off the diagonal. 
+
+In alevin-fry `--sketch` the genes line up along the x=y axis and appear to have less of an increase in expression with Spaceranger quantification, however the group of genes that are slightly off the diagonal is still present. 
 
 There is a subset of genes that seems to be slightly more affected and be further off the diagonal. 
 Let's take at those gene for each sample. 
 It does appear to be less dramatic in SCPCR000373.
+We will only focus on without `--sketch`, as that is where we see the largest inmpact on gene expression differences. 
 
 ```{r}
 # get the gene symbols and then join back with rowdata df 
@@ -619,6 +658,7 @@ rowdata_df_filtered <- purrr::map_df(spe_list_common, scpcaTools::rowdata_to_df,
   dplyr::mutate(sample_id = stringr::word(tool, 1, sep = "-"),
                 tool = dplyr::case_when(tool %in% fry_knee_names ~ "alevin-fry-knee",
                                         tool %in% fry_unfiltered_names ~ "alevin-fry-unfiltered",
+                                        tool %in% fry_unfiltered_sketch_names ~ "alevin-fry-unfiltered-sketch", 
                                         tool %in% spaceranger_names ~ "spaceranger")) %>%
   dplyr::left_join(sample_info_df,
                    by = c("tool", "sample_id" = "sample"))
@@ -633,7 +673,7 @@ common_genes <- rowdata_df_filtered %>%
   dplyr::group_by(gene_id) %>%
   dplyr::tally() %>%
   # filter for genes found in both spaceranger and alevin-fry
-  dplyr::filter(n == 3) %>%
+  dplyr::filter(n == 4) %>%
   dplyr::pull(gene_id)
 
 # filter rowdata_df to only include genes found in all tools and genes with mean > 0 and detected > 0 in all cells
@@ -651,11 +691,12 @@ gene_detect_df <- rowdata_df_filtered %>%
 
 ggplot(gene_detect_df, aes(x = tools_detected)) +
   geom_bar() +
-  scale_x_upset(n_intersections = 4)
+  scale_x_upset(n_intersections = 5)
 ```
 
 For the most part genes are found in all tools, however it looks like there is a chunk of genes that we would miss that are found in Spaceranger that are not found in either of the Alevin-fry tools. 
-Are any of those genes involved in important pathways that we might want to make sure that we don't lose? 
+It also appears that there is a group of genes specific to Alevin-fry-unfiltered `--sketch` and a group of genes that are only found to overlap between Spaceranger and Alevin-fry with `--sketch`. 
+Are any of the genes that are specific to Spaceranger genes involved in important pathways that we might want to make sure that we don't lose? 
 
 ```{r}
 # spaceranger only genes to do ORA 
@@ -703,7 +744,9 @@ readr::write_rds(all_spe_list, spe_file)
 - Alevin-fry and Spaceranger only result in similar distributions of UMI/spot and genes/spot, although it is not quite as nice as the overlay you see with single-cell libraries. 
 - Using alevin-fry-unfiltered results in identification of the same spots that are identified in Spaceranger. 
 - It appears that Spaceranger has slightly higher UMI/cell and genes detected/cell. 
+- The increase in UMI/cell and genes detected/cell in Spaceranger disappears with use of `--sketch` alignment with Alevin-fry. 
 - Both tools also show high correlation in mean gene expression and high overlap in the genes that are detected, although there is an increase in gene expression in Spaceranger alone. 
+- The increase in gene expression found in Spaceranger also decreases through use of `--sketch` alignment and more genes that were quantified in Spaceranger and were not quantified in Alevin-fry with selective alignment are now quantified with `--sketch`. 
 
 ## Session Info
 
