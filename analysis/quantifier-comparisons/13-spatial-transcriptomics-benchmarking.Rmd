@@ -425,6 +425,7 @@ ggplot(rowdata_cor, aes(x = `spaceranger`, y = `alevin-fry-unfiltered`)) +
   labs(x = "Spaceranger mean gene expression", y = "Alevin Fry Unfiltered Mean gene expression") + 
   theme_classic()
 ```
+
 ```{r}
 ggplot(rowdata_cor, aes(x = `spaceranger`, y = `alevin-fry-unfiltered-sketch`)) +
   geom_point(size = 0.5, alpha = 0.1) + 
@@ -754,6 +755,27 @@ spaceranger_go_results <- spaceranger_ora_results@result %>%
 spaceranger_go_results
 ```
 
+We will also look at the type of genes that are quantified only when we use Alevin-fry with `--sketch`. 
+
+```{r}
+# join only sketch genes with gene biotypes from gtf
+sketch_only_gene_table <- gene_detect_df %>%
+  dplyr::filter(tools_detected == "alevin-fry-unfiltered-sketch") %>%
+  dplyr::select(gene_id) %>%
+  dplyr::left_join(gtf, by= "gene_id") 
+
+# create a table of gene biotypes that are specific to spaceranger
+sketch_gene_counts <- sketch_only_gene_table %>%
+  dplyr::count(gene_biotype) %>% 
+  # reorder by gene biotype
+  dplyr::mutate(gene_biotype =factor(gene_biotype, levels = gene_biotype[order(n)]))
+```
+
+```{r}
+ggplot(sketch_gene_counts, aes(y = gene_biotype, x = n)) + 
+  geom_bar(stat = "identity") + 
+  xlab("")
+```
 
 ```{r}
 # save spe list
