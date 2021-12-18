@@ -50,6 +50,7 @@ process starsolo{
 
 process index_bam{
   container params.SAMTOOLS_CONTAINER
+  label 'bigdisk'
   publishDir "${params.outdir}/starsolo/${meta.library_id}"
   tag "${meta.run_id}"
   input:

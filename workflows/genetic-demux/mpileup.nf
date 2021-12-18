@@ -7,6 +7,7 @@ process mpileup{
   publishDir "${params.outdir}/mpileup/${meta.multiplex_library_id}"
   tag "${meta.multiplex_run_id}"
   cpus "2"
+  memory "8.GB"
   input:
     tuple val(meta), path(bamfiles), path(bamfiles_index)
     tuple path(ref_fasta), path(ref_index)
