@@ -6,7 +6,7 @@ output:
     toc: true
     toc_float: true
 params:
-  lib_id: "SCPCL000535"
+  lib_id: "SCPCL000543"
 ---
 
 # Set Up
@@ -16,9 +16,12 @@ Libraries:
 ```{r setup}
 suppressPackageStartupMessages({
   library(ggplot2)
+  library(patchwork)
   library(SingleCellExperiment)
   library(Seurat)
 })
+
+set.seed(2021)
 
 theme_set(theme_bw())
 ```
@@ -28,6 +31,7 @@ File paths:
 ```{r}
 file_dir <- file.path("data", "cellhash")
 
+
 # singleCellExperiment file
 unfiltered_file <- file.path(file_dir, paste0(params$lib_id, "_unfiltered.rds"))
 # Vireo output
@@ -35,6 +39,15 @@ vireo_file <- file.path(file_dir, paste0(params$lib_id, "_vireo"), "donor_ids.ts
 
 # file with sample and barcode info for all samples
 pool_file <- file.path(file_dir, "christensen-pools.tsv")
+
+## outfiles
+outdir <- "results"
+dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
+demux_tsv <- file.path(outdir, paste0(params$lib_id, "_demux.tsv"))
+demux_tables <- file.path(outdir, paste0(params$lib_id, "_demux_table.txt"))
+
+plotdir <- "plots"
+demux_umap_plot <- file.path(plotdir, paste0(params$lib_id, "_demux_umap.png"))
 ```
 
 # Single cell processing and filtering
@@ -44,6 +57,7 @@ pool_file <- file.path(file_dir, "christensen-pools.tsv")
 ```{r}
 sce_unfiltered <- readRDS(unfiltered_file)
 sce <- scpcaTools::filter_counts(sce_unfiltered)
+rm(sce_unfiltered)
 ```
 
 ```{r}
@@ -107,26 +121,54 @@ First convert to a seurat object & normalize, then demux with `Seurat::HTODemux(
 seurat_obj <- Seurat::CreateSeuratObject(counts(sce))
 seurat_obj[["HTO"]] <- CreateAssayObject(counts = counts(altExp(sce, "cellhash")))
 seurat_obj <- Seurat::NormalizeData(seurat_obj, assay = "HTO", normalization.method = "CLR")
-seurat_obj <- Seurat::HTODemux(seurat_obj)
+# Seurat Method fails at times
+try(seurat_obj <- Seurat::HTODemux(seurat_obj))
+seurat_obj <- Seurat::MULTIseqDemux(seurat_obj)
 ```
 
 Convert results to a data frame.
 ```{r}
 seurat_demux <- data.frame(
-  cell_barcode = colnames(seurat_obj),
-  seurat_hashid = as.character(seurat_obj$hash.ID),
-  seurat_maxid = as.character(seurat_obj$HTO_maxID),
-  seurat_margin = seurat_obj$HTO_margin
-) |>
-  dplyr::mutate(seurat_id = ifelse(seurat_hashid %in% c("Doublet","Negative"), 
-                                   NA_character_, 
-                                   seurat_hashid))
+  cell_barcode = colnames(seurat_obj))
+
+if(is.null(seurat_obj@meta.data$hash.ID)){
+  # HTOdemux failed
+  seurat_demux <- seurat_demux |>
+    dplyr::mutate(
+      seurat_hashid = NA_character_,
+      seurat_maxid = NA_character_,
+      seurat_margin = NA_real_
+      )
+} else {
+  # HTOdemux succeeded
+  seurat_demux <- seurat_demux |>
+    dplyr::mutate(
+      seurat_hashid = as.character(seurat_obj$hash.ID),
+      seurat_maxid = as.character(seurat_obj$HTO_maxID),
+      seurat_margin = seurat_obj$HTO_margin,
+    )
+}
+seurat_demux <- seurat_demux |>
+  dplyr::mutate(
+    seurat_multiid = as.character(seurat_obj$MULTI_ID),
+    seurat_id = ifelse(seurat_hashid %in% c("Doublet","Negative"), 
+                       NA_character_, 
+                       seurat_hashid),
+    multi_id = ifelse(seurat_multiid %in% c("Doublet","Negative"), 
+                      NA_character_, 
+                      seurat_multiid)
+  )
 ```
 
 Seurat demux table:
 ```{r}
 table(seurat_demux$seurat_id)
 ```
+Multi demux table:
+```{r}
+table(seurat_demux$multi_id)
+```
+
 
 # Genetic demultiplexing
 
@@ -144,6 +186,7 @@ vireo_demux <- readr::read_tsv(vireo_file)|>
                                   NA_character_, 
                                   vireo_donorid))
 ```
+
 Genetic demux table:
 
 ```{r}
@@ -160,14 +203,88 @@ demux <- data.frame(cell_barcode = colnames(sce)) |>
   dplyr::left_join(seurat_demux) |>
   dplyr::left_join(vireo_demux)
 ```
+```{r}
+# Write out data table
+readr::write_tsv(demux, demux_tsv)
+```
+
+
 
 ```{r}
-table(demux$seurat_id, demux$vireo_id, useNA = "always", dnn = c("Seurat", "Vireo"))
+sv_table <- table(demux$seurat_id, demux$vireo_id, useNA = "always", dnn = c("Seurat", "Vireo"))
+sv_table
+```
+```{r}
+mv_table <- table(demux$multi_id, demux$vireo_id, useNA = "always", dnn = c("Multi_id", "Vireo"))
+mv_table
+```
+
+
+```{r}
+hv_table <- table(demux$hashdrops_id, demux$vireo_id, useNA = "always", dnn = c("Hashdrops", "Vireo"))
+hv_table
 ```
 
 ```{r}
-table(demux$hashdrops_id, demux$vireo_id, useNA = "always", dnn = c("Hashdrops", "Vireo"))
+write.ftable(ftable(sv_table), demux_tables, quote = FALSE)
+write(c("\n"), demux_tables, append = TRUE) # add a blank line
+write.ftable(ftable(mv_table), demux_tables, quote = FALSE, append = TRUE)
+write(c("\n"), demux_tables, append = TRUE) # add a blank line
+write.ftable(ftable(hv_table), demux_tables, quote = FALSE, append = TRUE)
 ```
+
+## Plots
+
+Add assigned ids to SCE object
+```{r}
+sce$hashdrops_id <- demux$hashdrops_id
+sce$seurat_id <- demux$seurat_id
+sce$multi_id <- demux$multi_id
+sce$vireo_id <- demux$vireo_id
+```
+
+More aggressive filtering for plotting
+```{r}
+sce <- sce[, which(sce$detected > 500 & sce$subsets_mito_percent < 10)]
+```
+
+# cluster, normalize, and UMAP
+```{r}
+qclust <- scran::quickCluster(sce)
+sce <- sce |> 
+  scran::computeSumFactors(clusters = qclust) |>
+  scater::logNormCounts() |>
+  scater::runPCA() |>
+  scater::runUMAP()
+```
+
+Arrange data for plotting
+```{r}
+umap_data <- as.data.frame(reducedDim(sce, "UMAP"))
+colnames(umap_data) <- c("UMAP1", "UMAP2")
+
+umap_plot_data <- dplyr::bind_rows(
+  Hashdrops = dplyr::mutate(umap_data, ID = sce$hashdrops_id),
+  Seurat = dplyr::mutate(umap_data, ID = sce$seurat_id),
+  Multi = dplyr::mutate(umap_data, ID = sce$multi_id),
+  Vireo = dplyr::mutate(umap_data, ID = sce$vireo_id),
+  .id = "method"
+) |>
+  dplyr::arrange(!is.na(ID)) # move NA to start for plotting in back
+```
+
+Make a plot of all assignments
+```{r}
+ggplot(umap_plot_data, aes(x = UMAP1, y = UMAP2, color = ID)) + 
+  geom_point(size = 0.2, alpha = 0.2) + 
+  facet_wrap("method") +
+  scale_color_brewer(palette = "Dark2", na.value = "grey70") +
+  guides(color = guide_legend(override.aes = list(size = 1,
+                                                  alpha = 1)))
+
+ggsave(filename = demux_umap_plot, width = 10, height = 8)
+```
+
 
 
 # Session info
