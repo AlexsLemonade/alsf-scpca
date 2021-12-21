@@ -789,9 +789,9 @@ readr::write_rds(all_spe_list, spe_file)
 - Alevin-fry and Spaceranger only result in similar distributions of UMI/spot and genes/spot, although it is not quite as nice as the overlay you see with single-cell libraries. 
 - Using alevin-fry-unfiltered results in identification of the same spots that are identified in Spaceranger. 
 - It appears that Spaceranger has slightly higher UMI/cell and genes detected/cell. 
-- The increase in UMI/cell and genes detected/cell in Spaceranger disappears with use of `--sketch` alignment with Alevin-fry. 
+- Using Alevin-fry `--sketch` improves agreement with Spaceranger. 
 - Both tools also show high correlation in mean gene expression and high overlap in the genes that are detected, although there is an increase in gene expression in Spaceranger alone. 
-- The increase in gene expression found in Spaceranger also decreases through use of `--sketch` alignment and more genes that were quantified in Spaceranger and were not quantified in Alevin-fry with selective alignment are now quantified with `--sketch`. 
+- More genes that were quantified in Spaceranger and were not quantified in Alevin-fry with selective alignment are now quantified with `--sketch`. 
 
 ## Session Info
 
