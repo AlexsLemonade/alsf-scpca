@@ -207,7 +207,7 @@ Let's look at where they are on the PCA plot of the hashed drops:
 hash_sce$hashdrops_id <- hashdrops_classification$hashdrops_id
 
 scater::plotPCA(hash_sce,  
-                colour_by = "hashdrops_id")
+                colour_by = "hashdrops_id") +
   ggtitle("PCA plot of cells based on HTO counts with HashedDrops ids")
 ```
 
