@@ -11,7 +11,7 @@ variable "default_tags" {
     team = "science"
     project = "scpca"
     purpose = "nextflow-batch"
-    config = "https://github.com/AlexsLemonade/alsf-scpca/tree/jashapiro/terraform-batch/aws"
+    config = "https://github.com/AlexsLemonade/alsf-scpca/tree/main/aws"
   }
 
 }

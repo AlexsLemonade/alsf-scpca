@@ -1,6 +1,6 @@
-# This file creates the compute environments used by the default and priority queues
-# The default environment is a 100 vCPU spot cluster
-# Priority environment is a 20 vCPU on demand cluster
+# This file creates the compute environments used by the default and bigdisk queues
+# The default environment is a 256 vCPU spot cluster
+# Priority environment is a 128 vCPU on spot cluster with larger disk size
 
 resource "aws_iam_instance_profile" "nf_ecs_instance_role" {
   name = "nextflow-ecs-instance-role"
@@ -61,7 +61,7 @@ resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
     allocation_strategy = "SPOT_CAPACITY_OPTIMIZED"
     spot_iam_fleet_role = aws_iam_role.nf_spotfleet_role.arn
     bid_percentage = 100
-    max_vcpus = 32
+    max_vcpus = 128
     min_vcpus = 0
     # large disk launch template
     launch_template {
