@@ -13,6 +13,7 @@ params.run_ids = "SCPCR000001,SCPCR000002"
 process check_md5{
   container 'ghcr.io/alexslemonade/scpca-aws'
   publishDir "${params.outdir}"
+  tag "$id"
   input:
     tuple val(id), val(prefix), path(md5_file) 
   output:
