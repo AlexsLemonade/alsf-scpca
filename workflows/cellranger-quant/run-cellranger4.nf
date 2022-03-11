@@ -66,7 +66,7 @@ workflow{
     // create tuple of [sample_id, fastq dir]
     .map{row -> tuple(row.scpca_run_id,
                       getCRsamples(row.files),
-                      file("s3://${row.s3_prefix}")
+                      file("${row.files_directory}")
                       )}
   // run cellranger
   cellranger(ch_reads, params.index_path)

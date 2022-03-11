@@ -54,7 +54,7 @@ workflow{
       submitter: it.submitter,
       technology: it.technology,
       seq_unit: it.seq_unit,
-      s3_prefix: it.s3_prefix
+      files_directory: it.files_directory
     ]}   
     // only technologies we know how to process
     .filter{it.technology in all_techs} 
