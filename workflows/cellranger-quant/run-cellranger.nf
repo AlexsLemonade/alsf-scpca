@@ -102,7 +102,7 @@ workflow{
     // create tuple of [metadata, fastq dir]
     //.map{it.cr_samples =  getCRsamples(it.files); it}
     .map{meta -> tuple(meta,
-                       file("s3://${meta.s3_prefix}"),
+                       file("${meta.files_directory}"),
                        meta.seq_unit == 'nucleus'
                        )}
 
@@ -110,9 +110,9 @@ workflow{
     .filter{it.technology in spatial_techs}
     // create tuple of [metadata, fastq dir, and image filename]
     .map{meta -> tuple(meta,
-                       file("s3://${meta.s3_prefix}"),
+                       file("${meta.files_directory}"),
                        //getCRsamples(${meta.files}.findAll{it.contains '.fastq.gz'}),
-                       file("s3://${meta.s3_prefix}/*.jpg")
+                       file("${meta.files_directory}/*.jpg")
                        )}
 
   // run cellranger

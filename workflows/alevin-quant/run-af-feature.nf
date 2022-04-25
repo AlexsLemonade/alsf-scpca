@@ -128,7 +128,7 @@ workflow{
   //get and map the feature barcode files
   feature_barcodes_ch = feature_runs_ch
     .map{row -> tuple(row.feature_barcode_file,
-                      file("s3://${row.feature_barcode_file}"))}
+                      file("${row.feature_barcode_file}"))}
     .unique()
   index_feature(feature_barcodes_ch)
 
@@ -139,8 +139,8 @@ workflow{
                       row.scpca_run_id,
                       row.scpca_sample_id,
                       row.technology,
-                      file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
-                      file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
+                      file("${row.files_directory}/*_R1_*.fastq.gz"),
+                      file("${row.files_directory}/*_R2_*.fastq.gz"),
                       row.feature_barcode_geom
                       )}
     .combine(index_feature.out, by: 0) // combine by the feature_barcode_file
