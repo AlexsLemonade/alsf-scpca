@@ -133,8 +133,8 @@ workflow{
   reads_ch = samples_ch
     .map{row -> tuple(row.scpca_run_id,
                       row.technology,
-                      file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
-                      file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
+                      file("${row.files_directory}/*_R1_*.fastq.gz"),
+                      file("${row.files_directory}/*_R2_*.fastq.gz"),
                       row.seq_unit
                       )}
   barcodes_ch = samples_ch

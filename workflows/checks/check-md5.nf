@@ -13,6 +13,7 @@ params.run_ids = "SCPCR000001,SCPCR000002"
 process check_md5{
   container 'ghcr.io/alexslemonade/scpca-aws'
   publishDir "${params.outdir}"
+  tag "$id"
   input:
     tuple val(id), val(prefix), path(md5_file) 
   output:
@@ -46,8 +47,8 @@ workflow{
     .splitCsv(header: true, sep: '\t')
     .filter{run_all || (it.scpca_run_id in run_ids)}
     .map{row -> tuple(row.scpca_run_id,
-                      row.s3_prefix,
-                      file("s3://${row.s3_prefix}/${row.md5_file}")
+                      row.files_directory,
+                      file("${row.files_directory}/${row.md5_file}")
                       )}
   check_md5(ch_runs)
   cat_md5(check_md5.out.collect())

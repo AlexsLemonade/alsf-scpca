@@ -51,7 +51,7 @@ These results were then read into R and saved as a `SingleCellExperiment` object
 sce_unfiltered <- readRDS(unfiltered_file)
 ```
 
-These are unfiltered, so we will filter to likely cells with `emptyDropsCellRanger`, which should perform filtering similar to Cell Ranger.
+These are unfiltered, so we will filter to likely cells with `emptyDropsCellRanger`, which should perform filtering similarly to Cell Ranger.
 
 ```{r}
 sce_filtered <- scpcaTools::filter_counts(sce_unfiltered)
@@ -122,9 +122,9 @@ hash_data <- rowData(hash_sce) |>
   dplyr::left_join(pool_info, by = c("HTO" = "barcode_id"))
 hash_data
 ```
-This looks as expected: the HTOs that are detected are the ones that should be in this sample
+This looks as expected: the HTOs that are detected are the ones that should be in this sample.
 
-Let's reduce our hash data to just those & replaces the sample ids:
+Let's reduce our hash data to just those & replace the sample ids:
 ```{r}
 hash_sce <- hash_sce[!is.na(hash_data$scpca_sample_id),]
 rownames(hash_sce) <- hash_data$scpca_sample_id[!is.na(hash_data$scpca_sample_id)]
@@ -142,6 +142,7 @@ t(counts(hash_sce)[,1:20])
 There is some variation there, but the overall counts seem surprisingly similar across cells; it may be difficult to assign cells confidently.
 
 Let's see if there is much clustering among cells.
+I will use log1p here for normalization, just for speed.
 
 ```{r}
 # add a log counts matrix (no normalization)
@@ -155,7 +156,7 @@ scater::plotPCA(hash_sce, point_size = 0.1) +
   ggtitle("PCA plot of cells based on HTO counts")
 ```
 
-Looks like there may be a few potential clusters there, but overal it is pretty diffuse. 
+Looks like there may be a few potential clusters there, but overall it is pretty diffuse. 
 We do not see the 4 distinct clusters that we might have expected.
 I'm not sure how confidently we will be able to deconvolute.
 
@@ -201,6 +202,17 @@ ggplot(hashdrops_classification, aes(x = hashdrops_logfc)) +
 Not much with even a 2-fold change, which makes it very hard to assign cells confidently.
 We could lower the threshold, but that seems fraught.
 
+Let's look at where they are on the PCA plot of the hashed drops:
+```{r}
+hash_sce$hashdrops_id <- hashdrops_classification$hashdrops_id
+
+scater::plotPCA(hash_sce,  
+                colour_by = "hashdrops_id") +
+  ggtitle("PCA plot of cells based on HTO counts with HashedDrops ids")
+```
+
+Not exactly the most comforting assignments!
+
 
 ### Calculating a separate ambient set
 
@@ -230,6 +242,7 @@ Are we getting the same cells called confidently?
 sum(hash_result$Confident & hash_result2$Confident)
 ```
 
+Yup! So that isn't making a difference.
 
 ## Assigning cells with Seurat
 
@@ -283,6 +296,17 @@ ggplot(seurat_classification, aes(x = seurat_margin)) +
   geom_histogram(bins = 50)+ 
   labs(x = "Seurat Margin")
 ```
+
+Let's look at these calls on our PCA plot as well:
+```{r}
+hash_sce$seurat_id <- seurat_classification$seurat_id
+scater::plotPCA(hash_sce,  
+                colour_by = "seurat_id") + 
+  ggtitle("PCA plot of cells based on HTO counts wiht Seurat IDs")
+```
+
+Quite different sets of calls... Not sure what to be most confident in!
+
 
 # Expression data
 
@@ -351,17 +375,27 @@ hash_class <- data.frame(cell_barcode = colnames(sce_filtered)) |>
   dplyr::mutate(seurat_id = ifelse(seurat_id %in% c("Doublet","Negative"), NA_character_, seurat_id))
 
 # add columns to sce
-sce_filtered$seurat_id = hash_class$seurat_id
 sce_filtered$hashdrops_id = hash_class$hashdrops_id
+sce_filtered$seurat_id = hash_class$seurat_id
 ```
 
 Plot the UMAP results with classifications:
 ```{r}
-### seurat 
-scater::plotUMAP(sce_filtered, point_size = 0.1, colour_by = "seurat_id")
+### hashdrops 
+scater::plotUMAP(sce_filtered, point_size = 0.1, colour_by = "hashdrops_id") +
+  ggtitle("Expression UMAP with seurat IDs")
 ```
 
-There does appear to be some correspondance between clusters and classification, which could make sense, so maybe it is not all lost!
+They are in there, but too few to see!
+
+```{r}
+### seurat 
+scater::plotUMAP(sce_filtered, point_size = 0.1, colour_by = "seurat_id") +
+  ggtitle("Expression UMAP with seurat IDs")
+```
+
+
+There does appear to be some correspondence between expression clusters and classification, , so maybe all is not lost (but it isn't great).
 
 
 # Session info

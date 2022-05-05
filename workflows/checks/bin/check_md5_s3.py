@@ -26,6 +26,8 @@ def main():
     
     # set up s3
     s3 = boto3.client('s3')
+    if args.prefix.startswith('s3://'):
+        args.prefix = args.prefix[5:]
     bucket, prefix = args.prefix.split('/', 1)
 
     for md5, filename in md5_pairs:

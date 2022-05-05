@@ -41,8 +41,8 @@ workflow{
     .filter{it.scpca_run_id in run_ids} // use only the rows in the sample list
     // create tuple of [sample_id, [Read1 files], [Read2 files]]
     .map{row -> tuple(row.scpca_run_id,
-                      file("s3://${row.s3_prefix}/*_R1_*.fastq.gz"),
-                      file("s3://${row.s3_prefix}/*_R2_*.fastq.gz"),
+                      file("${row.files_directory}/*_R1_*.fastq.gz"),
+                      file("${row.files_directory}/*_R2_*.fastq.gz"),
                       )}
   ch_indexes = Channel.fromList([
     ['cdna_k31_no_sa',
