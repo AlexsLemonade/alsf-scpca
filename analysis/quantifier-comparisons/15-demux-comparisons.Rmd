@@ -1,0 +1,220 @@
+---
+title: "Genetic demultiplexing vs. cellhash"
+author: "Josh Shapiro for CCDL"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+params:
+  lib_id: "SCPCL000533"
+---
+
+# Set Up
+ 
+Libraries:
+
+```{r setup}
+suppressPackageStartupMessages({
+  library(ggplot2)
+  library(SingleCellExperiment)
+})
+
+set.seed(2021)
+
+```
+
+File paths:
+
+```{r}
+file_dir <- file.path("data", "multiplex")
+
+
+# singleCellExperiment files from 
+filtered_file <- file.path(file_dir, paste0(params$lib_id, "_filtered.rds"))
+
+
+## outfiles
+outdir <- "results"
+dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
+demux_tsv <- file.path(outdir, paste0(params$lib_id, "_demux.tsv"))
+demux_tables <- file.path(outdir, paste0(params$lib_id, "_demux_table.txt"))
+
+plotdir <- "plots"
+demux_umap_plot <- file.path(plotdir, paste0(params$lib_id, "_demux_umap.png"))
+```
+
+# Single cell processing and filtering
+
+The SingleCellExperiment files have already been processed via the `scpca-nf` pipeline, which performs filtering and adds cellhash-based demultiplexing calls using `DropletUtils::HashedDrops` and `Seurat::HTODemux`.
+
+The pipeline also incorporates genetic information inferred from bulk sequencing and performs genetic demultiplexing with [cellsnp](https://cellsnp-lite.readthedocs.io/en/latest/) and [Vireo](https://vireosnp.readthedocs.io/en/latest/).
+
+
+```{r}
+sce <- readRDS(filtered_file)
+```
+
+## Sample information
+
+The metadata in the processed SingleCellExperiment includes information about the samples included in this library:
+
+```{r}
+metadata(sce)$sample_id
+```
+
+
+# Demultiplexing results
+
+The confident calls (by default measures) are stored in the `colData` data frame, prefixed by method, so we will extract those calls for comparisons.
+Doublets here are coded as part of the `NA` group.
+
+```{r}
+demux_calls <- data.frame(
+  hashedDrops = sce$hashedDrops_sampleid,
+  HTODemux = sce$HTODemux_sampleid,
+  vireo = sce$vireo_sampleid
+)
+
+# Summarize all of the calls
+demux_calls |>
+  dplyr::mutate_all(as.factor) |>
+  summary()
+```
+
+In general, we see that `DropletUtils::hashedDrops` tends to make many fewer calls than `Seurat::HTODemux`. 
+In either case, we have a large excess of `NA` calls, where the cellhash-based demultiplexing algorithms did not find a single best call. 
+
+This may partly be a function of the quality of the cellhash results for this particular library.
+As seen in `14-cellhash-exploration.Rmd`, the cellhash data for these samples seems to have a lot of background signal that may make accurate demultiplexing based on cellhash data alone difficult.
+
+The genetic demultiplexing calls made by `vireo` seem to identify the most cells, but the relative frequencies of the samples do not necessarily agree with the results from `HTODemux`.
+This could be because different sets of cells are being called by the two methods, or because the actual calls differ, so we can look in a bit more detail.
+
+## Comparing classifications
+
+To compare the calls between methods, we will build some contingency tables among the call sets. 
+
+
+```{r}
+ds_table <- table(demux_calls$hashedDrops, 
+                  demux_calls$HTODemux, 
+                  useNA = "always", 
+                  dnn = c("hashedDrops", "HTODemux"))
+ds_table
+```
+
+```{r}
+dv_table <- table(demux_calls$hashedDrops, 
+                  demux_calls$vireo, 
+                  useNA = "always", 
+                  dnn = c("hashedDrops", "vireo"))
+dv_table
+```
+
+```{r}
+sv_table <- table(demux_calls$HTODemux, 
+                  demux_calls$vireo, 
+                  useNA = "always", 
+                  dnn = c("HTODemux", "vireo"))
+sv_table
+```
+
+
+## Visualizing assignments
+
+Before visualization, we will do some more  filtering so as to remove cells with little expression information and those with high mitochondrial content. 
+
+```{r}
+sce <- sce[, which(sce$detected > 500 & sce$subsets_mito_percent < 10)]
+```
+
+Now we perform some quick normalization, and generate a UMAP (with default parameters, as we are just having a quick look).
+
+
+```{r}
+qclust <- scran::quickCluster(sce)
+sce <- sce |> 
+  scran::computeSumFactors(clusters = qclust) |>
+  scater::logNormCounts() |>
+  scater::runUMAP()
+```
+
+Rearrange the data for easier plotting: 
+```{r}
+umap_data <- as.data.frame(reducedDim(sce, "UMAP"))
+colnames(umap_data) <- c("UMAP1", "UMAP2")
+
+# create entries for each method's calls for each cell & UMAP coordinates
+umap_plot_data <- dplyr::bind_rows(
+  hashedDrops = dplyr::mutate(umap_data, sample = sce$hashedDrops_sampleid),
+  HTODemux = dplyr::mutate(umap_data, sample = sce$HTODemux_sampleid),
+  vireo = dplyr::mutate(umap_data, sample = sce$vireo_sampleid),
+  .id = "method"
+) |>
+  dplyr::arrange(!is.na(sample)) # move NA to top for plotting in back
+```
+
+Make a plot of all assignments
+```{r}
+ggplot(umap_plot_data, aes(x = UMAP1, y = UMAP2, color = sample)) + 
+  geom_point(size = 1, alpha = 0.2) + 
+  scale_color_brewer(palette = "Dark2", na.value = "grey70") +
+  guides(color = guide_legend(override.aes = list(size = 2,
+                                                  alpha = 1))) + 
+  facet_wrap("method", nrow = 2) +
+  theme_bw() + 
+  theme(aspect.ratio = 1,
+        axis.text = element_blank(), 
+        axis.ticks = element_blank())
+
+```
+Overall, it does look like the `vireo` results are most consistent with the overal structure of the data, and thuse seem most likely to reflec the true sample identities.
+Of course, we do not know the true identities, and it is possible that the genetic demultiplexing is somehow conflating genetic and expression variation, but that seems less likely. 
+
+
+
+## Doublet calls
+
+The demultiplexing methods can potentially identify doublets, where more than one cell of different types ended up in the same droplet. 
+Here we will look at the overall rate of doublet calls for each method.
+
+```{r}
+# select doublet-related information for each method
+demux_calls_doublet <- data.frame(
+  hashedDrops_doublet = altExp(sce, "cellhash")$hashedDrops_Doublet,
+  hashedDrops_conf = altExp(sce, "cellhash")$hashedDrops_Confident,
+  HTODemux_class = altExp(sce, "cellhash")$HTODemux_classification.global,
+  vireo_calls = sce$vireo_donor_id
+)
+demux_classes <- demux_calls_doublet |> 
+  dplyr::mutate( # make the _class calls match HTODemux classes
+    hashedDrops_class = dplyr::case_when(
+      hashedDrops_doublet ~ "Doublet",
+      hashedDrops_conf ~ "Singlet",
+      TRUE ~ "Negative"
+    ),
+    vireo_class = dplyr::case_when(
+      vireo_calls == "doublet" ~ "Doublet",
+      vireo_calls == "unassigned" ~ "Negative",
+      is.na(vireo_calls) ~ "Negative",
+      TRUE ~ "Singlet"
+    )
+  ) |>
+  dplyr::select("hashedDrops_class", "HTODemux_class", "vireo_class") |>
+  dplyr::mutate_all(as.factor)
+
+summary(demux_classes)
+```
+
+Here we see that `HTODemux` seems to call the most doublets, which again makes sense if the cellhash background signal is signficant. 
+
+
+# Conclusions
+
+
+
+
+# Session info
+```{r}
+sessioninfo::session_info()
+```
