@@ -6,7 +6,7 @@ output:
     toc: true
     toc_float: true
 params:
-  lib_id: "SCPCL000533"
+  lib_id: "SCPCL000535"
 ---
 
 # Set Up
@@ -20,7 +20,6 @@ suppressPackageStartupMessages({
 })
 
 set.seed(2021)
-
 ```
 
 File paths:
@@ -42,6 +41,25 @@ demux_tables <- file.path(outdir, paste0(params$lib_id, "_demux_table.txt"))
 plotdir <- "plots"
 demux_umap_plot <- file.path(plotdir, paste0(params$lib_id, "_demux_umap.png"))
 ```
+
+## Functions
+
+```{r}
+# calculate the agreement between two lists, with and or without NAs included
+calc_agreement <- function(call_a, call_b, na.include = FALSE){
+  agree <- sum(call_a == call_b, na.rm = TRUE)
+  disagree <- sum(call_a != call_b, na.rm = TRUE)
+  if(na.include){
+    # add single NA values
+    disagree <- disagree  + sum(xor(is.na(call_a), is.na(call_b)))
+  } 
+  return(agree/(agree + disagree))
+}
+
+```
+
+
+
 
 # Single cell processing and filtering
 
@@ -103,6 +121,19 @@ ds_table <- table(demux_calls$hashedDrops,
 ds_table
 ```
 
+
+```{r}
+ds_agreement <- calc_agreement(demux_calls$hashedDrops, demux_calls$HTODemux)
+ds_agreement_withNA <- calc_agreement(demux_calls$hashedDrops, demux_calls$HTODemux, na.include = TRUE)
+
+glue::glue("
+  hashedDrops vs. HTODemux
+  Agreement: {sprintf(ds_agreement, fmt ='%.3f')}
+  With non-calls: {sprintf(ds_agreement_withNA, fmt ='%.3f')}
+")
+```
+
+
 ```{r}
 dv_table <- table(demux_calls$hashedDrops, 
                   demux_calls$vireo, 
@@ -110,6 +141,17 @@ dv_table <- table(demux_calls$hashedDrops,
                   dnn = c("hashedDrops", "vireo"))
 dv_table
 ```
+```{r}
+dv_agreement <- calc_agreement(demux_calls$hashedDrops, demux_calls$vireo)
+dv_agreement_withNA <- calc_agreement(demux_calls$hashedDrops, demux_calls$vireo, na.include = TRUE)
+
+glue::glue("
+  hashedDrops vs. vireo
+  Agreement: {sprintf(dv_agreement, fmt ='%.3f')}
+  With non-calls: {sprintf(dv_agreement_withNA, fmt ='%.3f')}
+")
+```
+
 
 ```{r}
 sv_table <- table(demux_calls$HTODemux, 
@@ -118,6 +160,21 @@ sv_table <- table(demux_calls$HTODemux,
                   dnn = c("HTODemux", "vireo"))
 sv_table
 ```
+```{r}
+sv_agreement <- calc_agreement(demux_calls$HTODemux, demux_calls$vireo)
+sv_agreement_withNA <- calc_agreement(demux_calls$HTODemux, demux_calls$vireo, na.include = TRUE)
+
+glue::glue("
+  HTODemux vs. vireo
+  Agreement: {sprintf(sv_agreement, fmt ='%.3f')}
+  With non-calls: {sprintf(sv_agreement_withNA, fmt ='%.3f')}
+")
+```
+
+Overall, when there are calls to be made, agreement among methods is quite good.
+However, the proportion of non-calls is extremely high, and can be quite non-overlapping.
+
+Without any way to determine ground truth, it is extremely difficult to assess which of the methods is really doing best in this case.
 
 
 ## Visualizing assignments
@@ -168,9 +225,8 @@ ggplot(umap_plot_data, aes(x = UMAP1, y = UMAP2, color = sample)) +
         axis.ticks = element_blank())
 
 ```
-Overall, it does look like the `vireo` results are most consistent with the overal structure of the data, and thuse seem most likely to reflec the true sample identities.
+Overall, it does look like the `vireo` results are most consistent with the overal structure of the data, and thus seem most likely to reflect the true sample identities.
 Of course, we do not know the true identities, and it is possible that the genetic demultiplexing is somehow conflating genetic and expression variation, but that seems less likely. 
-
 
 
 ## Doublet calls
@@ -206,12 +262,26 @@ demux_classes <- demux_calls_doublet |>
 summary(demux_classes)
 ```
 
-Here we see that `HTODemux` seems to call the most doublets, which again makes sense if the cellhash background signal is signficant. 
+Here we see that `HTODemux` seems to call the most doublets, which again makes sense if the cellhash background signal is substantial. 
 
 
 # Conclusions
 
+The main challenge we see in this data is that there seems to be very high background in the cellhash/HTO signal in these data.
+The high background levels make it hard to pick out the sample-specific signal, so the HTO-based methods do not seem to perform very well.
 
+`DropletUtils::hashedDrops` seems to be the most conservative method, and identifies very few cells overall. 
+
+`Seurat::HTODemux()` is more aggressive, calling ~100x more cells, but those calls may not be particularly reliable in this case. 
+Looking at the placement on the UMAP plots, they seem to span across clusters fairly broadly, which could be fine if we did not expect there to be any clustering by sample, but it is not clear what the expectation should be. 
+
+`vireo`, which bases its calls on the genetic variants detected in each cell shows a stronger correspondence between sample calls and the expression variation, which makes sense if each sample is likely to have cells with distinct expression profiles.
+There are still clusters with cells from multiple samples, which also seems like it should be expected. 
+
+Overall, it remains unclear which if any of the methods is the most reliable, and attempting to answer that question  is beyond the scope of this analysis, and indeed may be beyond the scope of this project as a whole.
+Rather than presenting a single set of calls as definitive and providing demultiplexed libraries for download, it seems like the best course of action is to allow downloading of the multiplexed library with all samples included, along with the calls and statistics generated by each of the demultiplexing methods.
+The task of deciding among the methods will be left to the end user, using the included statistics to allow for adjusting any thresholds and recalling cells as they deem fit.
+For the HTO-based methods, all of the count data will also be present to allow the application other demultiplexing methods.
 
 
 # Session info
