@@ -47,11 +47,11 @@ rm Miniconda3-latest-Linux-x86_64.sh
 
 The setup of the AWS batch queue and related resources for Nextflow usage are handled by the Terraform (`.tf`) files in this directory.
 
-The general setup currently consists of three Batch queues:
+The general setup currently consists of two Batch queues:
 
 - `nextflow-batch-default-queue`, which includes up to 256 vCPUs, with volumes provisioned with 64GB storage.
 - `nextflow-batch-bigdisk-queue`, which includes up to 32 vCPUs, with volumes provisioned with 500GB storage.
-- `nextflow-batch-auto-scaled-ebs-queue`, which includes up to 128 vCPUs, with automatically scaled storage volumes.
+  `nextflow-batch-auto-scaled-ebs-queue`, which includes up to 128 vCPUs, with automatically scaled storage volumes.
 
 `nextflow-batch-default-queue` should be used in most situations, except when large amounts of disk usage are expected.
 Both queues use spot instances, but the spot price threshold is set high (currently 100%!) so they should should never not run.
@@ -61,4 +61,7 @@ To use these files, you will need to install Terraform on your local machine, ei
 
 Once you have installed terraform, you can run `terraform init` from this directory to get started.
 To implement any changes, you will want a copy of the current state file, which is not included in this repository for security reasons.
-With that file in the directory, you can test any changes with `terraform plan` and then implement them on AWS with `terraform apply`. Changes to the compute environments do not always seem to go smoothly, as Terraform does not always properly shut down the job queues. If you encounter an error with apply, you may need to run `terraform taint aws_batch_job_queue.nf_default_queue && terraform taint aws_batch_job_queue.nf_bigdisk_queue` to force recreation of the job queues.
+With that file in the directory, you can test any changes with `terraform plan` and then implement them on AWS with `terraform apply`.
+
+Changes to the compute environments do not always seem to go smoothly, as Terraform does not always properly shut down the job queues.
+If you encounter an error with apply, you may need to run `terraform taint aws_batch_job_queue.nf_default_queue && terraform taint aws_batch_job_queue.nf_bigdisk_queue` to force recreation of the job queues.
