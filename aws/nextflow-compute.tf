@@ -2,12 +2,6 @@
 # The default environment is a 100 vCPU spot cluster
 # Priority environment is a 20 vCPU on demand cluster
 
-# As per https://github.com/hashicorp/terraform-provider-aws/pull/2347#issuecomment-345292890
-
-locals {
-  timestamp = formatdate("YYYYMMDDhhmmss", timestamp())
-}
-
 resource "aws_iam_instance_profile" "nf_ecs_instance_role" {
   name = "nextflow-ecs-instance-role"
   tags = var.default_tags
@@ -17,10 +11,7 @@ resource "aws_iam_instance_profile" "nf_ecs_instance_role" {
 # Create an spot instance environment with up to 256 vcpus
 # the AMI used is described in setup-log.md
 resource "aws_batch_compute_environment" "nf_spot" {
-  compute_environment_name = "nextflow-spot-compute-${local.timestamp}"
-  lifecycle {
-    create_before_destroy = true
-  }
+  compute_environment_name = "nextflow-spot-compute"
   tags = var.default_tags
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
@@ -35,6 +26,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
     # standard launch template
     launch_template {
       launch_template_id = aws_launch_template.nf_lt_standard.id
+      version = aws_launch_template.nf_lt_standard.latest_version
     }
     # ec2_key_pair = aws_key_pair.nf_keypair.key_name
     security_group_ids = [
@@ -47,7 +39,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
     tags = merge(
       var.default_tags,
       {
-        parent = "nextflow-spot-compute-${local.timestamp}"
+        parent = "nextflow-spot-compute"
       }
     )
   }
@@ -60,10 +52,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
 # Create an spot instance0 environment with up to 32 vcpus with large disks
 
 resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
-  compute_environment_name = "nextflow-spot-compute-bigdisk-${local.timestamp}"
-  lifecycle {
-    create_before_destroy = true
-  }
+  compute_environment_name = "nextflow-spot-compute-bigdisk"
   tags = var.default_tags
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
@@ -78,6 +67,7 @@ resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
     # large disk launch template
     launch_template {
       launch_template_id = aws_launch_template.nf_lt_bigdisk.id
+      version = aws_launch_template.nf_lt_bigdisk.latest_version
     }
     # ec2_key_pair = aws_key_pair.nf_keypair.key_name
     security_group_ids = [
@@ -90,7 +80,7 @@ resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
     tags = merge(
       var.default_tags,
       {
-        parent = "nextflow-spot-compute-${local.timestamp}"
+        parent = "nextflow-spot-compute"
       }
     )
   }
@@ -102,10 +92,7 @@ resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
 
 # Create a spot instance environment with up to 128 vcpus and auto-scaled EBS.
 resource "aws_batch_compute_environment" "nf_spot_auto_scaled_ebs" {
-  compute_environment_name = "nextflow-spot-compute-auto-scaled-ebs-${local.timestamp}"
-  lifecycle {
-    create_before_destroy = true
-  }
+  compute_environment_name = "nextflow-spot-compute-auto-scaled-ebs"
   tags = var.default_tags
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
@@ -120,6 +107,7 @@ resource "aws_batch_compute_environment" "nf_spot_auto_scaled_ebs" {
 
     launch_template {
       launch_template_id = aws_launch_template.nf_lt_auto_scaled_ebs.id
+      version = aws_launch_template.nf_lt_auto_scaled_ebs.latest_version
     }
     security_group_ids = [
       aws_security_group.nf_security.id,
@@ -131,7 +119,7 @@ resource "aws_batch_compute_environment" "nf_spot_auto_scaled_ebs" {
     tags = merge(
       var.default_tags,
       {
-        parent = "nextflow-spot-compute-${local.timestamp}"
+        parent = "nextflow-spot-compute"
       }
     )
   }
