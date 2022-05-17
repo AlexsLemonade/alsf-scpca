@@ -2,6 +2,8 @@
 # The default environment is a 100 vCPU spot cluster
 # Priority environment is a 20 vCPU on demand cluster
 
+# As per https://github.com/hashicorp/terraform-provider-aws/pull/2347#issuecomment-345292890
+
 locals {
   timestamp = formatdate("YYYYMMDDhhmmss", timestamp())
 }
@@ -98,7 +100,7 @@ resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
   depends_on   = [aws_iam_role_policy_attachment.nf_batch_role]
 }
 
-# Create a spot instance environment with up to 128 vcpus and autoscaled EBS.
+# Create a spot instance environment with up to 128 vcpus and auto-scaled EBS.
 resource "aws_batch_compute_environment" "nf_spot_auto_scaled_ebs" {
   compute_environment_name = "nextflow-spot-compute-auto-scaled-ebs-${local.timestamp}"
   lifecycle {

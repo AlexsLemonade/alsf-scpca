@@ -10,6 +10,7 @@ packages:
   - git
   - unzip
   - lvm2
+  - rsync
 
 runcmd:
   - curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
@@ -18,3 +19,4 @@ runcmd:
   - cd /opt && git clone https://github.com/awslabs/amazon-ebs-autoscale.git
   - cd /opt/amazon-ebs-autoscale && git checkout $EBS_AUTOSCALE_VERSION
   - sh /opt/amazon-ebs-autoscale/install.sh --file-system lvm.ext4 --initial-size 50 --volume-type gp2 --mountpoint /ebs-autoscale 2>&1 > /var/log/ebs-autoscale-install.log
+  - rsync -ax /home/ /ebs-autoscale/ && mount -o bind /ebs-autoscale /home && touch /home/ec2-user/cloud_init_complete_$(date +%Y%m%d_%H%M%S)
