@@ -64,4 +64,4 @@ To implement any changes, you will want a copy of the current state file, which 
 With that file in the directory, you can test any changes with `terraform plan` and then implement them on AWS with `terraform apply`.
 
 Changes to the compute environments do not always seem to go smoothly, as Terraform does not always properly shut down the job queues.
-If you encounter an error with apply, you may need to run `terraform taint aws_batch_job_queue.nf_default_queue && terraform taint aws_batch_job_queue.nf_bigdisk_queue && terraform taint aws_batch_job_queue.nf_auto_scaled_ebs_queue` to force recreation of the job queues.
+If you encounter an error with apply, you may need to run `terraform taint aws_batch_job_queue.nf_default_queue && terraform taint aws_batch_job_queue.nf_bigdisk_queue && terraform taint aws_batch_job_queue.nf_autoscale_queue` to force recreation of the job queues.

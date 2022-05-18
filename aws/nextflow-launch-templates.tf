@@ -33,13 +33,13 @@ resource "aws_launch_template" "nf_lt_bigdisk" {
 resource "aws_launch_template" "nf_lt_auto_scaled_ebs" {
   name = "nextflow-launchtemplate-auto-scaled-ebs"
   tags = var.default_tags
-  # Amazon Linux 2 Kernel 5.10 AMI 2.0.20220426.0 x86_64 HVM gp2
-  image_id = "ami-0022f774911c1d690"
+  image_id = "ami-061c10a2cb32f3491"  # hvm-2.0.20220509-x86_64-ebs
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
-      volume_size           = 10  # GiB
-      encrypted             = true
+      volume_size = 30  # GiB
+      volume_type = "gp3"
+      encrypted = true
       delete_on_termination = true
     }
   }

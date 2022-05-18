@@ -36,8 +36,8 @@ resource "aws_batch_job_queue" "nf_bigdisk_queue" {
   ]
 }
 
-resource "aws_batch_job_queue" "nf_auto_scaled_ebs_queue" {
-  name = "nextflow-batch-auto-scaled-ebs-queue"
+resource "aws_batch_job_queue" "nf_autoscale_queue" {
+  name = "nextflow-batch-autoscale-queue"
   tags = var.default_tags
   state = "ENABLED"
   priority = 1
