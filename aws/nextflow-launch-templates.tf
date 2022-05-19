@@ -33,7 +33,7 @@ resource "aws_launch_template" "nf_lt_bigdisk" {
 resource "aws_launch_template" "nf_lt_auto_scaled_ebs" {
   name = "nextflow-launchtemplate-auto-scaled-ebs"
   tags = var.default_tags
-  image_id = "ami-061c10a2cb32f3491"  # hvm-2.0.20220509-x86_64-ebs
+  image_id = "ami-01c08d4de548477df"  # ccdl-nextflow-base-v2.0 image
   block_device_mappings {
     device_name = "/dev/xvda"
     ebs {
@@ -44,5 +44,5 @@ resource "aws_launch_template" "nf_lt_auto_scaled_ebs" {
     }
   }
   update_default_version = true
-  user_data = filebase64("./user_data/auto_scaled_ebs.yaml")
+  user_data = filebase64("./user_data/auto_scaled_ebs")
 }

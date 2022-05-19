@@ -1,4 +1,9 @@
-#cloud-config
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="==AUTO_SCALED_EBS_BOUNDARY=="
+
+--==AUTO_SCALED_EBS_BOUNDARY==
+Content-Type: text/cloud-config; charset="us-ascii"
+
 repo_update: true
 repo_upgrade: all
 
@@ -21,3 +26,5 @@ runcmd:
   - cd /opt/amazon-ebs-autoscale && git checkout $EBS_AUTOSCALE_VERSION
   - sh /opt/amazon-ebs-autoscale/install.sh --file-system lvm.ext4 --initial-size 100 --volume-type gp3 --mountpoint /ebs-autoscale 2>&1 > /var/log/ebs-autoscale-install.log
   - rsync -ax /home/ /ebs-autoscale/ && mount -o bind /ebs-autoscale /home
+
+--==AUTO_SCALED_EBS_BOUNDARY==
