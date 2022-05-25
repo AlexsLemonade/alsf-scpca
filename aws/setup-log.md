@@ -51,7 +51,7 @@ The general setup currently consists of three Batch queues:
 
 - `nextflow-batch-default-queue`, which includes up to 256 vCPUs, with volumes provisioned with 64GB storage.
 - `nextflow-batch-bigdisk-queue`, which includes up to 32 vCPUs, with volumes provisioned with 500GB storage.
-  `nextflow-batch-auto-scaled-ebs-queue`, which includes up to 128 vCPUs, with automatically scaled storage volumes.
+ - `nextflow-batch-auto-scaled-ebs-queue`, which includes up to 128 vCPUs, with automatically scaled storage volumes.
 
 `nextflow-batch-default-queue` should be used in most situations, except when large amounts of disk usage are expected.
 Both queues use spot instances, but the spot price threshold is set high (currently 100%!) so they should should never not run.
