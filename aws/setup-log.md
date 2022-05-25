@@ -47,7 +47,7 @@ rm Miniconda3-latest-Linux-x86_64.sh
 
 The setup of the AWS batch queue and related resources for Nextflow usage are handled by the Terraform (`.tf`) files in this directory.
 
-The general setup currently consists of two Batch queues:
+The general setup currently consists of three Batch queues:
 
 - `nextflow-batch-default-queue`, which includes up to 256 vCPUs, with volumes provisioned with 64GB storage.
 - `nextflow-batch-bigdisk-queue`, which includes up to 32 vCPUs, with volumes provisioned with 500GB storage.
