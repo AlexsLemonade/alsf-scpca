@@ -1,6 +1,8 @@
 #!/usr/bin/env Rscript
 
-# Run cellhash demux notebook for each sample in the data folder
+# This little script runs the demux comparisons notebook for each library 
+# present in the in the data folder. Note that the main text will not change, 
+# even though results can vary among libraries, sometimes widely.
 
 rmd_template <- "15-demux-comparisons.Rmd"
 outdir <- file.path("results", "notebooks")
