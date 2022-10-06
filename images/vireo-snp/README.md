@@ -1,13 +1,13 @@
-This folder contains a Dockerfile for the [vireo-snp](https://vireosnp.readthedocs.io/en/latest/) package.
+This folder contains a Dockerfile for the [vireoSNP](https://vireosnp.readthedocs.io/en/latest/) package used
 
-The image is built from a versioned Python (slim) image.
+The image is built from a versioned Python (Debian slim) image.
 
 ## Building the image
 
-The image can be built with the following command run in this directory:
+The image can be built with the following command, run in this directory:
 
 ```
-docker build . -t ghcr.io/alexslemonade/vireo-snp:v0.5.7
+docker buildx build . -t ghcr.io/alexslemonade/vireo-snp:v0.5.7 --platform linux/amd64
 ```
 
 Alternatively, the latest version should be available via:
