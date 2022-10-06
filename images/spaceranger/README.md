@@ -9,7 +9,7 @@ In order to build this image, the spaceranger software source code components mu
 Following download of spaceranger, you can build the image running the following command from this `images/spaceranger` working directory:
 
 ```
-docker build . -t scpca-spaceranger:1.3.1
+docker buildx build . -t scpca-spaceranger:1.3.1 --platform linux/amd64
 ```
 
 At this point, the image should be ready for use on the local machine.
