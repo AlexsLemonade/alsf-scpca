@@ -1,6 +1,6 @@
-This folder contains a Dockerfile for the vireo-snp package.
+This folder contains a Dockerfile for the [vireo-snp](https://vireosnp.readthedocs.io/en/latest/) package.
 
-The image is built from a versioned python (slim) image.
+The image is built from a versioned Python (slim) image.
 
 ## Building the image
 
