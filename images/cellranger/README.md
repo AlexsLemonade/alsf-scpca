@@ -7,12 +7,12 @@ In order to build this image, the cellranger software and bcl2fastq source code 
 - The current version of cellranger is `cellranger-6.1.2.tar.gz` and can be downloaded from [10X Genomics Website](https://support.10xgenomics.com/single-cell-gene-expression/software/downloads/6.0) after agreeing to their license terms.
 - The current version of bcl2fastq is 2.20.0 and can be downloaded from [Illumina](https://support.illumina.com/sequencing/sequencing_software/bcl2fastq-conversion-software.html) after logging into an Illumina account.
   - As we are using an Centos image, you will need to download the "Linux rpm" version of the software.
-  - Note that the file Illumina provides to download is a `.zip` file that should contain the `bcl2fastq2-v2.20.0.422-Linux-x86_64.rpm` file specified in the `Dockerfile`. 
+  - Note that the file Illumina provides to download is a `.zip` file that should contain the `bcl2fastq2-v2.20.0.422-Linux-x86_64.rpm` file specified in the `Dockerfile`.
 
 Following download of cellranger and bcl2fastq, you can build the image running the following command from this `images/cellranger` working directory:
 
 ```
-docker build . -t scpca-cellranger:6.1.2
+docker buildx build . -t scpca-cellranger:6.1.2 --platform linux/amd64
 ```
 
 At this point, the image should be ready for use on the local machine.
