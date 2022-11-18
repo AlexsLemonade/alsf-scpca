@@ -30,6 +30,10 @@ def process_scrna(run, consts, overwrite):
     Process a scrna run, moving internal checkpoint files from source to destination locations
     and adding a scpca-meta.json file.
     """
+    # skip if empty
+    if not isinstance(run.scpca_run_id, str):
+        return
+
     print(f"Processing {run.scpca_run_id}")
 
     # remove any slashes that might be at ends of bucket or prefix
@@ -119,6 +123,9 @@ def process_bulk(run, consts, overwrite):
     Process a bulk run, moving internal checkpoint files from source to destination locations
     and adding a scpca-meta.json file.
     """
+    # skip if empty
+    if not isinstance(run.scpca_run_id, str):
+        return
     print(f"Processing {run.scpca_run_id}")
 
     # remove any slashes that might be at ends of bucket or prefix
@@ -132,11 +139,82 @@ def process_bulk(run, consts, overwrite):
     publish_uri = f"s3://{bucket}/{prefix}/{consts.dest_dir}/salmon"
     bulk_uri = f"{publish_uri}/{run.scpca_library_id}"
 
+    # set up S3
+    s3 = boto3.resource('s3')
+    s3_bucket = s3.Bucket(bucket)
+
+    ### read output metadata directly from s3
+    results_tsv = f"s3://{bucket}/{prefix}/{consts.results_dir}/{run.scpca_project_id}/{run.scpca_project_id}_bulk_metadata.tsv"
+    metadata_df = pandas.read_csv(results_tsv, sep = '\t', dtype = 'string', keep_default_na = False)
+    try:
+        scpca_version = metadata_df.loc[metadata_df['library_id'] == run.scpca_library_id, "workflow_version"].values[0]
+    except IndexError:
+        # no information found in output metadata file
+        scpca_version = None
+    if not scpca_version or scpca_version in ["NA", "null"]:
+        scpca_version = consts.scpca_version
+
+    ### Build metadata object
+    metadata = {
+        "run_id": run.scpca_run_id,
+        "library_id": run.scpca_library_id,
+        "sample_id": run.scpca_sample_id ,
+        "project_id": run.scpca_project_id ,
+        "submitter": run.submitter,
+        "technology": run.technology,
+        "seq_unit": run.seq_unit,
+        "feature_barcode_file": run.feature_barcode_file,
+        "feature_barcode_geom": run.feature_barcode_geom,
+        "files_directory": run.files_directory,
+        "slide_serial_number": run.slide_serial_number,
+        "slide_section": run.slide_section,
+        "ref_assembly": consts.ref_assembly,
+        "ref_fasta": consts.ref_fasta,
+        "ref_gtf": consts.ref_gtf,
+        "salmon_splici_index": consts.salmon_splici_index,
+        "salmon_bulk_index": consts.salmon_bulk_index,
+        "t2g_3col_path": consts.t2g_3col_path,
+        "t2g_bulk_path": consts.t2g_bulk_path,
+        "cellranger_index": consts.cellranger_index,
+        "star_index": consts.star_index,
+        "scpca_version": scpca_version,
+        "nextflow_version": consts.nextflow_version,
+        "salmon_publish_dir": publish_uri,
+        "salmon_results_dir": bulk_uri,
+        "barcode_file": run.barcode_file
+    }
+
+    ## copy files from source to destination
+    # list source and destination to see if files exist
+    origin_objs = list(s3_bucket.objects.filter(Prefix = origin_prefix))
+    dest_objs = list(s3_bucket.objects.filter(Prefix = dest_prefix))
+    if len(origin_objs) == 0:
+        print(f"No files for {run.scpca_run_id}")
+    elif len(dest_objs) > 0 and not overwrite:
+        print(f"Files present at destination for {run.scpca_run_id} -- skipping")
+    else:
+        print(f"Copying files for {run.scpca_run_id}")
+        ### S3 copying using awscli
+        sync_command = [
+            "aws", "s3", "sync",
+            f"s3://{bucket}/{origin_prefix}",
+            bulk_uri
+        ]
+        subprocess.run(sync_command)
+        ### write json object
+        s3_bucket.put_object(
+            Key = metadata_key,
+            Body = json.dumps(metadata, indent=2)
+        )
+
 def process_spatial(run, consts, overwrite):
     """
     Process a spatial run, moving internal checkpoint files from source to destination locations
     and adding a scpca-meta.json file.
     """
+    # skip if empty
+    if not isinstance(run.scpca_run_id, str):
+        return
     print(f"Processing {run.scpca_run_id}")
 
     # remove any slashes that might be at ends of bucket or prefix
@@ -152,9 +230,12 @@ def process_spatial(run, consts, overwrite):
 
 def process_demux(run, consts, overwrite):
     """
-    Process a spatial run, moving internal checkpoint files from source to destination locations
+    Process a genetic demultiplexing run, moving internal checkpoint files from source to destination locations
     Since the demux workflow has always included scpca-meta.json, we do not need to create it!
     """
+    # skip if empty
+    if not isinstance(run.scpca_run_id, str):
+        return
     print(f"Processing {run.scpca_run_id}")
 
     # remove any slashes that might be at ends of bucket or prefix
@@ -292,7 +373,7 @@ def main():
     # add barcode files
     library_df['barcode_file'] = library_df['technology'].apply(get_barcode, barcode_dir = args.barcode_dir)
 
-    library_df = library_df.iloc[0:2] # limit to 2 for testing
+    library_df = library_df.iloc[144:146] # limit to 2 for testing
 
     ### scRNA processing
     # filter to scRNAseq runs
