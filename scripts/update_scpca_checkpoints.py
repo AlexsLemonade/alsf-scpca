@@ -56,7 +56,7 @@ def process_scrna(run, consts, overwrite):
     try:
         results_obj = s3_bucket.Object(results_json)
         results_meta = json.loads(results_obj.get()['Body'].read().decode('utf-8'))
-    except s3.exceptions.ClientError:
+    except s3.meta.client.exceptions.NoSuchKey:
         # object did not exist
         results_meta = {}
     scpca_version = results_meta.get("workflow_version")
@@ -180,8 +180,7 @@ def process_bulk(run, consts, overwrite):
         "scpca_version": scpca_version,
         "nextflow_version": consts.nextflow_version,
         "salmon_publish_dir": publish_uri,
-        "salmon_results_dir": bulk_uri,
-        "barcode_file": run.barcode_file
+        "salmon_results_dir": bulk_uri
     }
 
     ## copy files from source to destination
@@ -223,10 +222,80 @@ def process_spatial(run, consts, overwrite):
 
     origin_prefix = f"{prefix}/{consts.source_dir}/spaceranger/{run.scpca_library_id}/{run.scpca_run_id}-spatial"
     dest_prefix = f"{prefix}/{consts.dest_dir}/spaceranger/{run.scpca_library_id}/{run.scpca_run_id}-spatial"
+    results_json = f"{prefix}/{consts.results_dir}/{run.scpca_project_id}/{run.scpca_sample_id}/{run.scpca_library_id}_spatial/{run.scpca_library_id}_metadata.json"
     metadata_key = f"{dest_prefix}/scpca-meta.json"
 
     publish_uri = f"s3://{bucket}/{prefix}/{consts.dest_dir}/spaceranger/{run.scpca_library_id}"
     spatial_uri = f"{publish_uri}/{run.scpca_run_id}-spatial"
+
+    # set up S3
+    s3 = boto3.resource('s3')
+    s3_bucket = s3.Bucket(bucket)
+
+    ### read output metadata, if present
+    try:
+        results_obj = s3_bucket.Object(results_json)
+        results_meta = json.loads(results_obj.get()['Body'].read().decode('utf-8'))
+    except s3.meta.client.exceptions.NoSuchKey:
+        # object did not exist
+        results_meta = {}
+    scpca_version = results_meta.get("workflow_version")
+    if not scpca_version:
+        scpca_version = consts.scpca_version
+
+    ### Build metadata object
+    metadata = {
+        "run_id": run.scpca_run_id,
+        "library_id": run.scpca_library_id,
+        "sample_id": run.scpca_sample_id ,
+        "project_id": run.scpca_project_id ,
+        "submitter": run.submitter,
+        "technology": run.technology,
+        "seq_unit": run.seq_unit,
+        "feature_barcode_file": run.feature_barcode_file,
+        "feature_barcode_geom": run.feature_barcode_geom,
+        "files_directory": run.files_directory,
+        "slide_serial_number": run.slide_serial_number,
+        "slide_section": run.slide_section,
+        "ref_assembly": consts.ref_assembly,
+        "ref_fasta": consts.ref_fasta,
+        "ref_gtf": consts.ref_gtf,
+        "salmon_splici_index": consts.salmon_splici_index,
+        "salmon_bulk_index": consts.salmon_bulk_index,
+        "t2g_3col_path": consts.t2g_3col_path,
+        "t2g_bulk_path": consts.t2g_bulk_path,
+        "cellranger_index": consts.cellranger_index,
+        "star_index": consts.star_index,
+        "scpca_version": scpca_version,
+        "nextflow_version": consts.nextflow_version,
+        "spaceranger_publish_dir": publish_uri,
+        "spaceranger_results_dir": spatial_uri
+    }
+
+    ## copy files from source to destination
+    # list source and destination to see if files exist
+    origin_objs = list(s3_bucket.objects.filter(Prefix = origin_prefix))
+    dest_objs = list(s3_bucket.objects.filter(Prefix = dest_prefix))
+    if len(origin_objs) == 0:
+        print(f"No files for {run.scpca_run_id}")
+    elif len(dest_objs) > 0 and not overwrite:
+        print(f"Files present at destination for {run.scpca_run_id} -- skipping")
+    else:
+        print(f"Copying files for {run.scpca_run_id}")
+        ### S3 copying using awscli
+        sync_command = [
+            "aws", "s3", "sync",
+            f"s3://{bucket}/{origin_prefix}",
+            spatial_uri,
+            "--dryrun"
+        ]
+        subprocess.run(sync_command)
+        ### write json object
+        s3_bucket.put_object(
+            Key = metadata_key,
+            Body = json.dumps(metadata, indent=2)
+        )
+
 
 def process_demux(run, consts, overwrite):
     """
@@ -373,7 +442,7 @@ def main():
     # add barcode files
     library_df['barcode_file'] = library_df['technology'].apply(get_barcode, barcode_dir = args.barcode_dir)
 
-    library_df = library_df.iloc[144:146] # limit to 2 for testing
+    library_df = library_df.iloc[371:373] # limit to 2 for testing
 
     ### scRNA processing
     # filter to scRNAseq runs
