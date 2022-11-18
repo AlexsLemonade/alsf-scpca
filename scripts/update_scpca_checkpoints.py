@@ -38,11 +38,26 @@ def process_scrna(run, consts, overwrite):
 
     origin_prefix = f"{prefix}/{consts.source_dir}/rad/{run.scpca_library_id}/{run.scpca_run_id}-rna"
     dest_prefix = f"{prefix}/{consts.dest_dir}/rad/{run.scpca_library_id}/{run.scpca_run_id}-rna"
+    results_json = f"{prefix}/{consts.results_dir}/{run.scpca_project_id}/{run.scpca_sample_id}/{run.scpca_library_id}_metadata.json"
     metadata_key = f"{dest_prefix}/scpca-meta.json"
 
     publish_uri = f"s3://{bucket}/{prefix}/{consts.dest_dir}/rad/{run.scpca_library_id}"
     rad_uri = f"{publish_uri}/{run.scpca_run_id}-rna"
 
+    # set up S3
+    s3 = boto3.resource('s3')
+    s3_bucket = s3.Bucket(bucket)
+
+    ### read output metadata, if present
+    try:
+        results_obj = s3_bucket.Object(results_json)
+        results_meta = json.loads(results_obj.get()['Body'].read().decode('utf-8'))
+    except s3.exceptions.ClientError:
+        # object did not exist
+        results_meta = {}
+    scpca_version = results_meta.get("workflow_version")
+    if not scpca_version:
+        scpca_version = consts.scpca_version
 
     ### Build metadata object
     metadata = {
@@ -67,7 +82,7 @@ def process_scrna(run, consts, overwrite):
         "t2g_bulk_path": consts.t2g_bulk_path,
         "cellranger_index": consts.cellranger_index,
         "star_index": consts.star_index,
-        "scpca_version": consts.scpca_version,
+        "scpca_version": scpca_version,
         "nextflow_version": consts.nextflow_version,
         "rad_publish_dir": publish_uri,
         "rad_dir": rad_uri,
@@ -77,11 +92,7 @@ def process_scrna(run, consts, overwrite):
     # print(json.dumps(metadata, indent=2))
 
     ## copy files from source to destination
-    # set up S3
-    s3 = boto3.resource('s3')
-    s3_bucket = s3.Bucket(bucket)
-
-    # list origin and destination to see if files exist
+    # list source and destination to see if files exist
     origin_objs = list(s3_bucket.objects.filter(Prefix = origin_prefix))
     dest_objs = list(s3_bucket.objects.filter(Prefix = dest_prefix))
     if len(origin_objs) == 0:
@@ -166,7 +177,8 @@ def process_demux(run, consts, overwrite):
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
-            f"s3://{bucket}/{dest_prefix}"
+            f"s3://{bucket}/{dest_prefix}",
+            "--dryrun"
         ]
         subprocess.run(sync_command)
 
@@ -200,6 +212,11 @@ def main():
         '--dest_dir',
         default = 'checkpoints',
         help = 'destination subdirectory for scpca checkpoint files'
+    )
+    parser.add_argument(
+        '--results_dir',
+        default = 'publish',
+        help = 'current subdirectory for scpca end result files'
     )
     parser.add_argument(
         '--overwrite',
@@ -259,7 +276,7 @@ def main():
     )
     const.add_argument(
         "--scpca_version",
-        default = "v0.3.3",
+        default = "v0.2.0",
         help = "default scpca version"
     )
     const.add_argument(
@@ -275,36 +292,37 @@ def main():
     # add barcode files
     library_df['barcode_file'] = library_df['technology'].apply(get_barcode, barcode_dir = args.barcode_dir)
 
+    library_df = library_df.iloc[0:2] # limit to 2 for testing
+
     ### scRNA processing
     # filter to scRNAseq runs
     sc_techs = ["10Xv2", "10Xv2_5prime", "10Xv3", "10Xv3.1"]
     scRNA_df = library_df.loc[library_df['technology'].isin(sc_techs)]
 
     # process scRNA runs
-    scRNA_df = scRNA_df.iloc[0:2] # limit to 2 for testing
     scRNA_df.apply(process_scrna, axis = 1,
-                   consts = args
+                   consts = args,
                    overwrite = args.overwrite)
 
     ### bulk processing
     bulk_techs = ['single_end', 'paired_end']
     bulk_df = library_df.loc[library_df['technology'].isin(bulk_techs)]
     bulk_df.apply(process_bulk, axis = 1,
-                  consts = args
+                  consts = args,
                   overwrite = args.overwrite)
 
     ### spatial processing
     spatial_techs = ['visium']
     spatial_df = library_df.loc[library_df['technology'].isin(spatial_techs)]
     spatial_df.apply(process_spatial, axis = 1,
-                     consts = args
+                     consts = args,
                      overwrite = args.overwrite)
 
     ### demux processing
     demux_techs = ['cellhash_10Xv2', 'cellhash_10Xv3', 'cellhash_10Xv3.1']
-    demux_df = library_df.loc[library_df['technology'].isin(demux)]
+    demux_df = library_df.loc[library_df['technology'].isin(demux_techs)]
     demux_df.apply(process_demux, axis = 1,
-                   consts = args
+                   consts = args,
                    overwrite = args.overwrite)
 
 if __name__ == '__main__':
