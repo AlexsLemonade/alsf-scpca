@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
-# script to build scpca-metadata.json files for checkpoint files
+# script to update checkpoint directories for scpca-nf for version 0.4
+# copies files to new checkpoint directory location and
+# adds scpca-metadata.json files as needed
 
 import argparse
 import json
