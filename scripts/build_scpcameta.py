@@ -23,22 +23,22 @@ def get_barcode(tech, barcode_dir):
     return barcode_file
 
 
-def process_scrna(run, source_dir, dest_dir, overwrite, consts):
+def process_scrna(run, consts, overwrite):
     """
     Process a scrna run, moving internal checkpoint files from source to destination locations
     and adding a scpca-meta.json file.
     """
     print(f"Processing {run.scpca_run_id}")
 
-    # remove any slashes that might be at ends of in bucket or prefix
+    # remove any slashes that might be at ends of bucket or prefix
     bucket = consts.bucket.strip('/')
     prefix = consts.prefix.strip('/')
 
-    origin_prefix = f"{prefix}/{source_dir}/rad/{run.scpca_library_id}/{run.scpca_run_id}-rna"
-    dest_prefix = f"{prefix}/{dest_dir}/rad/{run.scpca_library_id}/{run.scpca_run_id}-rna"
+    origin_prefix = f"{prefix}/{consts.source_dir}/rad/{run.scpca_library_id}/{run.scpca_run_id}-rna"
+    dest_prefix = f"{prefix}/{consts.dest_dir}/rad/{run.scpca_library_id}/{run.scpca_run_id}-rna"
     metadata_key = f"{dest_prefix}/scpca-meta.json"
 
-    publish_uri = f"s3://{bucket}/{prefix}/{dest_dir}/rad/{run.scpca_library_id}"
+    publish_uri = f"s3://{bucket}/{prefix}/{consts.dest_dir}/rad/{run.scpca_library_id}"
     rad_uri = f"{publish_uri}/{run.scpca_run_id}-rna"
 
 
@@ -92,8 +92,7 @@ def process_scrna(run, source_dir, dest_dir, overwrite, consts):
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
-            rad_uri,
-            "--dryrun"
+            rad_uri
         ]
         subprocess.run(sync_command)
         ### write json object
@@ -101,6 +100,75 @@ def process_scrna(run, source_dir, dest_dir, overwrite, consts):
             Key = metadata_key,
             Body = json.dumps(metadata, indent=2)
         )
+
+def process_bulk(run, consts, overwrite):
+    """
+    Process a bulk run, moving internal checkpoint files from source to destination locations
+    and adding a scpca-meta.json file.
+    """
+    print(f"Processing {run.scpca_run_id}")
+
+    # remove any slashes that might be at ends of bucket or prefix
+    bucket = consts.bucket.strip('/')
+    prefix = consts.prefix.strip('/')
+
+    origin_prefix = f"{prefix}/{consts.source_dir}/salmon/{run.scpca_library_id}"
+    dest_prefix = f"{prefix}/{consts.dest_dir}/salmon/{run.scpca_library_id}"
+    metadata_key = f"{dest_prefix}/scpca-meta.json"
+
+    publish_uri = f"s3://{bucket}/{prefix}/{consts.dest_dir}/salmon"
+    bulk_uri = f"{publish_uri}/{run.scpca_library_id}"
+
+def process_spatial(run, consts, overwrite):
+    """
+    Process a spatial run, moving internal checkpoint files from source to destination locations
+    and adding a scpca-meta.json file.
+    """
+    print(f"Processing {run.scpca_run_id}")
+
+    # remove any slashes that might be at ends of bucket or prefix
+    bucket = consts.bucket.strip('/')
+    prefix = consts.prefix.strip('/')
+
+    origin_prefix = f"{prefix}/{consts.source_dir}/spaceranger/{run.scpca_library_id}/{run.scpca_run_id}-spatial"
+    dest_prefix = f"{prefix}/{consts.dest_dir}/spaceranger/{run.scpca_library_id}/{run.scpca_run_id}-spatial"
+    metadata_key = f"{dest_prefix}/scpca-meta.json"
+
+    publish_uri = f"s3://{bucket}/{prefix}/{consts.dest_dir}/spaceranger/{run.scpca_library_id}"
+    spatial_uri = f"{publish_uri}/{run.scpca_run_id}-spatial"
+
+def process_demux(run, consts, overwrite):
+    """
+    Process a spatial run, moving internal checkpoint files from source to destination locations
+    Since the demux workflow has always included scpca-meta.json, we do not need to create it!
+    """
+    print(f"Processing {run.scpca_run_id}")
+
+    # remove any slashes that might be at ends of bucket or prefix
+    bucket = consts.bucket.strip('/')
+    prefix = consts.prefix.strip('/')
+
+    origin_prefix = f"{prefix}/{consts.source_dir}/vireo/{run.scpca_library_id}-vireo"
+    dest_prefix = f"{prefix}/{consts.dest_dir}/vireo/{run.scpca_library_id}-vireo"
+
+    # list origin and destination to see if files exist
+    origin_objs = list(s3_bucket.objects.filter(Prefix = origin_prefix))
+    dest_objs = list(s3_bucket.objects.filter(Prefix = dest_prefix))
+    if len(origin_objs) == 0:
+        print(f"No files for {run.scpca_run_id}")
+    elif len(dest_objs) > 0 and not overwrite:
+        print(f"Files present at destination for {run.scpca_run_id} -- skipping")
+    else:
+        print(f"Copying files for {run.scpca_run_id}")
+        ### S3 copying using awscli
+        sync_command = [
+            "aws", "s3", "sync",
+            f"s3://{bucket}/{origin_prefix}",
+            f"s3://{bucket}/{dest_prefix}"
+        ]
+        subprocess.run(sync_command)
+
+
 
 ### Main
 def main():
@@ -205,6 +273,7 @@ def main():
     # add barcode files
     library_df['barcode_file'] = library_df['technology'].apply(get_barcode, barcode_dir = args.barcode_dir)
 
+    ### scRNA processing
     # filter to scRNAseq runs
     sc_techs = ["10Xv2", "10Xv2_5prime", "10Xv3", "10Xv3.1"]
     scRNA_df = library_df.loc[library_df['technology'].isin(sc_techs)]
@@ -212,11 +281,29 @@ def main():
     # process scRNA runs
     scRNA_df = scRNA_df.iloc[0:2] # limit to 2 for testing
     scRNA_df.apply(process_scrna, axis = 1,
-                   source_dir = args.source_dir,
-                   dest_dir = args.dest_dir,
-                   overwrite = args.overwrite,
-                   consts = args)
+                   consts = args
+                   overwrite = args.overwrite)
 
+    ### bulk processing
+    bulk_techs = ['single_end', 'paired_end']
+    bulk_df = library_df.loc[library_df['technology'].isin(bulk_techs)]
+    bulk_df.apply(process_bulk, axis = 1,
+                  consts = args
+                  overwrite = args.overwrite)
+
+    ### spatial processing
+    spatial_techs = ['visium']
+    spatial_df = library_df.loc[library_df['technology'].isin(spatial_techs)]
+    spatial_df.apply(process_spatial, axis = 1,
+                     consts = args
+                     overwrite = args.overwrite)
+
+    ### demux processing
+    demux_techs = ['cellhash_10Xv2', 'cellhash_10Xv3', 'cellhash_10Xv3.1']
+    demux_df = library_df.loc[library_df['technology'].isin(demux)]
+    demux_df.apply(process_demux, axis = 1,
+                   consts = args
+                   overwrite = args.overwrite)
 
 if __name__ == '__main__':
     main()
