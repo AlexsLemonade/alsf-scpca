@@ -23,19 +23,24 @@ def get_barcode(tech, barcode_dir):
     return barcode_file
 
 
-def process_scrna(run, consts, overwrite = False):
+def process_scrna(run, source_dir, dest_dir, overwrite, consts):
+    """
+    Process a scrna run, moving internal checkpoint files from source to destination locations
+    and adding a scpca-meta.json file.
+    """
     print(f"Processing {run.scpca_run_id}")
 
     # remove any slashes that might be at ends of in bucket or prefix
     bucket = consts.bucket.strip('/')
     prefix = consts.prefix.strip('/')
 
-    origin_prefix = f"{prefix}/internal/rad/{run.scpca_library_id}/{run.scpca_run_id}-rna"
-    dest_prefix = f"{prefix}/checkpoints/rad/{run.scpca_library_id}/{run.scpca_run_id}-rna"
+    origin_prefix = f"{prefix}/{source_dir}/rad/{run.scpca_library_id}/{run.scpca_run_id}-rna"
+    dest_prefix = f"{prefix}/{dest_dir}/rad/{run.scpca_library_id}/{run.scpca_run_id}-rna"
+    metadata_key = f"{dest_prefix}/scpca-meta.json"
 
-    publish_dir = f"s3://{bucket}/{prefix}/checkpoints/rad/{run.scpca_library_id}"
-    rad_dir = f"{publish_dir}/{run.scpca_run_id}-rna"
-    meta_file = f"{rad_dir}/scpca-meta.json"
+    publish_uri = f"s3://{bucket}/{prefix}/{dest_dir}/rad/{run.scpca_library_id}"
+    rad_uri = f"{publish_uri}/{run.scpca_run_id}-rna"
+
 
     ### Build metadata object
     metadata = {
@@ -62,13 +67,14 @@ def process_scrna(run, consts, overwrite = False):
         "star_index": consts.star_index,
         "scpca_version": consts.scpca_version,
         "nextflow_version": consts.nextflow_version,
-        "rad_publish_dir": publish_dir,
-        "rad_dir": rad_dir,
+        "rad_publish_dir": publish_uri,
+        "rad_dir": rad_uri,
         "barcode_file": run.barcode_file
     }
 
     # print(json.dumps(metadata, indent=2))
 
+    ## copy files from source to destination
     # set up S3
     s3 = boto3.resource('s3')
     s3_bucket = s3.Bucket(bucket)
@@ -86,15 +92,17 @@ def process_scrna(run, consts, overwrite = False):
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
-            rad_dir,
+            rad_uri,
             "--dryrun"
         ]
         subprocess.run(sync_command)
+        ### write json object
+        s3_bucket.put_object(
+            Key = metadata_key,
+            Body = json.dumps(metadata, indent=2)
+        )
 
-
-
-
-### Main code
+### Main
 def main():
     ### Parse command line arguments
     parser = argparse.ArgumentParser()
@@ -112,6 +120,16 @@ def main():
         '--prefix',
         default = 'scpca/processed',
         help = 'base location of scpca results files'
+    )
+    parser.add_argument(
+        '--source_dir',
+        default = 'internal',
+        help = 'current subdirectory for scpca checkpoint files'
+    )
+    parser.add_argument(
+        '--dest_dir',
+        default = 'checkpoints',
+        help = 'destination subdirectory for scpca checkpoint files'
     )
     parser.add_argument(
         '--overwrite',
@@ -192,13 +210,13 @@ def main():
     scRNA_df = library_df.loc[library_df['technology'].isin(sc_techs)]
 
     # process scRNA runs
-    scRNA_df = scRNA_df.iloc[0:3]
-    scRNA_df.apply(process_scrna, axis = 1, consts = args, overwrite = args.overwrite)
+    scRNA_df = scRNA_df.iloc[0:2] # limit to 2 for testing
+    scRNA_df.apply(process_scrna, axis = 1,
+                   source_dir = args.source_dir,
+                   dest_dir = args.dest_dir,
+                   overwrite = args.overwrite,
+                   consts = args)
 
-
-
-# print json
-# print(json.dumps(metadata, indent=2))
 
 if __name__ == '__main__':
     main()
