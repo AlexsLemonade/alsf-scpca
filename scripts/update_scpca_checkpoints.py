@@ -109,14 +109,16 @@ def process_scrna(run, consts, overwrite):
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
-            rad_uri
+            rad_uri,
+            "--dryrun" if consts.dryrun else ""
         ]
         subprocess.run(sync_command)
         ### write json object
-        s3_bucket.put_object(
-            Key = metadata_key,
-            Body = json.dumps(metadata, indent=2)
-        )
+        if not consts.dryrun:
+            s3_bucket.put_object(
+                Key = metadata_key,
+                Body = json.dumps(metadata, indent=2)
+            )
 
 def process_bulk(run, consts, overwrite):
     """
@@ -197,14 +199,16 @@ def process_bulk(run, consts, overwrite):
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
-            bulk_uri
+            bulk_uri,
+            "--dryrun" if consts.dryrun else ""
         ]
         subprocess.run(sync_command)
         ### write json object
-        s3_bucket.put_object(
-            Key = metadata_key,
-            Body = json.dumps(metadata, indent=2)
-        )
+        if not consts.dryrun:
+            s3_bucket.put_object(
+                Key = metadata_key,
+                Body = json.dumps(metadata, indent=2)
+            )
 
 def process_spatial(run, consts, overwrite):
     """
@@ -287,14 +291,15 @@ def process_spatial(run, consts, overwrite):
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
             spatial_uri,
-            "--dryrun"
+            "--dryrun" if consts.dryrun else ""
         ]
         subprocess.run(sync_command)
         ### write json object
-        s3_bucket.put_object(
-            Key = metadata_key,
-            Body = json.dumps(metadata, indent=2)
-        )
+        if not consts.dryrun:
+            s3_bucket.put_object(
+                Key = metadata_key,
+                Body = json.dumps(metadata, indent=2)
+            )
 
 
 def process_demux(run, consts, overwrite):
@@ -328,7 +333,7 @@ def process_demux(run, consts, overwrite):
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
             f"s3://{bucket}/{dest_prefix}",
-            "--dryrun"
+            "--dryrun" if consts.dryrun else ""
         ]
         subprocess.run(sync_command)
 
@@ -372,6 +377,11 @@ def main():
         '--overwrite',
         action="store_true",
         help = "overwrite existing files at destination"
+    )
+    parser.add_argument(
+        '--dryrun',
+        action="store_true",
+        help = "do a dry run, modifying no files"
     )
     const = parser.add_argument_group('Common Values')
     const.add_argument(
