@@ -459,8 +459,6 @@ def main():
     # add barcode files
     library_df['barcode_file'] = library_df['technology'].apply(get_barcode, barcode_dir=args.barcode_dir)
 
-    library_df = library_df.iloc[371:373]  # limit to 2 for testing
-
     # scRNA processing
     # filter to scRNAseq runs
     sc_techs = ["10Xv2", "10Xv2_5prime", "10Xv3", "10Xv3.1"]
