@@ -11,7 +11,9 @@ import subprocess
 import boto3
 import pandas
 
-### Functions ###
+# Functions #
+
+
 def get_barcode(tech, barcode_dir):
     """Get the barcode file appropriate for a 10X technology"""
     barcode_dir = barcode_dir.rstrip("/") # remove trailing slash if needed
@@ -52,7 +54,7 @@ def process_scrna(run, consts, overwrite):
     s3 = boto3.resource('s3')
     s3_bucket = s3.Bucket(bucket)
 
-    ### read output metadata, if present
+    # read output metadata, if present
     try:
         results_obj = s3_bucket.Object(results_json)
         results_meta = json.loads(results_obj.get()['Body'].read().decode('utf-8'))
@@ -63,12 +65,12 @@ def process_scrna(run, consts, overwrite):
     if not scpca_version:
         scpca_version = consts.scpca_version
 
-    ### Build metadata object
+    # Build metadata object
     metadata = {
         "run_id": run.scpca_run_id,
         "library_id": run.scpca_library_id,
-        "sample_id": run.scpca_sample_id ,
-        "project_id": run.scpca_project_id ,
+        "sample_id": run.scpca_sample_id,
+        "project_id": run.scpca_project_id,
         "submitter": run.submitter,
         "technology": run.technology,
         "seq_unit": run.seq_unit,
@@ -95,17 +97,17 @@ def process_scrna(run, consts, overwrite):
 
     # print(json.dumps(metadata, indent=2))
 
-    ## copy files from source to destination
+    # copy files from source to destination
     # list source and destination to see if files exist
-    origin_objs = list(s3_bucket.objects.filter(Prefix = origin_prefix))
-    dest_objs = list(s3_bucket.objects.filter(Prefix = dest_prefix))
+    origin_objs = list(s3_bucket.objects.filter(Prefix=origin_prefix))
+    dest_objs = list(s3_bucket.objects.filter(Prefix=dest_prefix))
     if len(origin_objs) == 0:
         print(f"No files for {run.scpca_run_id}")
     elif len(dest_objs) > 0 and not overwrite:
         print(f"Files present at destination for {run.scpca_run_id} -- skipping")
     else:
         print(f"Copying files for {run.scpca_run_id}")
-        ### S3 copying using awscli
+        # S3 copying using awscli
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
@@ -113,12 +115,13 @@ def process_scrna(run, consts, overwrite):
             "--dryrun" if consts.dryrun else ""
         ]
         subprocess.run(sync_command)
-        ### write json object
+        # write json object
         if not consts.dryrun:
             s3_bucket.put_object(
-                Key = metadata_key,
-                Body = json.dumps(metadata, indent=2)
+                Key=metadata_key,
+                Body=json.dumps(metadata, indent=2)
             )
+
 
 def process_bulk(run, consts, overwrite):
     """
@@ -145,9 +148,9 @@ def process_bulk(run, consts, overwrite):
     s3 = boto3.resource('s3')
     s3_bucket = s3.Bucket(bucket)
 
-    ### read output metadata directly from s3
+    # read output metadata directly from s3
     results_tsv = f"s3://{bucket}/{prefix}/{consts.results_dir}/{run.scpca_project_id}/{run.scpca_project_id}_bulk_metadata.tsv"
-    metadata_df = pandas.read_csv(results_tsv, sep = '\t', dtype = 'string', keep_default_na = False)
+    metadata_df = pandas.read_csv(results_tsv, sep='\t', dtype='string', keep_default_na=False)
     try:
         scpca_version = metadata_df.loc[metadata_df['library_id'] == run.scpca_library_id, "workflow_version"].values[0]
     except IndexError:
@@ -156,12 +159,12 @@ def process_bulk(run, consts, overwrite):
     if not scpca_version or scpca_version in ["NA", "null"]:
         scpca_version = consts.scpca_version
 
-    ### Build metadata object
+    # Build metadata object
     metadata = {
         "run_id": run.scpca_run_id,
         "library_id": run.scpca_library_id,
-        "sample_id": run.scpca_sample_id ,
-        "project_id": run.scpca_project_id ,
+        "sample_id": run.scpca_sample_id,
+        "project_id": run.scpca_project_id,
         "submitter": run.submitter,
         "technology": run.technology,
         "seq_unit": run.seq_unit,
@@ -185,17 +188,17 @@ def process_bulk(run, consts, overwrite):
         "salmon_results_dir": bulk_uri
     }
 
-    ## copy files from source to destination
+    # copy files from source to destination
     # list source and destination to see if files exist
-    origin_objs = list(s3_bucket.objects.filter(Prefix = origin_prefix))
-    dest_objs = list(s3_bucket.objects.filter(Prefix = dest_prefix))
+    origin_objs = list(s3_bucket.objects.filter(Prefix=origin_prefix))
+    dest_objs = list(s3_bucket.objects.filter(Prefix=dest_prefix))
     if len(origin_objs) == 0:
         print(f"No files for {run.scpca_run_id}")
     elif len(dest_objs) > 0 and not overwrite:
         print(f"Files present at destination for {run.scpca_run_id} -- skipping")
     else:
         print(f"Copying files for {run.scpca_run_id}")
-        ### S3 copying using awscli
+        # S3 copying using awscli
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
@@ -203,12 +206,13 @@ def process_bulk(run, consts, overwrite):
             "--dryrun" if consts.dryrun else ""
         ]
         subprocess.run(sync_command)
-        ### write json object
+        # write json object
         if not consts.dryrun:
             s3_bucket.put_object(
-                Key = metadata_key,
-                Body = json.dumps(metadata, indent=2)
+                Key=metadata_key,
+                Body=json.dumps(metadata, indent=2)
             )
+
 
 def process_spatial(run, consts, overwrite):
     """
@@ -236,7 +240,7 @@ def process_spatial(run, consts, overwrite):
     s3 = boto3.resource('s3')
     s3_bucket = s3.Bucket(bucket)
 
-    ### read output metadata, if present
+    # read output metadata, if present
     try:
         results_obj = s3_bucket.Object(results_json)
         results_meta = json.loads(results_obj.get()['Body'].read().decode('utf-8'))
@@ -247,12 +251,12 @@ def process_spatial(run, consts, overwrite):
     if not scpca_version:
         scpca_version = consts.scpca_version
 
-    ### Build metadata object
+    # Build metadata object
     metadata = {
         "run_id": run.scpca_run_id,
         "library_id": run.scpca_library_id,
-        "sample_id": run.scpca_sample_id ,
-        "project_id": run.scpca_project_id ,
+        "sample_id": run.scpca_sample_id,
+        "project_id": run.scpca_project_id,
         "submitter": run.submitter,
         "technology": run.technology,
         "seq_unit": run.seq_unit,
@@ -276,17 +280,17 @@ def process_spatial(run, consts, overwrite):
         "spaceranger_results_dir": spatial_uri
     }
 
-    ## copy files from source to destination
+    # copy files from source to destination
     # list source and destination to see if files exist
-    origin_objs = list(s3_bucket.objects.filter(Prefix = origin_prefix))
-    dest_objs = list(s3_bucket.objects.filter(Prefix = dest_prefix))
+    origin_objs = list(s3_bucket.objects.filter(Prefix=origin_prefix))
+    dest_objs = list(s3_bucket.objects.filter(Prefix=dest_prefix))
     if len(origin_objs) == 0:
         print(f"No files for {run.scpca_run_id}")
     elif len(dest_objs) > 0 and not overwrite:
         print(f"Files present at destination for {run.scpca_run_id} -- skipping")
     else:
         print(f"Copying files for {run.scpca_run_id}")
-        ### S3 copying using awscli
+        # S3 copying using awscli
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
@@ -294,11 +298,11 @@ def process_spatial(run, consts, overwrite):
             "--dryrun" if consts.dryrun else ""
         ]
         subprocess.run(sync_command)
-        ### write json object
+        # write json object
         if not consts.dryrun:
             s3_bucket.put_object(
-                Key = metadata_key,
-                Body = json.dumps(metadata, indent=2)
+                Key=metadata_key,
+                Body=json.dumps(metadata, indent=2)
             )
 
 
@@ -319,16 +323,20 @@ def process_demux(run, consts, overwrite):
     origin_prefix = f"{prefix}/{consts.source_dir}/vireo/{run.scpca_library_id}-vireo"
     dest_prefix = f"{prefix}/{consts.dest_dir}/vireo/{run.scpca_library_id}-vireo"
 
+    # set up S3
+    s3 = boto3.resource('s3')
+    s3_bucket = s3.Bucket(bucket)
+
     # list origin and destination to see if files exist
-    origin_objs = list(s3_bucket.objects.filter(Prefix = origin_prefix))
-    dest_objs = list(s3_bucket.objects.filter(Prefix = dest_prefix))
+    origin_objs = list(s3_bucket.objects.filter(Prefix=origin_prefix))
+    dest_objs = list(s3_bucket.objects.filter(Prefix=dest_prefix))
     if len(origin_objs) == 0:
         print(f"No files for {run.scpca_run_id}")
     elif len(dest_objs) > 0 and not overwrite:
         print(f"Files present at destination for {run.scpca_run_id} -- skipping")
     else:
         print(f"Copying files for {run.scpca_run_id}")
-        ### S3 copying using awscli
+        # S3 copying using awscli
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
@@ -338,152 +346,152 @@ def process_demux(run, consts, overwrite):
         subprocess.run(sync_command)
 
 
-
-### Main
+# Main
 def main():
-    ### Parse command line arguments
+    # Parse command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--library_file',
-        default = 's3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv',
-        help = 'path or URI to library data file TSV'
+        default='s3://ccdl-scpca-data/sample_info/scpca-library-metadata.tsv',
+        help='path or URI to library data file TSV'
     )
     parser.add_argument(
         '--bucket',
-        default = 'nextflow-ccdl-results',
-        help = 'S3 bucket where results files are located'
+        default='nextflow-ccdl-results',
+        help='S3 bucket where results files are located'
     )
     parser.add_argument(
         '--prefix',
-        default = 'scpca/processed',
-        help = 'base location of scpca results files'
+        default='scpca/processed',
+        help='base location of scpca results files'
     )
     parser.add_argument(
         '--source_dir',
-        default = 'internal',
-        help = 'current subdirectory for scpca checkpoint files'
+        default='internal',
+        help='current subdirectory for scpca checkpoint files'
     )
     parser.add_argument(
         '--dest_dir',
-        default = 'checkpoints',
-        help = 'destination subdirectory for scpca checkpoint files'
+        default='checkpoints',
+        help='destination subdirectory for scpca checkpoint files'
     )
     parser.add_argument(
         '--results_dir',
-        default = 'publish',
-        help = 'current subdirectory for scpca end result files'
+        default='publish',
+        help='current subdirectory for scpca end result files'
     )
     parser.add_argument(
         '--overwrite',
         action="store_true",
-        help = "overwrite existing files at destination"
+        help="overwrite existing files at destination"
     )
     parser.add_argument(
         '--dryrun',
         action="store_true",
-        help = "do a dry run, modifying no files"
+        help="do a dry run, modifying no files"
     )
     const = parser.add_argument_group('Common Values')
     const.add_argument(
         "--ref_assembly",
-        default = "Homo_sapiens.GRCh38.104",
-        help = "reference assembly"
+        default="Homo_sapiens.GRCh38.104",
+        help="reference assembly"
     )
     const.add_argument(
         "--ref_fasta",
-        default = "s3://scpca-references/homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz",
-        help = "path or uri to genome reference fasta"
+        default="s3://scpca-references/homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz",
+        help="path or uri to genome reference fasta"
     )
     const.add_argument(
         "--ref_gtf",
-        default = "s3://scpca-references/homo_sapiens/ensembl-104/annotation/Homo_sapiens.GRCh38.104.gtf.gz",
-        help = "path or uri to genome reference gtf"
+        default="s3://scpca-references/homo_sapiens/ensembl-104/annotation/Homo_sapiens.GRCh38.104.gtf.gz",
+        help="path or uri to genome reference gtf"
     )
     const.add_argument(
         "--salmon_splici_index",
-        default = "s3://scpca-references/homo_sapiens/ensembl-104/salmon_index/Homo_sapiens.GRCh38.104.spliced_intron.txome",
-        help = "path or uri to splici index"
+        default="s3://scpca-references/homo_sapiens/ensembl-104/salmon_index/Homo_sapiens.GRCh38.104.spliced_intron.txome",
+        help="path or uri to splici index"
     )
     const.add_argument(
         "--salmon_bulk_index",
-        default = "s3://scpca-references/homo_sapiens/ensembl-104/salmon_index/Homo_sapiens.GRCh38.104.spliced_cdna.txome",
-        help = "path or uri to bulk index"
+        default="s3://scpca-references/homo_sapiens/ensembl-104/salmon_index/Homo_sapiens.GRCh38.104.spliced_cdna.txome",
+        help="path or uri to bulk index"
     )
     const.add_argument(
         "--t2g_3col_path",
-        default = "s3://scpca-references/homo_sapiens/ensembl-104/annotation/Homo_sapiens.GRCh38.104.spliced_intron.tx2gene_3col.tsv",
-        help = "path or uri to 3 column t2g file for splici index"
+        default="s3://scpca-references/homo_sapiens/ensembl-104/annotation/Homo_sapiens.GRCh38.104.spliced_intron.tx2gene_3col.tsv",
+        help="path or uri to 3 column t2g file for splici index"
     )
     const.add_argument(
         "--t2g_bulk_path",
-        default = "s3://scpca-references/homo_sapiens/ensembl-104/annotation/Homo_sapiens.GRCh38.104.spliced_cdna.tx2gene.tsv",
-        help = "path or uri to bulk t3g file"
+        default="s3://scpca-references/homo_sapiens/ensembl-104/annotation/Homo_sapiens.GRCh38.104.spliced_cdna.tx2gene.tsv",
+        help="path or uri to bulk t3g file"
     )
     const.add_argument(
         "--cellranger_index",
-        default = "s3://scpca-references/homo_sapiens/ensembl-104/cellranger_index/Homo_sapiens.GRCh38.104_cellranger_full",
-        help = "path or uri to Cell Ranger index"
+        default="s3://scpca-references/homo_sapiens/ensembl-104/cellranger_index/Homo_sapiens.GRCh38.104_cellranger_full",
+        help="path or uri to Cell Ranger index"
     )
     const.add_argument(
         "--star_index",
-        default = "s3://scpca-references/homo_sapiens/ensembl-104/star_index/Homo_sapiens.GRCh38.104.star_idx",
-        help = "path or uri to STAR index"
+        default="s3://scpca-references/homo_sapiens/ensembl-104/star_index/Homo_sapiens.GRCh38.104.star_idx",
+        help="path or uri to STAR index"
     )
     const.add_argument(
         "--nextflow_version",
-        default = "22.10.0",
-        help = "default nextflow version"
+        default="22.10.0",
+        help="default nextflow version"
     )
     const.add_argument(
         "--scpca_version",
-        default = "v0.2.0",
-        help = "default scpca version"
+        default="v0.2.0",
+        help="default scpca version"
     )
     const.add_argument(
         "--barcode_dir",
-        default = "s3://scpca-references/barcodes/10X",
-        help = "path or uri to directory with barcode files"
+        default="s3://scpca-references/barcodes/10X",
+        help="path or uri to directory with barcode files"
     )
     args = parser.parse_args()
 
-    ### Read in library file
-    library_df = pandas.read_csv(args.library_file, sep = "\t",  dtype = 'string', keep_default_na=False)
+    # Read in library file
+    library_df = pandas.read_csv(args.library_file, sep="\t",  dtype='string', keep_default_na=False)
 
     # add barcode files
-    library_df['barcode_file'] = library_df['technology'].apply(get_barcode, barcode_dir = args.barcode_dir)
+    library_df['barcode_file'] = library_df['technology'].apply(get_barcode, barcode_dir=args.barcode_dir)
 
-    library_df = library_df.iloc[371:373] # limit to 2 for testing
+    library_df = library_df.iloc[371:373]  # limit to 2 for testing
 
-    ### scRNA processing
+    # scRNA processing
     # filter to scRNAseq runs
     sc_techs = ["10Xv2", "10Xv2_5prime", "10Xv3", "10Xv3.1"]
     scRNA_df = library_df.loc[library_df['technology'].isin(sc_techs)]
 
     # process scRNA runs
-    scRNA_df.apply(process_scrna, axis = 1,
-                   consts = args,
-                   overwrite = args.overwrite)
+    scRNA_df.apply(process_scrna, axis=1,
+                   consts=args,
+                   overwrite=args.overwrite)
 
-    ### bulk processing
+    # bulk processing
     bulk_techs = ['single_end', 'paired_end']
     bulk_df = library_df.loc[library_df['technology'].isin(bulk_techs)]
-    bulk_df.apply(process_bulk, axis = 1,
-                  consts = args,
-                  overwrite = args.overwrite)
+    bulk_df.apply(process_bulk, axis=1,
+                  consts=args,
+                  overwrite=args.overwrite)
 
-    ### spatial processing
+    # spatial processing
     spatial_techs = ['visium']
     spatial_df = library_df.loc[library_df['technology'].isin(spatial_techs)]
-    spatial_df.apply(process_spatial, axis = 1,
-                     consts = args,
-                     overwrite = args.overwrite)
+    spatial_df.apply(process_spatial, axis=1,
+                     consts=args,
+                     overwrite=args.overwrite)
 
-    ### demux processing
+    # demux processing
     demux_techs = ['cellhash_10Xv2', 'cellhash_10Xv3', 'cellhash_10Xv3.1']
     demux_df = library_df.loc[library_df['technology'].isin(demux_techs)]
-    demux_df.apply(process_demux, axis = 1,
-                   consts = args,
-                   overwrite = args.overwrite)
+    demux_df.apply(process_demux, axis=1,
+                   consts=args,
+                   overwrite=args.overwrite)
+
 
 if __name__ == '__main__':
     main()
