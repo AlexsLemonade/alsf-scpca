@@ -111,9 +111,11 @@ def process_scrna(run, consts, overwrite):
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
-            rad_uri,
-            "--dryrun" if consts.dryrun else ""
+            rad_uri
         ]
+        if consts.dryrun:
+            sync_command.append("--dryrun")
+
         subprocess.run(sync_command)
         # write json object
         if not consts.dryrun:
@@ -202,9 +204,11 @@ def process_bulk(run, consts, overwrite):
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
-            bulk_uri,
-            "--dryrun" if consts.dryrun else ""
+            bulk_uri
         ]
+        if consts.dryrun:
+            sync_command.append("--dryrun")
+
         subprocess.run(sync_command)
         # write json object
         if not consts.dryrun:
@@ -294,9 +298,11 @@ def process_spatial(run, consts, overwrite):
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
-            spatial_uri,
-            "--dryrun" if consts.dryrun else ""
+            spatial_uri
         ]
+        if consts.dryrun:
+            sync_command.append("--dryrun")
+
         subprocess.run(sync_command)
         # write json object
         if not consts.dryrun:
@@ -340,11 +346,12 @@ def process_demux(run, consts, overwrite):
         sync_command = [
             "aws", "s3", "sync",
             f"s3://{bucket}/{origin_prefix}",
-            f"s3://{bucket}/{dest_prefix}",
-            "--dryrun" if consts.dryrun else ""
+            f"s3://{bucket}/{dest_prefix}"
         ]
-        subprocess.run(sync_command)
+        if consts.dryrun:
+            sync_command.append("--dryrun")
 
+        subprocess.run(sync_command)
 
 # Main
 def main():
