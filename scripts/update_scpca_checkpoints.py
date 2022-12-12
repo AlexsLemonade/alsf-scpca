@@ -69,7 +69,7 @@ def process_scrna(run, consts, overwrite):
     metadata = {
         "run_id": run.scpca_run_id,
         "library_id": run.scpca_library_id,
-        "sample_id": run.scpca_sample_id,
+        "sample_id": run.scpca_sample_id.replace(";", ","),
         "project_id": run.scpca_project_id,
         "submitter": run.submitter,
         "technology": run.technology,
