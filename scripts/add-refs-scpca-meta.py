@@ -22,11 +22,6 @@ parser.add_argument(
     default='scpca/processed/checkpoints',
     help='directory containing checkpoint files to modify'
 )
-parser.add_argument(
-        '--overwrite',
-        action="store_true",
-        help="overwrite existing files at destination"
-    )
 args = parser.parse_args()
 
 # Read in library file
