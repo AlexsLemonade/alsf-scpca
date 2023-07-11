@@ -2,12 +2,10 @@
 
 """
 
-This script is meant to add the missing `ref_mito` and `ref_fasta_index` to `scpca-meta.json` checkpoint files
-for previously processed libraries through `scpca-nf`.
+The purpose of this script is to include the 'ref_mito' and 'ref_fasta_index' fields that are missing in the 'scpca-meta.json' checkpoint files of libraries that have been processed through 'scpca-nf' before.
 For all runs present in the `--library_file`, this script will check for an existing `scpca-meta.json` file in the provided `--checkpoints_prefix` on S3.
-If the file is not there, that run is skipped.
-If the file is there, the json is loaded and `ref_mito` and `ref_fasta_index` are added if missing.
-
+If the file is unavailable, the run will be skipped.
+If the file exists, the JSON is loaded, and `ref_mito` and `ref_fasta_index` are added if they are not already present.
 To run this script for modifying the `scpca-meta.json` files from runs that have already been processed for production do:
 
 python add-refs-scpca-meta.py --checkpoints_prefix "scpca_prod/checkpoints"
