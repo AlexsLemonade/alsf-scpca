@@ -87,9 +87,10 @@ for run in library_df.itertuples():
         print(f"No scpca-meta.json file for {run.scpca_run_id}")
         continue
 
+    # create a list of new fields to check for
     new_fields = ['mito_file', 'ref_fasta_index', 'assay_ontology_term_id', 'submitter_cell_types_file']
 
-    # add mito file and ref fasta index if not already present
+    # check if any of the new fields are already present, if not add them
     if all(key in results_meta for key in new_fields):
         print(f"All fields are present, no updates to scpca-meta.json for {run.scpca_run_id}")
     else:
