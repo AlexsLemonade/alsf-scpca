@@ -43,7 +43,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 # Read in library file
-library_df = pandas.read_csv(args.library_file, sep="\t", keep_default_na=False)
+library_df = pandas.read_csv(args.library_file, sep="\t", keep_default_na=False).iloc[49:50,]
 
 # remove any extra / at the end
 bucket = args.bucket.strip('/')
@@ -90,8 +90,9 @@ for run in library_df.itertuples():
     # create a list of new fields to check for
     new_fields = ['mito_file', 'ref_fasta_index', 'assay_ontology_term_id', 'submitter_cell_types_file']
 
-    # check if any of the new fields are already present, if not add them
-    if all(key in results_meta for key in new_fields):
+    # check if any of the new fields are already present
+    # if they are all present, make sure that submitter_cell_types_file is up to date
+    if all(key in results_meta for key in new_fields) and results_meta['submitter_cell_types_file'] == run.submitter_cell_types_file:
         print(f"All fields are present, no updates to scpca-meta.json for {run.scpca_run_id}")
     else:
         # add any missing fields
@@ -101,7 +102,8 @@ for run in library_df.itertuples():
             results_meta['ref_fasta_index'] = "homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
         if 'assay_ontology_term_id' not in results_meta.keys():
             results_meta['assay_ontology_term_id'] = run.assay_ontology_term_id
-        if 'submitter_cell_types_file' not in results_meta.keys():
+        # update submitter cell types file if it's missing or if the value doesn't match the metadata file
+        if 'submitter_cell_types_file' not in results_meta.keys() or results_meta['submitter_cell_types_file'] != run.submitter_cell_types_file:
             results_meta['submitter_cell_types_file'] = run.submitter_cell_types_file
 
     # copy updated json file
