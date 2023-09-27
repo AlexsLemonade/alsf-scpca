@@ -43,7 +43,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 # Read in library file
-library_df = pandas.read_csv(args.library_file, sep="\t", keep_default_na=False).iloc[49:50,]
+library_df = pandas.read_csv(args.library_file, sep="\t", keep_default_na=False)
 
 # remove any extra / at the end
 bucket = args.bucket.strip('/')
@@ -88,7 +88,12 @@ for run in library_df.itertuples():
         continue
 
     # create a list of new fields to check for
-    new_fields = ['mito_file', 'ref_fasta_index', 'assay_ontology_term_id', 'submitter_cell_types_file']
+    new_fields = {
+        'mito_file': "s3://scpca-references/homo_sapiens/ensembl-104/annotation/Homo_sapiens.GRCh38.104.mitogenes.txt",
+        'ref_fasta_index': "homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai",
+        'assay_ontology_term_id', run.assay_ontology_term_id,
+        'submitter_cell_types_file', run.submitter_cell_types_file
+    }
 
     # check if any of the new fields are already present
     # if they are all present, make sure that submitter_cell_types_file is up to date
