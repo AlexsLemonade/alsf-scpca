@@ -91,8 +91,7 @@ for run in library_df.itertuples():
     new_fields = {
         'mito_file': "s3://scpca-references/homo_sapiens/ensembl-104/annotation/Homo_sapiens.GRCh38.104.mitogenes.txt",
         'ref_fasta_index': "homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai",
-        'assay_ontology_term_id', run.assay_ontology_term_id,
-        'submitter_cell_types_file', run.submitter_cell_types_file
+        'assay_ontology_term_id': run.assay_ontology_term_id
     }
 
     # check if any of the new fields are already present
@@ -100,18 +99,16 @@ for run in library_df.itertuples():
     if all(key in results_meta for key in new_fields) and results_meta['submitter_cell_types_file'] == run.submitter_cell_types_file:
         print(f"All fields are present, no updates to scpca-meta.json for {run.scpca_run_id}")
     else:
-        # add any missing fields
-        if 'mito_file' not in results_meta.keys():
-            results_meta['mito_file'] = "s3://scpca-references/homo_sapiens/ensembl-104/annotation/Homo_sapiens.GRCh38.104.mitogenes.txt"
-        if 'ref_fasta' not in results_meta.keys():
-            results_meta['ref_fasta_index'] = "homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai"
-        if 'assay_ontology_term_id' not in results_meta.keys():
-            results_meta['assay_ontology_term_id'] = run.assay_ontology_term_id
+        # update missing fields
+        for key, default in new_fields.items():
+            results_meta.setdefault(key, default)
+
         # update submitter cell types file if it's missing or if the value doesn't match the metadata file
         if 'submitter_cell_types_file' not in results_meta.keys() or results_meta['submitter_cell_types_file'] != run.submitter_cell_types_file:
             results_meta['submitter_cell_types_file'] = run.submitter_cell_types_file
 
-    # copy updated json file
+
+        # copy updated json file
     s3_bucket.put_object(
         Key=meta_json_key,
         Body=json.dumps(results_meta, indent=2)
