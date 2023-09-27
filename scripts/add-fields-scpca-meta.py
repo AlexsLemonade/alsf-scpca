@@ -14,7 +14,7 @@ If the file is unavailable, the run will be skipped.
 If the file exists, the JSON is loaded, and the missing fields are added if they are not already present.
 To run this script for modifying the `scpca-meta.json` files from runs that have already been processed for production do:
 
-python add-refs-scpca-meta.py --checkpoints_prefix "scpca_prod/checkpoints"
+python add-fields-scpca-meta.py --checkpoints_prefix "scpca-prod/checkpoints"
 
 """
 
