@@ -104,11 +104,11 @@ for run in library_df.itertuples():
             results_meta.setdefault(key, default)
 
         # update submitter cell types file if it's missing or if the value doesn't match the metadata file
-        if 'submitter_cell_types_file' not in results_meta.keys() or results_meta['submitter_cell_types_file'] != run.submitter_cell_types_file:
+        if results_meta.get('submitter_cell_types_file') != run.submitter_cell_types_file:
             results_meta['submitter_cell_types_file'] = run.submitter_cell_types_file
 
 
-        # copy updated json file
+    # copy updated json file
     s3_bucket.put_object(
         Key=meta_json_key,
         Body=json.dumps(results_meta, indent=2)
