@@ -6,5 +6,6 @@ The files in this folder were utilized to create or adjust the `scpca-meta.json`
 In this script, the old results from mapping are copied over from the `internal` to `checkpoints` directory.
 Additionally, the `scpca-meta.json` file was created and saved to the `checkpoints` directory for each run to track processing information.
 
-2. `add-refs-scpca-meta.py`: This script specifically updates existing `scpca-meta.json` files within the `checkpoints` directory.
-For any libraries processed through `scpca-nf v0.5.1` or earlier, the `scpca-meta.json` file is modified to include two additional fields - `ref_mito` and `ref_fasta_index`.
+2. `add-fields-scpca-meta.py`: This script specifically updates existing `scpca-meta.json` files within the `checkpoints` directory.
+For any libraries processed through `scpca-nf v0.5.1` or earlier, the `scpca-meta.json` file is modified to include additional fields that have been added in new release of `scpca-nf`.
+This includes `ref_mito`, `ref_fasta_index`, `assay_ontology_term_id`, and `submitter_cell_types_file`.
