@@ -8,6 +8,8 @@ This includes addition of the following missing fields:
 - 'ref_fasta_index'
 - 'assay_ontology_term_id'
 - 'submitter_cell_types_file'
+- 'ref_assembly'
+- 'star_index'
 
 For all runs present in the `--library_file`, this script will check for an existing `scpca-meta.json` file in the provided `--checkpoints_prefix` on S3.
 If the file is unavailable, the run will be skipped.
@@ -94,7 +96,9 @@ for run in library_df.itertuples():
     new_fields = {
         "mito_file": "s3://scpca-references/homo_sapiens/ensembl-104/annotation/Homo_sapiens.GRCh38.104.mitogenes.txt",
         "ref_fasta_index": "homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai",
+        "star_index": "s3://scpca-references/homo_sapiens/ensembl-104/star_index/Homo_sapiens.GRCh38.104.star_idx",
         "assay_ontology_term_id": run.assay_ontology_term_id,
+        "ref_assembly": run.sample_reference
     }
 
     # check if any of the new fields are already present
