@@ -113,13 +113,17 @@ for run in all_metadata_df.itertuples():
                 f"All fields are present, no updates for {run.scpca_run_id} to {checkpoint_file}"
             )
         else:
-            # before modifying, make sure that the entries in the project metadata isn't NA
+            # before modifying, make sure that the entries in the project metadata aren't NA
             if run.singler_ref_file != "NA":
                 checkpoint_meta["singler_model_file"] = new_fields["singler_model_file"]
+            else:
+                checkpoint_meta["singler_model_file"] = "NA"
             if run.cellassign_ref_file != "NA":
                 checkpoint_meta["cellassign_reference_file"] = new_fields[
                     "cellassign_reference_file"
                 ]
+            else:
+                checkpoint_meta["cellassign_reference_file"] = "NA"
 
         # copy updated json file
         s3_bucket.put_object(
