@@ -2,15 +2,18 @@
 
 """
 
-The purpose of this script is to update the the 'scpca-meta.json' checkpoint files for cell typing of already processed libraries to be up to date with changes in `scpca-nf`.
-This includes addition of the following missing fields in the celltype checkpoints:
+The purpose of this script is to update the the 'scpca-meta.json' checkpoint files for cell typing of already processed libraries to contain reference file names with the following format:
+<ref_name>_<source>_<version><ext>.
+Specifically, we want to check that the version is present in the filename for:
 - `singler_ref_version`
 - `cellassign_ref_version`
 
 For all runs present in the `--library_file`, this script will check the `celltype` folder for an existing `scpca-meta.json` file in the provided `--checkpoints_prefix` on S3.
 Both the `scpca-meta.json` for SingleR and CellAssign will be updated.
 If the file is unavailable, the run will be skipped.
-If the file exists, the JSON is loaded, and the missing fields are added if they are not already present.
+If the file exists, the JSON is loaded, and there is a check for whether or not the reference file names contain a version.
+If they have a version already, no updates are made.
+If no version is found in the filename, then the filename is replaced with the filename in `scpca-project-celltype-metadata.tsv`.
 To run this script for modifying the cell type `scpca-meta.json` files from runs that have already been processed for production do:
 
 python add-celltype-fields-scpca-meta.py --checkpoints_prefix "scpca-prod/checkpoints"
@@ -21,6 +24,7 @@ import argparse
 import json
 import boto3
 import pandas
+import re
 
 # Parse command line arguments
 parser = argparse.ArgumentParser()
@@ -73,7 +77,7 @@ s3 = boto3.resource("s3")
 s3_bucket = s3.Bucket(bucket)
 
 # go through every run id and modify scpca-meta.json files if present
-for run in all_metadata_df.itertuples():
+for run in all_metadata_df[490:491].itertuples():
     print(f"Processing {run.scpca_run_id}")
 
     # build paths to singleR and CellAssign checkpoints
@@ -110,17 +114,42 @@ for run in all_metadata_df.itertuples():
                 f"All fields are present, no updates for {run.scpca_run_id} to {checkpoint_file}"
             )
         else:
-            # before modifying, make sure that the entries in the project metadata aren't NA
-            if run.singler_ref_file != "NA":
-                checkpoint_meta["singler_model_file"] = new_fields["singler_model_file"]
+            # find if versions are in the existing checkpoints
+            singler_version_present = re.search(
+                r"(\d{1}-\d{2}-\d{1}_model.rds$)", checkpoint_meta["singler_model_file"]
+            )
+            cellassign_version_present = re.search(
+                r"(20\d{2}-[01]\d{1}-\d{2}.tsv$)",
+                checkpoint_meta["cellassign_reference_file"],
+            )
+
+            # only modify if version string can't be found in checkpoint file
+            if not singler_version_present:
+                # if NA in metadata, make sure checkpoint is NA
+                if run.singler_ref_file == "NA":
+                    checkpoint_meta["singler_model_file"] = "NA"
+                else:
+                    checkpoint_meta["singler_model_file"] = new_fields[
+                        "singler_model_file"
+                    ]
             else:
-                checkpoint_meta["singler_model_file"] = "NA"
-            if run.cellassign_ref_file != "NA":
-                checkpoint_meta["cellassign_reference_file"] = new_fields[
-                    "cellassign_reference_file"
-                ]
+                print(
+                    f"SingleR model file already has version in filename, no updates will be made to {checkpoint_file}"
+                )
+
+            # only modify if version string can't be found in checkpoint file
+            if not cellassign_version_present:
+                # if NA in metadata, make sure checkpoint is NA
+                if run.cellassign_ref_file == "NA":
+                    checkpoint_meta["cellassign_reference_file"] = "NA"
+                else:
+                    checkpoint_meta["cellassign_reference_file"] = new_fields[
+                        "cellassign_reference_file"
+                    ]
             else:
-                checkpoint_meta["cellassign_reference_file"] = "NA"
+                print(
+                    f"CellAssign reference file already has version in filename, no updates will be made {checkpoint_file}"
+                )
 
         # copy updated json file
         s3_bucket.put_object(
