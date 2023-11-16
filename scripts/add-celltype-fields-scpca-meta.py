@@ -116,10 +116,10 @@ for run in all_metadata_df.itertuples():
         else:
             # find if versions are in the existing checkpoints
             singler_version_present = re.search(
-                r"(\d{1}-\d{2}-\d{1}_model.rds$)", checkpoint_meta["singler_model_file"]
+                r"([-\d]+_model.rds$)", checkpoint_meta["singler_model_file"]
             )
             cellassign_version_present = re.search(
-                r"(20\d{2}-[01]\d{1}-\d{2}.tsv$)",
+                r"(20\d{2}-[01]\d-\d{2}.tsv$)",
                 checkpoint_meta["cellassign_reference_file"],
             )
 
