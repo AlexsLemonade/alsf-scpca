@@ -54,9 +54,6 @@ project_df = pandas.read_csv(
     args.project_celltype_file, sep="\t", keep_default_na=False
 )
 
-# remove any extra / at the end
-bucket = args.bucket.strip("/")
-checkpoints_prefix = args.checkpoints_prefix.strip("/")
 
 # join library and project cell type metadata
 all_metadata_df = library_df.join(
