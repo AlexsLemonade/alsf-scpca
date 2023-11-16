@@ -77,7 +77,7 @@ s3 = boto3.resource("s3")
 s3_bucket = s3.Bucket(bucket)
 
 # go through every run id and modify scpca-meta.json files if present
-for run in all_metadata_df[490:491].itertuples():
+for run in all_metadata_df.itertuples():
     print(f"Processing {run.scpca_run_id}")
 
     # build paths to singleR and CellAssign checkpoints
