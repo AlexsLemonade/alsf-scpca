@@ -3,7 +3,7 @@
 """
 
 The purpose of this script is to update the the 'scpca-meta.json' checkpoint files of already processed libraries to be up to date with changes in `scpca-nf`.
-This includes addition of the following missing fields:
+This includes addition of the following missing fields in the mapping checkpoints:
 - 'ref_mito'
 - 'ref_fasta_index'
 - 'assay_ontology_term_id'
@@ -14,6 +14,9 @@ This includes addition of the following missing fields:
 For all runs present in the `--library_file`, this script will check for an existing `scpca-meta.json` file in the provided `--checkpoints_prefix` on S3.
 If the file is unavailable, the run will be skipped.
 If the file exists, the JSON is loaded, and the missing fields are added if they are not already present.
+NOTE: This script only updates the `scpca-meta.json` files for mapping results.
+For cell type metadata changes, see `add-celltype-fields-scpca-meta.py`.
+
 To run this script for modifying the `scpca-meta.json` files from runs that have already been processed for production do:
 
 python add-fields-scpca-meta.py --checkpoints_prefix "scpca-prod/checkpoints"
