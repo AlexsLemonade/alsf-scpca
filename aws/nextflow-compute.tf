@@ -129,8 +129,7 @@ resource "aws_batch_compute_environment" "nf_spot_auto_scaled_ebs" {
   depends_on   = [aws_iam_role_policy_attachment.nf_batch_role]
 }
 
-# Create an ondemand environment with up to 64 vcpus
-# the AMI used is described in setup-log.md
+# Create an ondemand environment with up to 128 vcpus
 resource "aws_batch_compute_environment" "nf_ondemand" {
   compute_environment_name = "nextflow-ondemand-compute"
   tags = var.default_tags
@@ -140,7 +139,7 @@ resource "aws_batch_compute_environment" "nf_ondemand" {
       "optimal",
     ]
     allocation_strategy = "BEST_FIT"
-    max_vcpus = 64
+    max_vcpus = 128
     min_vcpus = 0
     # standard launch template
     launch_template {
