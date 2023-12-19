@@ -1,6 +1,5 @@
 # AWS Batch setup
 provider "aws" {
-  profile = "default"
   region  = "us-east-1"
 }
 
@@ -47,11 +46,11 @@ resource "aws_batch_job_queue" "nf_autoscale_queue" {
 }
 
 
-# resource "aws_batch_job_queue" "nf_priority_queue" {
-#   name     = "nextflow-batch-priority-queue"
-#   state    = "ENABLED"
-#   priority = 1
-#   compute_environments = [
-#     aws_batch_compute_environment.nf_ondemand.arn,
-#   ]
-# }
+resource "aws_batch_job_queue" "nf_priority_queue" {
+  name     = "nextflow-batch-priority-queue"
+  state    = "ENABLED"
+  priority = 1
+  compute_environments = [
+    aws_batch_compute_environment.nf_ondemand.arn,
+  ]
+}
