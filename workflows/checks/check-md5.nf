@@ -15,7 +15,7 @@ process check_md5{
   publishDir "${params.outdir}"
   tag "$id"
   input:
-    tuple val(id), val(prefix), path(md5_file) 
+    tuple val(id), val(prefix), path(md5_file)
   output:
     path outfile
   script:
@@ -46,6 +46,7 @@ workflow{
   ch_runs = Channel.fromPath(params.run_metafile)
     .splitCsv(header: true, sep: '\t')
     .filter{run_all || (it.scpca_run_id in run_ids)}
+    .filter{it.files_directory != "NA"}
     .map{row -> tuple(row.scpca_run_id,
                       row.files_directory,
                       file("${row.files_directory}/${row.md5_file}")
