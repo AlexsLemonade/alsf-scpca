@@ -49,7 +49,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
   depends_on   = [aws_iam_role_policy_attachment.nf_batch_role]
 }
 
-# Create an spot instance0 environment with up to 32 vcpus with large disks
+# Create an spot instance0 environment with up to 128 vcpus with large disks
 
 resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
   compute_environment_name = "nextflow-spot-compute-bigdisk"
@@ -90,7 +90,7 @@ resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
   depends_on   = [aws_iam_role_policy_attachment.nf_batch_role]
 }
 
-# Create a spot instance environment with up to 512 vcpus and auto-scaled EBS.
+# Create a spot instance environment with up to 2048 vcpus and auto-scaled EBS.
 resource "aws_batch_compute_environment" "nf_spot_auto_scaled_ebs" {
   compute_environment_name = "nextflow-spot-compute-auto-scaled-ebs"
   tags = var.default_tags
@@ -102,7 +102,7 @@ resource "aws_batch_compute_environment" "nf_spot_auto_scaled_ebs" {
     allocation_strategy = "SPOT_CAPACITY_OPTIMIZED"
     spot_iam_fleet_role = aws_iam_role.nf_spotfleet_role.arn
     bid_percentage = 100
-    max_vcpus = 512
+    max_vcpus = 2048
     min_vcpus = 0
 
     launch_template {
@@ -129,7 +129,7 @@ resource "aws_batch_compute_environment" "nf_spot_auto_scaled_ebs" {
   depends_on   = [aws_iam_role_policy_attachment.nf_batch_role]
 }
 
-# Create an ondemand environment with up to 256 vcpus
+# Create an ondemand environment with up to 512 vcpus
 resource "aws_batch_compute_environment" "nf_ondemand" {
   compute_environment_name = "nextflow-ondemand-compute"
   tags = var.default_tags
@@ -139,7 +139,7 @@ resource "aws_batch_compute_environment" "nf_ondemand" {
       "optimal",
     ]
     allocation_strategy = "BEST_FIT"
-    max_vcpus = 256
+    max_vcpus = 512
     min_vcpus = 0
     # standard launch template
     launch_template {
