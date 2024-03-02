@@ -18,7 +18,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
     instance_type = [
       "optimal",
     ]
-    allocation_strategy = "SPOT_CAPACITY_OPTIMIZED"
+    allocation_strategy = "SPOT_PRICE_CAPACITY_OPTIMIZED"
     spot_iam_fleet_role = aws_iam_role.nf_spotfleet_role.arn
     bid_percentage = 100
     max_vcpus = 256
@@ -59,7 +59,7 @@ resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
     instance_type = [
       "optimal",
     ]
-    allocation_strategy = "SPOT_CAPACITY_OPTIMIZED"
+    allocation_strategy = "SPOT_PRICE_CAPACITY_OPTIMIZED"
     spot_iam_fleet_role = aws_iam_role.nf_spotfleet_role.arn
     bid_percentage = 100
     max_vcpus = 128
@@ -97,9 +97,13 @@ resource "aws_batch_compute_environment" "nf_spot_auto_scaled_ebs" {
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
     instance_type = [
-      "optimal",
+      "c4", "m4", "r4",
+      "c5", "m5", "r5",
+      "c5a", "m5a", "r5a",
+      "c6i", "m6i", "r6i",
+      "c6a", "m6a", "r6a",
     ]
-    allocation_strategy = "SPOT_CAPACITY_OPTIMIZED"
+    allocation_strategy = "SPOT_PRICE_CAPACITY_OPTIMIZED"
     spot_iam_fleet_role = aws_iam_role.nf_spotfleet_role.arn
     bid_percentage = 100
     max_vcpus = 2048
@@ -136,7 +140,11 @@ resource "aws_batch_compute_environment" "nf_ondemand" {
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
     instance_type = [
-      "optimal",
+      "c4", "m4", "r4",
+      "c5", "m5", "r5",
+      "c5a", "m5a", "r5a",
+      "c6i", "m6i", "r6i",
+      "c6a", "m6a", "r6a",
     ]
     allocation_strategy = "BEST_FIT"
     max_vcpus = 512
