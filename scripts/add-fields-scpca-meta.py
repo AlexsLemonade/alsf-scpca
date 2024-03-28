@@ -36,6 +36,10 @@ parser.add_argument(
     help="path or URI to library data file TSV",
 )
 parser.add_argument(
+    "--library_ids",
+    help="comma separated list of library IDs to update checkpoints",
+)
+parser.add_argument(
     "--bucket",
     default="nextflow-ccdl-results",
     help="S3 bucket where results files are located",
@@ -49,6 +53,19 @@ args = parser.parse_args()
 
 # Read in library file
 library_df = pandas.read_csv(args.library_file, sep="\t", keep_default_na=False)
+
+# if library ids are provided, filter to only include those
+# otherwise keep the full library df
+if args.library_ids:
+    # get a list of library_ids
+    library_ids = args.library_ids.split(",")
+
+    # check that library ids are present in library metadata
+    if not all(id in library_df["scpca_library_id"].tolist() for id in library_ids):
+        raise ValueError(f"All {library_ids} not found in {args.library_file}")
+
+    # filter library df to only include specified library ids
+    library_df = library_df[library_df["scpca_library_id"].isin(library_ids)]
 
 # remove any extra / at the end
 bucket = args.bucket.strip("/")
@@ -101,7 +118,7 @@ for run in library_df.itertuples():
         "ref_fasta_index": "homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai",
         "star_index": "s3://scpca-references/homo_sapiens/ensembl-104/star_index/Homo_sapiens.GRCh38.104.star_idx",
         "assay_ontology_term_id": run.assay_ontology_term_id,
-        "ref_assembly": run.sample_reference
+        "ref_assembly": run.sample_reference,
     }
 
     # check if any of the new fields are already present
