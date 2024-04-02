@@ -58,10 +58,10 @@ library_df = pandas.read_csv(args.library_file, sep="\t", keep_default_na=False)
 # otherwise keep the full library df
 if args.library_ids:
     # get a list of library_ids
-    library_ids = args.library_ids.split(",")
+    library_ids = set(args.library_ids.split(","))
 
     # check that library ids are present in library metadata
-    if not all(id in library_df["scpca_library_id"].tolist() for id in library_ids):
+    if not library_ids.issubset(library_df["scpca_library_id"].unique()):
         raise ValueError(f"All {library_ids} not found in {args.library_file}")
 
     # filter library df to only include specified library ids
