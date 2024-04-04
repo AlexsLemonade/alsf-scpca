@@ -12,7 +12,7 @@ resource "aws_iam_instance_profile" "nf_ecs_instance_role" {
 # the AMI used is described in setup-log.md
 resource "aws_batch_compute_environment" "nf_spot" {
   compute_environment_name = "nextflow-spot-compute"
-  tags                     = var.default_tags
+  tags = var.default_tags
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
     instance_type = [
@@ -20,13 +20,13 @@ resource "aws_batch_compute_environment" "nf_spot" {
     ]
     allocation_strategy = "SPOT_PRICE_CAPACITY_OPTIMIZED"
     spot_iam_fleet_role = aws_iam_role.nf_spotfleet_role.arn
-    bid_percentage      = 100
-    max_vcpus           = 256
-    min_vcpus           = 0
+    bid_percentage = 100
+    max_vcpus = 256
+    min_vcpus = 0
     # standard launch template
     launch_template {
       launch_template_id = aws_launch_template.nf_lt_standard.id
-      version            = aws_launch_template.nf_lt_standard.latest_version
+      version = aws_launch_template.nf_lt_standard.latest_version
     }
     # ec2_key_pair = aws_key_pair.nf_keypair.key_name
     security_group_ids = [
@@ -53,7 +53,7 @@ resource "aws_batch_compute_environment" "nf_spot" {
 
 resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
   compute_environment_name = "nextflow-spot-compute-bigdisk"
-  tags                     = var.default_tags
+  tags = var.default_tags
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
     instance_type = [
@@ -61,13 +61,13 @@ resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
     ]
     allocation_strategy = "SPOT_PRICE_CAPACITY_OPTIMIZED"
     spot_iam_fleet_role = aws_iam_role.nf_spotfleet_role.arn
-    bid_percentage      = 100
-    max_vcpus           = 128
-    min_vcpus           = 0
+    bid_percentage = 100
+    max_vcpus = 128
+    min_vcpus = 0
     # large disk launch template
     launch_template {
       launch_template_id = aws_launch_template.nf_lt_bigdisk.id
-      version            = aws_launch_template.nf_lt_bigdisk.latest_version
+      version = aws_launch_template.nf_lt_bigdisk.latest_version
     }
     # ec2_key_pair = aws_key_pair.nf_keypair.key_name
     security_group_ids = [
@@ -93,7 +93,7 @@ resource "aws_batch_compute_environment" "nf_spot_bigdisk" {
 # Create a spot instance environment with up to 2048 vcpus and auto-scaled EBS.
 resource "aws_batch_compute_environment" "nf_spot_auto_scaled_ebs" {
   compute_environment_name = "nextflow-spot-compute-auto-scaled-ebs"
-  tags                     = var.default_tags
+  tags = var.default_tags
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
     instance_type = [
@@ -105,13 +105,13 @@ resource "aws_batch_compute_environment" "nf_spot_auto_scaled_ebs" {
     ]
     allocation_strategy = "SPOT_PRICE_CAPACITY_OPTIMIZED"
     spot_iam_fleet_role = aws_iam_role.nf_spotfleet_role.arn
-    bid_percentage      = 100
-    max_vcpus           = 2048
-    min_vcpus           = 0
+    bid_percentage = 100
+    max_vcpus = 2048
+    min_vcpus = 0
 
     launch_template {
       launch_template_id = aws_launch_template.nf_lt_auto_scaled_ebs.id
-      version            = aws_launch_template.nf_lt_auto_scaled_ebs.latest_version
+      version = aws_launch_template.nf_lt_auto_scaled_ebs.latest_version
     }
     security_group_ids = [
       aws_security_group.nf_security.id,
@@ -136,7 +136,7 @@ resource "aws_batch_compute_environment" "nf_spot_auto_scaled_ebs" {
 # Create an ondemand environment with up to 512 vcpus
 resource "aws_batch_compute_environment" "nf_ondemand" {
   compute_environment_name = "nextflow-ondemand-compute"
-  tags                     = var.default_tags
+  tags = var.default_tags
   compute_resources {
     instance_role = aws_iam_instance_profile.nf_ecs_instance_role.arn
     instance_type = [
@@ -147,12 +147,12 @@ resource "aws_batch_compute_environment" "nf_ondemand" {
       "c6a", "m6a", "r6a",
     ]
     allocation_strategy = "BEST_FIT"
-    max_vcpus           = 512
-    min_vcpus           = 0
+    max_vcpus = 512
+    min_vcpus = 0
     # standard launch template
     launch_template {
       launch_template_id = aws_launch_template.nf_lt_auto_scaled_ebs.id
-      version            = aws_launch_template.nf_lt_auto_scaled_ebs.latest_version
+      version = aws_launch_template.nf_lt_auto_scaled_ebs.latest_version
     }
     # ec2_key_pair = aws_key_pair.nf_keypair.key_name
     security_group_ids = [
