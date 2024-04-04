@@ -83,7 +83,10 @@ resource "aws_iam_policy" "nf_readwrite_S3" {
     "arn:aws:s3:::nextflow-ccdl-data/*",
     "arn:aws:s3:::nextflow-ccdl-results/*",
     "arn:aws:s3:::nextflow-ccdl-data",
-    "arn:aws:s3:::nextflow-ccdl-results"
+    "arn:aws:s3:::nextflow-ccdl-results",
+    "arn:aws:s3:::openscpca-temp-simdata",
+    "arn:aws:s3:::openscpca-temp-simdata/*"
+
    ]
   },
   {
