@@ -10,6 +10,7 @@ This includes addition of the following missing fields in the mapping checkpoint
 - 'submitter_cell_types_file'
 - 'ref_assembly'
 - 'star_index'
+- `infercnv_gene_order`
 
 For all runs present in the `--library_file`, this script will check for an existing `scpca-meta.json` file in the provided `--checkpoints_prefix` on S3.
 If the file is unavailable, the run will be skipped.
@@ -117,6 +118,7 @@ for run in library_df.itertuples():
         "mito_file": "s3://scpca-references/homo_sapiens/ensembl-104/annotation/Homo_sapiens.GRCh38.104.mitogenes.txt",
         "ref_fasta_index": "homo_sapiens/ensembl-104/fasta/Homo_sapiens.GRCh38.dna.primary_assembly.fa.fai",
         "star_index": "s3://scpca-references/homo_sapiens/ensembl-104/star_index/Homo_sapiens.GRCh38.104.star_idx",
+        "infercnv_gene_order": "s3://scpca-references/homo_sapiens/ensembl-104/infercnv/Homo_sapiens.GRCh38.104_gene_order_arms.txt.gz",
         "assay_ontology_term_id": run.assay_ontology_term_id,
         "ref_assembly": run.sample_reference,
     }
