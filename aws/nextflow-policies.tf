@@ -6,7 +6,7 @@
 # This policy allows read and write access to specific buckets for nextflow processing
 resource "aws_iam_policy" "nf_readwrite_S3" {
   name   = "nextflow-ccdl-readwrite-s3"
-  tags = var.default_tags
+  tags   = var.default_tags
   policy = <<EOF
 {
  "Version": "2012-10-17",
@@ -107,7 +107,7 @@ EOF
 # This policy gives read access to all S3 buckets
 resource "aws_iam_policy" "nf_read_S3" {
   name   = "nextflow-ccdl-read-s3"
-  tags = var.default_tags
+  tags   = var.default_tags
   policy = <<EOF
 {
   "Version": "2012-10-17",
@@ -131,7 +131,8 @@ resource "aws_iam_policy" "nf_read_S3" {
       "Resource": [
         "arn:aws:s3:::ccdl-scpca-data/*",
         "arn:aws:s3:::nextflow-ccdl-data/*",
-        "arn:aws:s3:::nextflow-ccdl-results/*"
+        "arn:aws:s3:::nextflow-ccdl-results/*",
+        "arn:aws:s3:::openscpca-celltype-annotations-public-access/*"
       ]
     },
     {
@@ -168,6 +169,7 @@ resource "aws_iam_policy" "nf_read_S3" {
         "arn:aws:s3:::ccdl-scpca-data",
         "arn:aws:s3:::nextflow-ccdl-data",
         "arn:aws:s3:::nextflow-ccdl-results",
+        "arn:aws:s3:::openscpca-celltype-annotations-public-access",
         "arn:aws:s3:*:*:accesspoint/*",
         "arn:aws:s3:*:*:job/*"
       ]
@@ -190,10 +192,10 @@ EOF
 }
 
 resource "aws_iam_policy" "nf_manage_ebs" {
-  name   = "nextflow-ccdl-manage-ebs"
+  name        = "nextflow-ccdl-manage-ebs"
   description = "A policy that allows to manage (attach/create/delete) EBS volumes."
-  tags = var.default_tags
-  policy = <<EOF
+  tags        = var.default_tags
+  policy      = <<EOF
 {
     "Version": "2012-10-17",
     "Statement": [
