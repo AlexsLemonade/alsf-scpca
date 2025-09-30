@@ -8,6 +8,7 @@ This includes addition of the following missing fields in the mapping checkpoint
 - 'ref_fasta_index'
 - 'assay_ontology_term_id'
 - 'submitter_cell_types_file'
+- 'openscpca_cell_types_file'
 - 'ref_assembly'
 - 'star_index'
 - `infercnv_gene_order`
@@ -20,7 +21,7 @@ For cell type metadata changes, see `add-celltype-fields-scpca-meta.py`.
 
 To run this script for modifying the `scpca-meta.json` files from runs that have already been processed for production do:
 
-python add-fields-scpca-meta.py --checkpoints_prefix "scpca-prod/checkpoints"
+python add-fields-scpca-meta.py --checkpoints_prefix "scpca-staging/checkpoints"
 
 """
 
@@ -121,6 +122,7 @@ for run in library_df.itertuples():
         "infercnv_gene_order": "s3://scpca-references/homo_sapiens/ensembl-104/infercnv/Homo_sapiens.GRCh38.104_gene_order_arms.txt.gz",
         "assay_ontology_term_id": run.assay_ontology_term_id,
         "ref_assembly": run.sample_reference,
+        "openscpca_cell_types_file": run.openscpca_cell_types_file
     }
 
     # check if any of the new fields are already present
