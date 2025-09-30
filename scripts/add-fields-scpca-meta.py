@@ -121,15 +121,15 @@ for run in library_df.itertuples():
         "star_index": "s3://scpca-references/homo_sapiens/ensembl-104/star_index/Homo_sapiens.GRCh38.104.star_idx",
         "infercnv_gene_order": "s3://scpca-references/homo_sapiens/ensembl-104/infercnv/Homo_sapiens.GRCh38.104_gene_order_arms.txt.gz",
         "assay_ontology_term_id": run.assay_ontology_term_id,
-        "ref_assembly": run.sample_reference,
-        "openscpca_cell_types_file": run.openscpca_cell_types_file
+        "ref_assembly": run.sample_reference
     }
 
     # check if any of the new fields are already present
-    # if they are all present, make sure that submitter_cell_types_file is up to date
+    # if they are all present, make sure that submitter_cell_types_file and openscpca_cell_types_file are up to date
     if (
         all(key in results_meta for key in new_fields)
-        and results_meta["submitter_cell_types_file"] == run.submitter_cell_types_file
+        and results_meta.get("submitter_cell_types_file") == run.submitter_cell_types_file
+        and results_meta.get("openscpca_cell_types_file") == run.openscpca_cell_types_file
     ):
         print(
             f"All fields are present, no updates to scpca-meta.json for {run.scpca_run_id}"
@@ -145,6 +145,13 @@ for run in library_df.itertuples():
             != run.submitter_cell_types_file
         ):
             results_meta["submitter_cell_types_file"] = run.submitter_cell_types_file
+
+        # update openscpca cell types file if it's missing or if the value doesn't match the metadata file
+        if (
+            results_meta.get("openscpca_cell_types_file")
+            != run.openscpca_cell_types_file
+        ):
+            results_meta["openscpca_cell_types_file"] = run.openscpca_cell_types_file
 
     # copy updated json file
     s3_bucket.put_object(Key=meta_json_key, Body=json.dumps(results_meta, indent=2))
