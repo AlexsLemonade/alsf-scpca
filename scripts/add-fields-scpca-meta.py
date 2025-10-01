@@ -19,7 +19,7 @@ If the file exists, the JSON is loaded, and the missing fields are added if they
 NOTE: This script only updates the `scpca-meta.json` files for mapping results.
 For cell type metadata changes, see `add-celltype-fields-scpca-meta.py`.
 
-To run this script for modifying the `scpca-meta.json` files from runs that have already been processed for production do:
+To run this script for modifying the `scpca-meta.json` files from runs that have already been processed and live in scpca-staging do:
 
 python add-fields-scpca-meta.py --checkpoints_prefix "scpca-staging/checkpoints"
 
