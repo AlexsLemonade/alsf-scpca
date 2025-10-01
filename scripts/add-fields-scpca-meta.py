@@ -121,7 +121,7 @@ for run in library_df.itertuples():
         "star_index": "s3://scpca-references/homo_sapiens/ensembl-104/star_index/Homo_sapiens.GRCh38.104.star_idx",
         "infercnv_gene_order": "s3://scpca-references/homo_sapiens/ensembl-104/infercnv/Homo_sapiens.GRCh38.104_gene_order_arms.txt.gz",
         "assay_ontology_term_id": run.assay_ontology_term_id,
-        "ref_assembly": run.sample_reference
+        "ref_assembly": run.sample_reference,
     }
 
     # check if any of the new fields are already present
