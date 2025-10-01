@@ -8,6 +8,7 @@ This includes addition of the following missing fields in the mapping checkpoint
 - 'ref_fasta_index'
 - 'assay_ontology_term_id'
 - 'submitter_cell_types_file'
+- 'openscpca_cell_types_file'
 - 'ref_assembly'
 - 'star_index'
 - `infercnv_gene_order`
@@ -18,9 +19,9 @@ If the file exists, the JSON is loaded, and the missing fields are added if they
 NOTE: This script only updates the `scpca-meta.json` files for mapping results.
 For cell type metadata changes, see `add-celltype-fields-scpca-meta.py`.
 
-To run this script for modifying the `scpca-meta.json` files from runs that have already been processed for production do:
+To run this script for modifying the `scpca-meta.json` files from runs that have already been processed and live in scpca-staging do:
 
-python add-fields-scpca-meta.py --checkpoints_prefix "scpca-prod/checkpoints"
+python add-fields-scpca-meta.py --checkpoints_prefix "scpca-staging/checkpoints"
 
 """
 
@@ -124,10 +125,11 @@ for run in library_df.itertuples():
     }
 
     # check if any of the new fields are already present
-    # if they are all present, make sure that submitter_cell_types_file is up to date
+    # if they are all present, make sure that submitter_cell_types_file and openscpca_cell_types_file are up to date
     if (
         all(key in results_meta for key in new_fields)
-        and results_meta["submitter_cell_types_file"] == run.submitter_cell_types_file
+        and results_meta.get("submitter_cell_types_file") == run.submitter_cell_types_file
+        and results_meta.get("openscpca_cell_types_file") == run.openscpca_cell_types_file
     ):
         print(
             f"All fields are present, no updates to scpca-meta.json for {run.scpca_run_id}"
@@ -143,6 +145,13 @@ for run in library_df.itertuples():
             != run.submitter_cell_types_file
         ):
             results_meta["submitter_cell_types_file"] = run.submitter_cell_types_file
+
+        # update openscpca cell types file if it's missing or if the value doesn't match the metadata file
+        if (
+            results_meta.get("openscpca_cell_types_file")
+            != run.openscpca_cell_types_file
+        ):
+            results_meta["openscpca_cell_types_file"] = run.openscpca_cell_types_file
 
     # copy updated json file
     s3_bucket.put_object(Key=meta_json_key, Body=json.dumps(results_meta, indent=2))
